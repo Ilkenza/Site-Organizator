@@ -267,6 +267,10 @@
             display: inline-block;
         }
 
+        .inline-filter-wrapper.open {
+            padding: 0px 0px 0px 2px;
+        }
+
         /* Clear (×) button inside the inline filter wrapper */
         .inline-filter-clear {
             width: 18px;
@@ -302,7 +306,13 @@
         .inline-filter-wrapper.open .inline-filter-clear {
             padding: 9px 10px;
             width: 100%;
+            border-radius: 0px;
             height: 100%;
+        }
+
+
+        .inline-filter-wrapper.open .inline-filter-clear:hover {
+            background: rgba(160, 180, 208, 0.15);
         }
 
         /* Highlight the filter wrapper itself when input is focused or open */
