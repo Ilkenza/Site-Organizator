@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
     <title>Site Organizer</title>
     <style>
         * {
@@ -46,7 +48,7 @@
         }
 
         h2 {
-            color: #6CBBFB;
+            color: #4e7cbd;
             font-size: 20px;
             font-weight: 600;
         }
@@ -223,8 +225,9 @@
             align-items: center;
             background: #1A2E52;
             border-radius: 8px 0px 0px 8px;
-            padding: 0px 2px 0px 2px;
+            padding: 0px;
         }
+
 
         .inline-filter-wrapper .inline-filter {
             min-width: 80px;
@@ -245,7 +248,7 @@
         .inline-filter-toggle {
             background: transparent;
             border: none;
-            padding: 6px;
+            padding: 8px;
             margin: 0;
             display: inline-flex;
             align-items: center;
@@ -253,7 +256,11 @@
             color: inherit;
             cursor: pointer;
             line-height: 0;
-            border-radius: 6px;
+            border-radius: 8px 0px 0px 8px;
+        }
+
+        .inline-filter-toggle:hover {
+            background: rgba(108, 187, 251, 0.06);
         }
 
         /* Inline filter input and clear visibility - collapsed by default */
@@ -267,9 +274,7 @@
             display: inline-block;
         }
 
-        .inline-filter-wrapper.open {
-            padding: 0px 0px 0px 2px;
-        }
+
 
         /* Clear (×) button inside the inline filter wrapper */
         .inline-filter-clear {
@@ -700,7 +705,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h2>📌 Site Organizer</h2>
+            <h2><i class="fa-solid fa-globe" style="color:#4e7cbd;font-size:1.2em" aria-hidden="true"></i> Site
+                Organizer</h2>
             <div class="header-right hidden" id="headerUserInfo">
                 <span class="user-email" id="headerUserEmail"></span>
                 <div class="btn-group-mini">
@@ -841,8 +847,6 @@
                                     class="btn-add inline-filter-clear hidden" title="Clear search"
                                     aria-label="Clear search">✕</button>
                             </span>
-                            <button type="button" id="addCategoryBtn" class="btn-add"
-                                aria-label="Add category">+</button>
                             <span id="addCategoryForm" class="inline-add-form hidden" aria-hidden="true">
                                 <input type="text" id="newCategoryName" class="inline-input"
                                     placeholder="Category name" />
@@ -870,6 +874,8 @@
                                 <button type="button" id="saveCategoryBtn" class="btn-icon small"
                                     aria-label="Save category">✓</button>
                             </span>
+                            <button type="button" id="addCategoryBtn" class="btn-add"
+                                aria-label="Add category">+</button>
                         </span>
                     </label>
                     <div id="categoriesCheckboxList"
