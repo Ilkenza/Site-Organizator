@@ -331,7 +331,7 @@ async function detectSitesColumns() {
         console.debug('detectSitesColumns threw', e);
         return [];
     }
-} 
+}
 
 // API URL
 const API_URL = 'http://localhost:3000';
@@ -1313,7 +1313,7 @@ function showSiteForm() {
                                 if (toggle) { toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); }
                                 if (tagsFilter) tagsFilter.classList.add('hidden');
                                 // hide the clear button as well
-                                if (tagsClear) { tagsClear.classList.add('hidden'); tagsClear.style.display = 'none'; tagsClear.textContent = '✕'; tagsClear.setAttribute('aria-label','Clear search'); }
+                                if (tagsClear) { tagsClear.classList.add('hidden'); tagsClear.style.display = 'none'; tagsClear.textContent = '✕'; tagsClear.setAttribute('aria-label', 'Clear search'); }
                             });
                         }
                     } catch (err) { console.debug('attach tags filter handlers failed', err); }
@@ -1492,7 +1492,7 @@ function showSiteForm() {
                                 if (toggle) { toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); }
                                 if (categoriesFilter) categoriesFilter.classList.add('hidden');
                                 // hide the clear button as well
-                                if (categoriesClear) { categoriesClear.classList.add('hidden'); categoriesClear.style.display = 'none'; categoriesClear.textContent = '✕'; categoriesClear.setAttribute('aria-label','Clear search'); }
+                                if (categoriesClear) { categoriesClear.classList.add('hidden'); categoriesClear.style.display = 'none'; categoriesClear.textContent = '✕'; categoriesClear.setAttribute('aria-label', 'Clear search'); }
                             });
                         }
                     } catch (err) { console.debug('attach categories filter handlers failed', err); }
