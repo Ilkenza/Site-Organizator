@@ -523,6 +523,12 @@
             background: rgba(108, 187, 251, 0.1);
         }
 
+        /* Diagnostic: highlight rows that used fallback mapping (temporary) */
+        tr[data-cat-match="fallback"] td,
+        tr[data-tag-match="fallback"] td {
+            outline: 1px dashed rgba(255, 255, 255, 0.06);
+        }
+
         /* Multi-select row styles */
         table tbody tr.row-selected {
             background: rgba(108, 187, 251, 0.2) !important;
@@ -2249,9 +2255,7 @@
         }
 
         /* Custom table scrollbars to match UI */
-        #sitesContainer,
-        #categoriesContainer,
-        #tagsContainer {
+        .custom-scroll, #debugPanel, #sitesContainer, #categoriesContainer, #tagsContainer, .modal-url, .add-site-checkbox-list, #editCategoriesCheckboxList, #editTagsCheckboxList, #addCategoriesCheckboxList, #addTagsCheckboxList {
             scrollbar-width: thin;
             /* Firefox */
             scrollbar-color: #6CBBFB44 #0f1e3d;
@@ -2259,41 +2263,31 @@
         }
 
         /* WebKit-based browsers */
-        #sitesContainer::-webkit-scrollbar,
-        #categoriesContainer::-webkit-scrollbar,
-        #tagsContainer::-webkit-scrollbar {
+        .custom-scroll::-webkit-scrollbar, #sitesContainer::-webkit-scrollbar, #categoriesContainer::-webkit-scrollbar, #tagsContainer::-webkit-scrollbar, .modal-url::-webkit-scrollbar, .add-site-checkbox-list::-webkit-scrollbar, #editCategoriesCheckboxList::-webkit-scrollbar, #editTagsCheckboxList::-webkit-scrollbar, #addCategoriesCheckboxList::-webkit-scrollbar, #addTagsCheckboxList::-webkit-scrollbar {
             width: 10px;
             height: 10px;
         }
 
-        #sitesContainer::-webkit-scrollbar-track,
-        #categoriesContainer::-webkit-scrollbar-track,
-        #tagsContainer::-webkit-scrollbar-track {
+        .custom-scroll::-webkit-scrollbar-track, #sitesContainer::-webkit-scrollbar-track, #categoriesContainer::-webkit-scrollbar-track, #tagsContainer::-webkit-scrollbar-track, .modal-url::-webkit-scrollbar-track, .add-site-checkbox-list::-webkit-scrollbar-track, #editCategoriesCheckboxList::-webkit-scrollbar-track, #editTagsCheckboxList::-webkit-scrollbar-track, #addCategoriesCheckboxList::-webkit-scrollbar-track, #addTagsCheckboxList::-webkit-scrollbar-track {
             background: #0f1e3d;
             /* track matches card background */
             border-radius: 10px;
         }
 
-        #sitesContainer::-webkit-scrollbar-thumb,
-        #categoriesContainer::-webkit-scrollbar-thumb,
-        #tagsContainer::-webkit-scrollbar-thumb {
+        .custom-scroll::-webkit-scrollbar-thumb, #sitesContainer::-webkit-scrollbar-thumb, #categoriesContainer::-webkit-scrollbar-thumb, #tagsContainer::-webkit-scrollbar-thumb, .modal-url::-webkit-scrollbar-thumb, .add-site-checkbox-list::-webkit-scrollbar-thumb, #editCategoriesCheckboxList::-webkit-scrollbar-thumb, #editTagsCheckboxList::-webkit-scrollbar-thumb, #addCategoriesCheckboxList::-webkit-scrollbar-thumb, #addTagsCheckboxList::-webkit-scrollbar-thumb {
             background: linear-gradient(180deg, rgba(108, 187, 251, 0.28), rgba(26, 46, 82, 0.9));
             border-radius: 8px;
             border: 2px solid #0f1e3d;
             /* creates an inset effect */
         }
 
-        #sitesContainer::-webkit-scrollbar-thumb:hover,
-        #categoriesContainer::-webkit-scrollbar-thumb:hover,
-        #tagsContainer::-webkit-scrollbar-thumb:hover {
+        .custom-scroll::-webkit-scrollbar-thumb:hover, #sitesContainer::-webkit-scrollbar-thumb:hover, #categoriesContainer::-webkit-scrollbar-thumb:hover, #tagsContainer::-webkit-scrollbar-thumb:hover, .modal-url::-webkit-scrollbar-thumb:hover, .add-site-checkbox-list::-webkit-scrollbar-thumb:hover, #editCategoriesCheckboxList::-webkit-scrollbar-thumb:hover, #editTagsCheckboxList::-webkit-scrollbar-thumb:hover, #addCategoriesCheckboxList::-webkit-scrollbar-thumb:hover, #addTagsCheckboxList::-webkit-scrollbar-thumb:hover {
             background: #6CBBFB;
             /* stronger on hover */
         }
 
         /* Small corner fix for overflow on the containers */
-        #sitesContainer,
-        #categoriesContainer,
-        #tagsContainer {
+        .custom-scroll, #debugPanel, #sitesContainer, #categoriesContainer, #tagsContainer, .modal-url, .add-site-checkbox-list, #editCategoriesCheckboxList, #editTagsCheckboxList, #addCategoriesCheckboxList, #addTagsCheckboxList {
             overflow: auto;
         }
     </style>
@@ -2359,6 +2353,7 @@
                 </div>
             </div>
             <div class="status" id="status"></div>
+
         </div>
 
         <div class="container">
@@ -2430,7 +2425,7 @@
                                     aria-hidden="true"></i> Add Site</button>
                         </div>
                     </div>
-                    <div id="sitesContainer" style="max-height: 400px; overflow-y: auto;">
+                    <div id="sitesContainer" class="custom-scroll" style="max-height: 400px; overflow-y: auto;">
                         <div class="empty-state">
                             <p>No data. Click "Load Data" to load sites.</p>
                         </div>
@@ -2461,7 +2456,7 @@
                                     class="fa-solid fa-plus add-icon" aria-hidden="true"></i> Add Category</button>
                         </div>
                     </div>
-                    <div id="categoriesContainer" style="max-height: 400px; overflow-y: auto;">
+                    <div id="categoriesContainer" class="custom-scroll" style="max-height: 400px; overflow-y: auto;">
                         <div class="empty-state">
                             <p>No data.</p>
                         </div>
@@ -2490,7 +2485,7 @@
                                     aria-hidden="true"></i> Add Tag</button>
                         </div>
                     </div>
-                    <div id="tagsContainer" style="max-height: 400px; overflow-y: auto;">
+                    <div id="tagsContainer" class="custom-scroll" style="max-height: 400px; overflow-y: auto;">
                         <div class="empty-state">
                             <p>No data.</p>
                         </div>
@@ -2526,7 +2521,7 @@
                         <h2>⚠️ Confirm Deletion</h2>
                         <button class="modal-close-btn" onclick="closeBulkDeleteModal()">x</button>
                     </div>
-                    <div class="modal-url" id="bulkDeleteUrl" style="max-height: 400px; overflow-y: auto;"></div>
+                    <div class="modal-url custom-scroll" id="bulkDeleteUrl" style="max-height: 400px; overflow-y: auto;"></div>
                     <p style="color: #FF6B6B; font-size: 0.9em; margin-top: 16px; font-weight: 500;">⚠️ This action
                         cannot be undone</p>
                     <div class="add-site-button-group">
@@ -2545,7 +2540,7 @@
                         <h2>⚠️ Confirm Deletion</h2>
                         <button class="modal-close-btn" onclick="closeDeleteModal()">x</button>
                     </div>
-                    <div class="modal-url" id="deleteUrl" style="max-height: 400px; overflow-y: auto;"></div>
+                    <div class="modal-url custom-scroll" id="deleteUrl" style="max-height: 400px; overflow-y: auto;"></div>
                     <p style="color: #FF6B6B; font-size: 0.9em; margin-top: 16px; font-weight: 500;">⚠️ This action
                         cannot be undone</p>
                     <div class="add-site-button-group">
@@ -2578,7 +2573,7 @@
 
                         <div class="add-site-form-group">
                             <label class="edit-label">Category</label>
-                            <div id="editCategoriesCheckboxList" class="add-site-checkbox-list">
+                            <div id="editCategoriesCheckboxList" class="add-site-checkbox-list custom-scroll">
                             </div>
                             <div class="add-site-hint">Select one or more categories</div>
                         </div>
@@ -2588,7 +2583,7 @@
                                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                                 <label class="edit-label">Tags</label>
                             </div>
-                            <div id="editTagsCheckboxList" class="add-site-checkbox-list">
+                            <div id="editTagsCheckboxList" class="add-site-checkbox-list custom-scroll">
                             </div>
                             <div class="add-site-hint">Select one or more tags</div>
                         </div>
@@ -2630,14 +2625,14 @@
 
                         <div class="add-site-form-group">
                             <label class="edit-label">Category</label>
-                            <div id="addCategoriesCheckboxList" class="add-site-checkbox-list">
+                            <div id="addCategoriesCheckboxList" class="add-site-checkbox-list custom-scroll">
                             </div>
                             <div class="add-site-hint">Select one or more categories</div>
                         </div>
 
                         <div class="add-site-form-group">
                             <label class="edit-label">Tags</label>
-                            <div id="addTagsCheckboxList" class="add-site-checkbox-list">
+                            <div id="addTagsCheckboxList" class="add-site-checkbox-list custom-scroll">
                             </div>
                             <div class="add-site-hint">Select one or more tags</div>
                         </div>
@@ -3168,10 +3163,9 @@
                 const row = (this && this.dataset && this.dataset.categoryId === String(categoryId)) ? this : explicitRow;
                 if (!row) return;
 
-                // Debugging: log event target to help diagnose clicks
-                console.debug('toggleCategoryRowSelection called', { categoryId, target: ev && ev.target && ev.target.tagName, row });
+                // Debugging: log event target removed in cleanup
 
-                // Ignore clicks on action buttons (but allow anchor clicks to propagate selection when desired)
+                // Ignore clicks on action buttons (but allow anchor clicks to propagate selection when desired)    
                 const targetTag = ev && ev.target && ev.target.tagName ? ev.target.tagName : null;
                 if (targetTag === 'BUTTON') return;
 
@@ -3709,8 +3703,24 @@
                 }, 5000);
             }
 
+            // Temporary on-page debug logger (visible to users who don't inspect console)
+            function appendDebug(msg) {
+                try {
+                    const panel = document.getElementById('debugPanel');
+                    if (!panel) return;
+                    const t = new Date().toLocaleTimeString();
+                    const line = document.createElement('div');
+                    line.textContent = `[${t}] ${msg}`;
+                    panel.insertBefore(line, panel.firstChild);
+                    panel.style.display = 'block';
+                    // Keep last 80 lines
+                    while (panel.childNodes.length > 80) panel.removeChild(panel.lastChild);
+                } catch (e) { /* ignore */ }
+            }
+
+
+
             function switchTab(tabName, clickedBtn) {
-                console.debug('switchTab', { tabName, clickedBtn });
                 const allTabs = document.querySelectorAll('.tab-content');
                 allTabs.forEach(tab => tab.classList.remove('active'));
 
@@ -3724,19 +3734,22 @@
                 allButtons.forEach(btn => btn.classList.remove('active'));
 
                 const activeTab = document.getElementById(tabName + 'Tab');
-                if (activeTab) activeTab.classList.add('active');
-                else console.debug('switchTab: active tab element not found for', tabName);
-
-                // Find the corresponding tab button and mark it active (robust to clicks on inner elements)
-                let btn = clickedBtn || document.querySelector(`.tab-button[data-tab="${tabName}"]`) || Array.from(document.querySelectorAll('.tab-button')).find(b => {
-                    const on = b.getAttribute('onclick') || '';
-                    return on.includes(`switchTab('${tabName}'`) || on.includes(`switchTab(\"${tabName}\"`);
-                });
-
-                if (btn && btn.classList) {
-                    btn.classList.add('active');
+                if (activeTab) {
+                    activeTab.classList.add('active');
                 } else {
-                    console.debug('switchTab: tab button not found for', tabName);
+                    /* active tab element not found */
+
+                    // Find the corresponding tab button and mark it active (robust to clicks on inner elements)
+                    let btn = clickedBtn || document.querySelector(`.tab-button[data-tab="${tabName}"]`) || Array.from(document.querySelectorAll('.tab-button')).find(b => {
+                        const on = b.getAttribute('onclick') || '';
+                        return on.includes(`switchTab('${tabName}'`) || on.includes(`switchTab(\"${tabName}\"`);
+                    });
+
+                    if (btn && btn.classList) {
+                        btn.classList.add('active');
+                    } else {
+                        /* tab button not found */
+                    }
                 }
 
                 // Update ARIA for accessibility
@@ -3913,6 +3926,11 @@
                 // Clear any selection when reloading
                 clearSelection(); clearTagSelection(); clearCategorySelection(); showStatus('Loading data...', 'info');
 
+                // After loading we optionally analyze mappings to help diagnose missing badges
+                function _afterLoadDiagnostics() {
+                    try { analyzeSiteCategoryMappings(); } catch (e) { /* ignore in prod */ }
+                }
+
                 // Check if URL has category
                 const urlPath = window.location.pathname;
                 const categoryMatch = urlPath.match(/\/category\/(.+?)(?:\?|\/|$)/);
@@ -3951,12 +3969,17 @@
                     document.getElementById('categoriesTableCount').textContent = stats.stats?.categories || 0;
                     document.getElementById('tagsTableCount').textContent = stats.stats?.tags || 0;
 
-                    renderSites(sites.data || []);
                     allSites = sites.data || [];
                     allCategories = categories.data || [];
                     allTags = tags.data || [];
+
                     renderCategories(categories.data || []);
                     renderTags(tags.data || []);
+                    // Now that categories/tags are available, render sites so matching checks succeed
+                    renderSites(sites.data || []);
+
+                    // Diagnostic helper: log any sites whose categories/tags do not map to current lists
+                    try { _afterLoadDiagnostics(); } catch (e) { /* ignore */ }
 
                     showStatus('✅ Data loaded successfully!', 'success');
                 } catch (error) {
@@ -4061,6 +4084,15 @@
 
             function renderSites(sites) {
                 const container = document.getElementById('sitesContainer');
+                // Diagnostic lookup maps (temporary) — use trimmed keys for stability
+                const categoryById = new Map((allCategories || []).map(c => [String(c.id).trim(), c]));
+                const categoryByName = new Map((allCategories || []).map(c => [String(c.name).trim(), c]));
+                const tagById = new Map((allTags || []).map(t => [String(t.id).trim(), t]));
+                const tagByName = new Map((allTags || []).map(t => [String(t.name).trim(), t]));
+
+                // renderSites called (debug logs removed)
+                try { appendDebug(`renderSites called (sites=${sites.length}, cats=${(allCategories || []).length}, tags=${(allTags || []).length})`); } catch (e) { }
+
                 if (sites.length === 0) {
                     container.innerHTML = '<div class="empty-state"><p>No sites</p></div>';
                     return;
@@ -4078,47 +4110,137 @@
 
                 let html = '<table><thead><tr><th onclick="sortTable(\'sitesContainer\', 0, \'sites\')">Name <span class="sort-icon inactive"></span></th><th>URL</th><th onclick="sortTable(\'sitesContainer\', 2, \'sites\')">Category <span class="sort-icon inactive"></span></th><th onclick="sortTable(\'sitesContainer\', 3, \'sites\')">Tags <span class="sort-icon inactive"></span></th><th>Pricing</th><th onclick="sortTable(\'sitesContainer\', 5, \'sites\')">Created <span class="sort-icon inactive"></span></th></tr></thead><tbody>';
                 sites.forEach(site => {
+                    // Diagnostic match trackers for this site
+                    let catMatchTypes = [];
+                    let tagMatchTypes = [];
+                    let unmappedTags = [];
+                    let catRaw = [];
+                    let tagRaw = [];
                     let categoryName = '-';
-                    // Show all categories as colored badges (similar to tags)
+                    // Show all categories as colored badges (similar to tags)" 
                     if (site.categories_array && site.categories_array.length > 0) {
-                        // Filter out deleted categories and show only existing ones
+                        // Map categories to badges using deterministic lookup maps (id -> name -> fallback)
                         categoryName = site.categories_array
-                            .filter(c => {
-                                const catName = typeof c === 'string' ? c : c.name;
-                                return allCategories.some(allCat => allCat.name === catName);
-                            })
                             .map(c => {
-                                const catName = typeof c === 'string' ? c : c.name;
-                                const catColor = (typeof c === 'object' && c.color) ? c.color : '#6CBBFB';
-                                return `<span class="tag-badge" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40;">${catName}</span>`;
+                                // Accept objects, strings, numbers — normalize to either id or name
+                                let catName = '';
+                                let catId = null;
+                                if (typeof c === 'string') catName = c.trim();
+                                else if (typeof c === 'number') catId = String(c);
+                                else if (typeof c === 'object' && c) {
+                                    if (c.id !== undefined && c.id !== null) catId = String(c.id).trim();
+                                    if (c.name !== undefined && c.name !== null) catName = String(c.name).trim();
+                                } else if (c != null) {
+                                    // catch-all: coerce to string
+                                    catName = String(c).trim();
+                                }
+
+                                let found = null;
+                                let matchType = null;
+                                if (catId) {
+                                    found = categoryById.get(catId);
+                                    if (found) matchType = 'id';
+                                }
+                                if (!found && catName) {
+                                    found = categoryByName.get(catName);
+                                    if (found) matchType = 'name';
+                                }
+                                if (!found) matchType = 'fallback';
+
+                                catMatchTypes.push(matchType);
+                                // keep original raw for diagnostics
+                                try { catRaw.push(typeof c === 'object' ? (c.name || c.id || JSON.stringify(c)) : String(c)); } catch (e) { catRaw.push(String(c)); }
+
+                                const catColor = found ? (found.color || '#6CBBFB') : '#7A8FAA';
+                                const displayName = catName || (found && found.name) || (catId ? (`id:${catId}`) : 'Unknown');
+                                /* fallback category mapping suppressed */
+                                /* category mapping debug suppressed */
+                                return `<span class="tag-badge" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40;">${displayName}</span>`;
                             }).join(' ');
+                        if (!categoryName) categoryName = '-';
                     } else if (site.categories_array && site.categories_array[0]) {
                         const cat = site.categories_array[0];
-                        const catName = typeof cat === 'string' ? cat : cat.name;
-                        const catColor = (typeof cat === 'object' && cat.color) ? cat.color : '#6CBBFB';
-                        categoryName = `<span class="tag-badge" style="background: ${catColor}; color: white;">${catName}</span>`;
+                        let catName = '';
+                        let catId = null;
+                        if (typeof cat === 'string') catName = (cat || '').trim();
+                        else if (typeof cat === 'number') catId = String(cat);
+                        else if (typeof cat === 'object' && cat) {
+                            if (cat.id !== undefined && cat.id !== null) catId = String(cat.id).trim();
+                            if (cat.name !== undefined && cat.name !== null) catName = String(cat.name).trim();
+                        }
+                        let found = null;
+                        let matchType = null;
+                        if (catId) {
+                            found = categoryById.get(catId);
+                            if (found) matchType = 'id';
+                        }
+                        if (!found && catName) {
+                            found = categoryByName.get(catName);
+                            if (found) matchType = 'name';
+                        }
+                        if (!found) matchType = 'fallback';
+                        catMatchTypes.push(matchType);
+                        try { catRaw.push(typeof cat === 'object' ? (cat.name || cat.id || JSON.stringify(cat)) : String(cat)); } catch (e) { catRaw.push(String(cat)); }
+                        const catColor = found ? (found.color || '#6CBBFB') : '#7A8FAA';
+                        categoryName = `<span class="tag-badge" style="background: ${catColor}; color: white;">${catName || (catId ? ('id:' + catId) : '')}</span>`;
+                        /* fallback category mapping (single) suppressed */
                     } else if (site.category) {
-                        categoryName = `<span class="tag-badge" style="background: #6CBBFB20; color: #6CBBFB; border: 1px solid #6CBBFB40;">${site.category}</span>`;
+                        // legacy single-category field (string)
+                        const catName = String(site.category).trim();
+                        const found = categoryByName.get(catName);
+                        const matchType = found ? 'name' : 'fallback';
+                        catMatchTypes.push(matchType);
+                        try { catRaw.push(catName); } catch (e) { }
+                        const catColor = found ? (found.color || '#6CBBFB') : '#7A8FAA';
+                        categoryName = `<span class="tag-badge" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40;">${site.category}</span>`;
+                        /* fallback category mapping (legacy) suppressed */
                     }
 
-                    // Display tags as colored badges
+                    // Display tags as colored badges and detect unmapped ones
                     let tagsHtml = '-';
+                    // unmappedTags and tagRaw declared earlier
                     if (site.tags_array && site.tags_array.length > 0) {
-                        // Filter out deleted tags and show only existing ones
-                        tagsHtml = site.tags_array
-                            .filter(t => {
-                                const tagName = typeof t === 'string' ? t : t.name;
-                                return allTags.some(allTag => allTag.name === tagName);
-                            })
-                            .map(t => {
-                                const tagName = typeof t === 'string' ? t : t.name;
-                                const tagColor = (typeof t === 'object' && t.color) ? t.color : '#667eea';
-                                return `<span class="tag-badge" style="background: ${tagColor}20; color: ${tagColor}; border: 1px solid ${tagColor}40;">${tagName}</span>`;
-                            }).join(' ');
-                        // If all tags were filtered out, show dash
+                        // Map tags to badges using lookup maps (id -> name -> fallback)
+                        const parts = site.tags_array.map(t => {
+                            let tagName = '';
+                            let tagId = null;
+                            if (typeof t === 'string') tagName = (t || '').trim();
+                            else if (typeof t === 'number') tagId = String(t);
+                            else if (typeof t === 'object' && t) {
+                                if (t.id !== undefined && t.id !== null) tagId = String(t.id).trim();
+                                if (t.name !== undefined && t.name !== null) tagName = String(t.name).trim();
+                            } else if (t != null) tagName = String(t).trim();
+
+                            let found = null;
+                            let matchType = null;
+                            if (tagId) {
+                                found = tagById.get(tagId);
+                                if (found) matchType = 'id';
+                            }
+                            if (!found && tagName) {
+                                found = tagByName.get(tagName);
+                                if (found) matchType = 'name';
+                            }
+                            if (!found) matchType = 'fallback';
+
+                            tagMatchTypes.push(matchType);
+                            try { tagRaw.push(typeof t === 'object' ? (t.name || t.id || JSON.stringify(t)) : String(t)); } catch (e) { tagRaw.push(String(t)); }
+                            const tagColor = found ? (found.color || '#667eea') : '#8A9FB5';
+                            const displayName = tagName || (found && found.name) || (tagId ? (`id:${tagId}`) : 'Unknown');
+                            if (!found) unmappedTags.push(displayName);
+                            /* fallback tag mapping (suppressed) */
+                            return `<span class="tag-badge" style="background: ${tagColor}20; color: ${tagColor}; border: 1px solid ${tagColor}40;">${displayName}</span>`;
+                        });
+                        tagsHtml = parts.join(' ');
                         if (!tagsHtml) tagsHtml = '-';
                     } else if (site.tags && typeof site.tags === 'string') {
-                        tagBadges = `<span class="tag-badge" style="background: #667eea20; color: #667eea; border: 1px solid #667eea40;">${site.tags}</span>`;
+                        const tName = String(site.tags).trim();
+                        const found = tagByName.get(tName);
+                        const matchType = found ? 'name' : 'fallback';
+                        tagMatchTypes.push(matchType);
+                        try { tagRaw.push(tName); } catch (e) { }
+                        tagsHtml = `<span class="tag-badge" style="background: #667eea20; color: #667eea; border: 1px solid #667eea40;">${site.tags}</span>`;
+                        /* fallback tag mapping (legacy) suppressed */
                     }
                     const pricingFormatted = formatPricing(site.pricing);
                     const siteName = site.name || '-';
@@ -4127,7 +4249,12 @@
                     const pricingClass = site.pricing ? `pricing-badge ${site.pricing.replace(/_/g, '-')}` : 'pricing-badge';
 
                     const isSelected = selectedSiteIds.has(site.id);
-                    html += `<tr data-site-id="${site.id}" data-created="${site.created_at}" class="${isSelected ? 'row-selected' : ''}" onclick="toggleRowSelection(event, '${site.id}')">
+                    const catMatchAttr = (catMatchTypes && catMatchTypes.length) ? (catMatchTypes.includes('fallback') ? 'fallback' : (catMatchTypes.includes('name') ? 'name' : 'id')) : 'none';
+                    const tagMatchAttr = (tagMatchTypes && tagMatchTypes.length) ? (tagMatchTypes.includes('fallback') ? 'fallback' : (tagMatchTypes.includes('name') ? 'name' : 'id')) : 'none';
+                    const catRawAttr = (catRaw && catRaw.length) ? encodeURIComponent(JSON.stringify(catRaw.slice(0, 8))) : '';
+                    const tagRawAttr = (tagRaw && tagRaw.length) ? encodeURIComponent(JSON.stringify(tagRaw.slice(0, 8))) : '';
+                    /* site mapping summary suppressed */
+                    html += `<tr data-site-id="${site.id}" data-created="${site.created_at}" data-cat-match="${catMatchAttr}" data-tag-match="${tagMatchAttr}" data-cat-raw="${catRawAttr}" data-tag-raw="${tagRawAttr}" class="${isSelected ? 'row-selected' : ''}" onclick="toggleRowSelection(event, '${site.id}')">
                     <td>${siteName}</td>
                     <td><a href="${site.url}" target="_blank" title="${site.url}" onclick="event.stopPropagation()">${site.url}</a></td>
                     <td>${categoryName}</td>
@@ -4138,6 +4265,67 @@
                 });
                 html += '</tbody></table>';
                 container.innerHTML = html;
+            }
+
+            // Update a single rendered site row (keeps UI in sync after edits without a full reload)
+            function updateSiteRow(site) {
+                try {
+                    if (!site || !site.id) return;
+                    const row = document.querySelector(`tr[data-site-id="${site.id}"]`);
+                    if (!row) return; // not currently rendered (e.g., filtered out or paginated)
+
+                    // Recompute mappings similar to renderSites for this single site
+                    const categoryById = new Map((allCategories || []).map(c => [String(c.id).trim(), c]));
+                    const categoryByName = new Map((allCategories || []).map(c => [String(c.name).trim(), c]));
+                    const tagById = new Map((allTags || []).map(t => [String(t.id).trim(), t]));
+                    const tagByName = new Map((allTags || []).map(t => [String(t.name).trim(), t]));
+
+                    // Categories
+                    let categoryName = '-';
+                    if (site.categories_array && site.categories_array.length > 0) {
+                        categoryName = site.categories_array.map(c => {
+                            const catName = typeof c === 'string' ? c.trim() : (c && c.name) ? String(c.name).trim() : '';
+                            const catId = (typeof c === 'object' && c && c.id) ? String(c.id).trim() : null;
+                            let found = null;
+                            if (catId) found = categoryById.get(catId);
+                            if (!found && catName) found = categoryByName.get(catName);
+                            const catColor = found ? (found.color || '#6CBBFB') : '#7A8FAA';
+                            const displayName = catName || (found && found.name) || 'Unknown';
+                            return `<span class="tag-badge" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40;">${displayName}</span>`;
+                        }).join(' ');
+                    } else if (site.category) {
+                        const found = categoryByName.get(String(site.category).trim());
+                        const catColor = found ? (found.color || '#6CBBFB') : '#7A8FAA';
+                        categoryName = `<span class="tag-badge" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40;">${site.category}</span>`;
+                    }
+
+                    // Tags
+                    let tagsHtml = '-';
+                    if (site.tags_array && site.tags_array.length > 0) {
+                        tagsHtml = site.tags_array.map(t => {
+                            const tagName = typeof t === 'string' ? (t || '').trim() : (t && t.name) ? String(t.name).trim() : '';
+                            const tagId = (typeof t === 'object' && t && t.id) ? String(t.id).trim() : null;
+                            let found = null;
+                            if (tagId) found = tagById.get(tagId);
+                            if (!found && tagName) found = tagByName.get(tagName);
+                            const tagColor = found ? (found.color || '#667eea') : '#8A9FB5';
+                            const displayName = tagName || (found && found.name) || 'Unknown';
+                            return `<span class="tag-badge" style="background: ${tagColor}20; color: ${tagColor}; border: 1px solid ${tagColor}40;">${displayName}</span>`;
+                        }).join(' ');
+                    } else if (site.tags && typeof site.tags === 'string') {
+                        tagsHtml = `<span class="tag-badge" style="background: #667eea20; color: #667eea; border: 1px solid #667eea40;">${site.tags}</span>`;
+                    }
+
+                    // Update DOM cells: category is cell index 2, tags is index 3 (matches renderSites)
+                    if (row.cells && row.cells.length >= 4) {
+                        row.cells[2].innerHTML = categoryName;
+                        row.cells[3].innerHTML = tagsHtml;
+                    }
+
+                    try { appendDebug(`updateSiteRow applied for site ${site.id}`); } catch (e) { }
+                } catch (err) {
+                    console.error('updateSiteRow failed', err);
+                }
             }
 
             function renderCategories(categories) {
@@ -4163,7 +4351,7 @@
 
             function renderTags(tags) {
                 const container = document.getElementById('tagsContainer');
-                if (tags.length === 0) {
+                if (!tags || tags.length === 0) {
                     container.innerHTML = '<div class="empty-state"><p>No tags</p></div>';
                     return;
                 }
@@ -4187,6 +4375,56 @@
                 });
             }
 
+            // Diagnostic: find sites whose categories/tags do not map to current master lists
+            function analyzeSiteCategoryMappings() {
+                try {
+                    if (!allSites || !allCategories) return;
+
+                    const categoryById = new Map(allCategories.map(c => [String(c.id), c]));
+                    const categoryByName = new Map(allCategories.map(c => [String(c.name), c]));
+
+                    const tagById = new Map(allTags.map(t => [String(t.id), t]));
+                    const tagByName = new Map(allTags.map(t => [String(t.name), t]));
+
+                    const issues = [];
+
+                    allSites.forEach(site => {
+                        const catItems = site.categories_array || (site.categories ? (Array.isArray(site.categories) ? site.categories : [site.categories]) : []);
+                        (catItems || []).forEach(ci => {
+                            const id = (ci && ci.id) ? String(ci.id) : null;
+                            const name = (typeof ci === 'string') ? ci : (ci && ci.name) ? ci.name : null;
+                            let found = false;
+                            if (id) found = categoryById.has(id);
+                            if (!found && name) found = categoryByName.has(String(name));
+                            if (!found) {
+                                issues.push({ siteId: site.id, siteName: site.name, missingCategory: name || id || ci });
+                            }
+                        });
+
+                        const tagItems = site.tags_array || (site.tags ? (Array.isArray(site.tags) ? site.tags : [site.tags]) : []);
+                        (tagItems || []).forEach(ti => {
+                            const id = (ti && ti.id) ? String(ti.id) : null;
+                            const name = (typeof ti === 'string') ? ti : (ti && ti.name) ? ti.name : null;
+                            let found = false;
+                            if (id) found = tagById.has(id);
+                            if (!found && name) found = tagByName.has(String(name));
+                            if (!found) {
+                                issues.push({ siteId: site.id, siteName: site.name, missingTag: name || id || ti });
+                            }
+                        });
+                    });
+
+                    if (issues.length > 0) {
+                        /* analyzeSiteCategoryMappings: found unmapped references (suppressed) */
+                    } else {
+                        /* analyzeSiteCategoryMappings: all refs map to current lists */
+                    }
+                } catch (e) {
+                    console.error('analyzeSiteCategoryMappings threw', e);
+                }
+            }
+
+
             // Show delete modal with all data from row
             function showDeleteModal(siteId) {
                 const modal = document.getElementById('deleteModal');
@@ -4203,32 +4441,38 @@
                 let categoryBadges = '-';
                 if (site.categories_array && site.categories_array.length > 0) {
                     categoryBadges = site.categories_array
-                        .filter(c => {
-                            const catName = typeof c === 'string' ? c : c.name;
-                            return allCategories.some(allCat => allCat.name === catName);
-                        })
                         .map(c => {
-                            const catName = typeof c === 'string' ? c : c.name;
-                            const catColor = (typeof c === 'object' && c.color) ? c.color : '#6CBBFB';
-                            return `<span class="tag-badge" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40; cursor: not-allowed;">${catName}</span>`;
+                            const catName = typeof c === 'string' ? c : (c && c.name) ? c.name : '';
+                            const catId = (typeof c === 'object' && c && c.id) ? String(c.id) : null;
+                            let found = null;
+                            if (catId) found = allCategories.find(allCat => String(allCat.id) === catId);
+                            if (!found && catName) found = allCategories.find(allCat => String(allCat.name) === String(catName));
+
+                            const catColor = found ? (found.color || '#6CBBFB') : '#7A8FAA';
+                            const displayName = catName || (found && found.name) || 'Unknown';
+                            return `<span class="tag-badge" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40; cursor: not-allowed;">${displayName}</span>`;
                         }).join(' ');
                     if (!categoryBadges) categoryBadges = '-';
                 } else if (site.category) {
-                    categoryBadges = `<span class="tag-badge" style="background: #6CBBFB20; color: #6CBBFB; border: 1px solid #6CBBFB40; cursor: not-allowed;">${site.category}</span>`;
+                    const found = allCategories.find(allCat => String(allCat.name) === String(site.category));
+                    const catColor = found ? (found.color || '#6CBBFB') : '#7A8FAA';
+                    categoryBadges = `<span class="tag-badge" style="background: ${catColor}20; color: ${catColor}; border: 1px solid ${catColor}40; cursor: not-allowed;">${site.category}</span>`;
                 }
 
                 // Format tags as styled badges
                 let tagBadges = '-';
                 if (site.tags_array && site.tags_array.length > 0) {
                     tagBadges = site.tags_array
-                        .filter(t => {
-                            const tagName = typeof t === 'string' ? t : t.name;
-                            return allTags.some(allTag => allTag.name === tagName);
-                        })
                         .map(t => {
-                            const tagName = typeof t === 'string' ? t : t.name;
-                            const tagColor = (typeof t === 'object' && t.color) ? t.color : '#667eea';
-                            return `<span class="tag-badge" style="background: ${tagColor}20; color: ${tagColor}; border: 1px solid ${tagColor}40; cursor: not-allowed;">${tagName}</span>`;
+                            const tagName = typeof t === 'string' ? t : (t && t.name) ? t.name : '';
+                            const tagId = (typeof t === 'object' && t && t.id) ? String(t.id) : null;
+                            let found = null;
+                            if (tagId) found = allTags.find(allTag => String(allTag.id) === tagId);
+                            if (!found && tagName) found = allTags.find(allTag => String(allTag.name) === String(tagName));
+
+                            const tagColor = found ? (found.color || '#667eea') : '#8A9FB5';
+                            const displayName = tagName || (found && found.name) || 'Unknown';
+                            return `<span class="tag-badge" style="background: ${tagColor}20; color: ${tagColor}; border: 1px solid ${tagColor}40; cursor: not-allowed;">${displayName}</span>`;
                         }).join(' ');
                     if (!tagBadges) tagBadges = '-';
                 } else if (site.tags && typeof site.tags === 'string') {
@@ -4788,10 +5032,19 @@
                 const colorRadio = document.querySelector('input[name="editTagColor"]:checked');
                 const color = colorRadio ? colorRadio.value : '#667eea';
 
+                // saveEditedTag invoked (debug logs removed)
+                try { appendDebug(`saveEditedTag called id=${tagId} name=${name}`); } catch (e) { }
+
+                try { showStatus('🔧 Saving tag...', 'info'); } catch (e) { }
+
                 if (!name) {
                     showStatus('Tag name is required', 'error');
                     return;
                 }
+
+                // Remember old tag name (if present) for local patching
+                const oldTag = allTags.find(t => String(t.id) === String(tagId));
+                const oldTagName = oldTag ? oldTag.name : null;
 
                 try {
                     const response = await fetch(`${API_URL}/api/tags/${tagId}`, {
@@ -4803,9 +5056,52 @@
                     const data = await response.json();
 
                     if (response.ok && data.success) {
+                        // Apply local update so sites reflect the change immediately
+                        const updatedTag = (data && data.data) ? data.data : { id: tagId, name, color };
+                        const idx = allTags.findIndex(t => String(t.id) === String(tagId));
+                        if (idx >= 0) allTags[idx] = updatedTag; else allTags.push(updatedTag);
+
+                        // Patch allSites tags arrays and legacy fields
+                        const affectedSiteIds = new Set();
+                        allSites.forEach(s => {
+                            let changed = false;
+                            if (s.tags_array && Array.isArray(s.tags_array)) {
+                                s.tags_array = s.tags_array.map(ti => {
+                                    if (ti && typeof ti === 'object' && ti.id && String(ti.id) === String(tagId)) {
+                                        changed = true;
+                                        return { id: updatedTag.id, name: updatedTag.name, color: updatedTag.color };
+                                    }
+                                    if (typeof ti === 'string' && oldTagName && ti === oldTagName) {
+                                        changed = true;
+                                        return { id: updatedTag.id, name: updatedTag.name, color: updatedTag.color };
+                                    }
+                                    return ti;
+                                });
+                            } else if (s.tags && typeof s.tags === 'string' && oldTagName && s.tags === oldTagName) {
+                                s.tags = updatedTag.name;
+                                changed = true;
+                            }
+                            if (changed) affectedSiteIds.add(s.id);
+                        });
+
+                        // Update individual site rows immediately
+                        affectedSiteIds.forEach(id => {
+                            const s = allSites.find(x => x.id === id);
+                            if (s) updateSiteRow(s);
+                        });
+
+                        /* saveEditedTag: local update applied (suppressed debug) */
+
                         showStatus('✅ Tag successfully updated!', 'success');
                         closeEditTagModal();
-                        loadData();
+
+                        // Re-render lists immediately to reduce transient glitches
+                        renderTags(allTags);
+                        renderSites(allSites);
+
+                        // Schedule a full refresh shortly after so server state is authoritative
+                        setTimeout(() => loadData(), 700);
+
                     } else {
                         showStatus('❌ Error while updating: ' + (data.error || 'Unknown error'), 'error');
                     }
@@ -4860,6 +5156,9 @@
             function showEditCategoryModal(categoryId, categoryName, categoryColor) {
                 const modal = document.getElementById('editCategoryModal');
 
+                // opening the edit modal (debug logs removed)
+                try { appendDebug(`showEditCategoryModal id=${categoryId} name=${categoryName}`); } catch (e) { }
+
                 document.getElementById('editCategoryName').value = categoryName;
 
                 // Set the radio button for the matching color
@@ -4895,10 +5194,20 @@
                 const colorRadio = document.querySelector('input[name="editCategoryColor"]:checked');
                 const color = colorRadio ? colorRadio.value : '#667eea';
 
+                // saveEditedCategory invoked (debug logs removed)
+                try { appendDebug(`saveEditedCategory called id=${categoryId} name=${name}`); } catch (e) { }
+
+                // Show a short visible status so users see activity even if console filters hide debug
+                try { showStatus('🔧 Saving category...', 'info'); } catch (e) { }
+
                 if (!name) {
                     showStatus('Category name is required', 'error');
                     return;
                 }
+
+                // Remember old name so we can patch sites locally if needed
+                const oldCat = allCategories.find(c => String(c.id) === String(categoryId));
+                const oldName = oldCat ? oldCat.name : null;
 
                 try {
                     const response = await fetch(`${API_URL}/api/categories/${categoryId}`, {
@@ -4915,9 +5224,60 @@
                     const data = await response.json();
 
                     if (response.ok && data.success) {
+                        /* server returned for saveEditedCategory (suppressed debug) */
+
+                        // Apply local in-memory updates so UI remains consistent immediately
+                        const updatedCat = (data && data.data) ? data.data : { id: categoryId, name, color };
+
+                        const idx = allCategories.findIndex(c => String(c.id) === String(categoryId));
+                        if (idx >= 0) allCategories[idx] = updatedCat; else allCategories.push(updatedCat);
+
+                        // Patch allSites in-memory so renderSites can show updated category names/colors
+                        const affectedSiteIds = new Set();
+                        allSites.forEach(s => {
+                            let changed = false;
+                            if (s.categories_array && Array.isArray(s.categories_array)) {
+                                s.categories_array = s.categories_array.map(ci => {
+                                    if (ci && typeof ci === 'object' && ci.id && String(ci.id) === String(categoryId)) {
+                                        changed = true;
+                                        return { id: updatedCat.id, name: updatedCat.name, color: updatedCat.color };
+                                    }
+                                    if (typeof ci === 'string' && oldName && ci === oldName) {
+                                        changed = true;
+                                        return { id: updatedCat.id, name: updatedCat.name, color: updatedCat.color };
+                                    }
+                                    // leave unchanged
+                                    return ci;
+                                });
+                            } else if (s.category && oldName && s.category === oldName) {
+                                s.category = updatedCat.name;
+                                changed = true;
+                            }
+                            if (changed) affectedSiteIds.add(s.id);
+                        });
+
+                        // Update individual site rows immediately
+                        affectedSiteIds.forEach(id => {
+                            const s = allSites.find(x => x.id === id);
+                            if (s) updateSiteRow(s);
+                        });
+
+                        /* saveEditedCategory: local update applied (suppressed debug) */
+
                         showStatus('✅ Category successfully updated!', 'success');
                         closeEditCategoryModal();
-                        loadData();
+
+                        // Re-render lists immediately to avoid transient missing badges
+                        renderCategories(allCategories);
+                        renderSites(allSites);
+
+                        // Schedule a full reload after a short delay to ensure server state converges
+                        setTimeout(() => {
+                            loadData().then(() => {
+                                try { analyzeSiteCategoryMappings(); } catch (e) { console.error('analyzeSiteCategoryMappings failed', e); }
+                            }).catch(err => console.error('loadData after category edit failed', err));
+                        }, 700);
+
                     } else {
                         showStatus('❌ Error while updating: ' + (data.error || 'Unknown error'), 'error');
                     }
@@ -5038,7 +5398,7 @@
                             // Ignore clicks on the category link itself (it loads category view)
                             if (e.target.tagName === 'A') return;
 
-                            console.log('Category row clicked (delegate)', { id: tr.dataset.categoryId, tag: e.target.tagName });
+                            /* category row click delegate (log suppressed) */
 
                             // Call toggler using the row as context
                             if (window.toggleCategoryRowSelection) {
