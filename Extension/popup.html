@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Organizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 500px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #050a30 0%, #0F1E3D 100%);
+            padding: 0;
+        }
+
+        .container {
+            background: #0F1E3D;
+            padding: 24px;
+        }
+
+        .header {
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid #1A2E52;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .header-right .user-email {
+            color: #E0E8F7;
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        h2 {
+            color: #6CBBFB;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .auth-section {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .auth-info {
+            font-size: 13px;
+            color: #E0E8F7;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #E0E8F7;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #1A2E52;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+            font-family: inherit;
+            background: #1A2E52;
+            color: #E0E8F7;
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        input[type="password"]:focus,
+        select:focus {
+            outline: none;
+
+        }
+
+        input[type="text"]::placeholder,
+        input[type="email"]::placeholder,
+        input[type="password"]::placeholder {
+            color: #8A9FB5;
+        }
+
+        select {
+            cursor: pointer;
+            background-color: #1A2E52;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236CBBFB' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 20px;
+            padding-right: 40px;
+        }
+
+        select option {
+            background: #1A2E52;
+            color: #E0E8F7;
+            outline: none;
+            padding: 8px;
+            line-height: 1.8;
+        }
+
+
+
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            /* restrict transitions to visual properties only to avoid animated transforms */
+            transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+            font-family: inherit;
+        }
+
+        .btn-save {
+            background: #1E4976;
+            color: #E0E8F7;
+        }
+
+        .btn-save:hover {
+            background: #2A5B9E;
+            box-shadow: 0 2px 8px rgba(30, 73, 118, 0.4);
+        }
+
+        .btn-save:active {
+            background: #1E4976;
+        }
+
+        .btn-save:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-cancel {
+            background: #1A2E52;
+            color: #E0E8F7;
+        }
+
+        .btn-cancel:hover {
+            background: #2A3E5F;
+            box-shadow: 0 2px 8px rgba(26, 46, 82, 0.4);
+        }
+
+        /* Small compact add icon (right of label) */
+        .btn-add {
+            background: transparent;
+            border: 1px solid rgba(108, 187, 251, 0.16);
+            color: #6CBBFB;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            font-size: 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-left: 8px;
+        }
+
+        .btn-add:hover {
+            background: rgba(108, 187, 251, 0.06);
+        }
+
+        /* Disable scale/transform animations on add/X buttons to avoid jumpy effect */
+        .btn-add:active,
+        .btn-icon.small:active {
+            transform: none !important;
+            transition: none !important;
+        }
+
+
+
+        /* Inline compact add form (appears beside +) */
+        /* Wrapper that visually joins the + and inline form into a compact control */
+        .inline-add-wrapper {
+            display: inline-flex;
+            align-items: center;
+            gap: 0;
+            background: #1A2E52;
+            border: 1px solid #6CBBFB40;
+            border-radius: 8px;
+            margin-left: 8px;
+            position: relative;
+            /* for palette */
+        }
+
+        /* Wrapper to hold input + icon inline */
+        .inline-filter-wrapper {
+            display: inline-flex;
+            align-items: center;
+            background: #1A2E52;
+            border-radius: 8px 0px 0px 8px;
+            padding: 0px 2px 0px 2px;
+        }
+
+        .inline-filter-wrapper .inline-filter {
+            min-width: 80px;
+            max-width: 120px;
+        }
+
+        .inline-filter-icon {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            pointer-events: none;
+            opacity: 0.95;
+            color: #A0B4D0;
+            /* default muted color */
+        }
+
+        /* Toggle button that shows the magnifier (keyboard accessible) */
+        .inline-filter-toggle {
+            background: transparent;
+            border: none;
+            padding: 6px;
+            margin: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: inherit;
+            cursor: pointer;
+            line-height: 0;
+            border-radius: 6px;
+        }
+
+        /* Inline filter input and clear visibility - collapsed by default */
+        .inline-filter-wrapper:not(.open) .inline-filter,
+        .inline-filter-wrapper:not(.open) .inline-filter-clear {
+            display: none;
+        }
+
+        /* When open, show input inline */
+        .inline-filter-wrapper.open .inline-filter {
+            display: inline-block;
+        }
+
+        /* Clear (×) button inside the inline filter wrapper */
+        .inline-filter-clear {
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            color: #A0B4D0;
+            cursor: pointer;
+            padding: 0 6px;
+            border-radius: 6px;
+            flex-shrink: 0;
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        .inline-filter-clear.hidden {
+            display: none;
+        }
+
+        /* Turn icon and clear button blue when input is focused (click/focus within wrapper) or when wrapper is open */
+        .inline-filter-wrapper:focus-within .inline-filter-icon,
+        .inline-filter-wrapper.open .inline-filter-icon,
+        .inline-filter-wrapper:focus-within .inline-filter-clear,
+        .inline-filter-wrapper.open .inline-filter-clear {
+            color: #6CBBFB;
+
+
+        }
+
+        .inline-filter-wrapper.open .inline-filter-clear {
+            padding: 9px 10px;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Highlight the filter wrapper itself when input is focused or open */
+
+
+        /* Highlight the adjacent add button wrapper when the filter is focused */
+        .inline-filter-wrapper:focus-within+.inline-add-wrapper {
+            border-color: #6CBBFB;
+        }
+
+        /* Also highlight the add wrapper when any of its children (e.g. the search input) is focused */
+        .inline-add-wrapper:focus-within {
+            border-color: #6CBBFB;
+        }
+
+        .inline-add-wrapper .btn-add {
+            margin-left: 0;
+            border-radius: 0px 8px 8px 0px;
+            padding: 6px 8px;
+            background: transparent;
+            border: none;
+            border-left: 1px solid rgba(108, 187, 251, 0.16);
+            color: #6CBBFB;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+
+        }
+
+        .inline-add-wrapper .btn-add:hover {
+            background: rgba(108, 187, 251, 0.04);
+        }
+
+        .inline-add-form {
+            display: inline-flex;
+            align-items: center;
+            margin: 0;
+        }
+
+        /* Smaller, compact inline input (transparent to blend with wrapper) */
+        .inline-add-wrapper .inline-input {
+            min-width: 72px;
+            padding: 6px 8px;
+            border-radius: 0px;
+            background: transparent;
+            border: none;
+            color: #E0E8F7;
+            font-size: 12px;
+            line-height: 18px;
+            position: relative;
+            /* ensure input is above nearby controls when focused */
+            z-index: 2200;
+        }
+
+        /* Inline filter inputs (small, next to labels) */
+        .inline-filter {
+            min-width: 120px;
+            max-width: 160px;
+            padding: 6px 8px;
+            background: #1A2E52;
+            color: #E0E8F7;
+            border: none;
+            font-size: 12px;
+            outline: none;
+        }
+
+        /* When input inside the inline control is focused, prevent accidental activation of the color button */
+        .inline-add-wrapper.inline-input-focused .color-circle {
+            pointer-events: none;
+            opacity: 0.85;
+        }
+
+        /* keep the inline inputs visually on top */
+        .inline-add-wrapper input[type="text"] {
+            position: relative;
+            z-index: 5;
+            border-left: 1px solid #6cbbfb77;
+        }
+
+        .inline-add-wrapper.inline-input-focused .color-circle:focus {
+            outline: none;
+        }
+
+        /* Inline palette container (hidden by default) */
+        .color-palette-inline {
+            display: none;
+            gap: 6px;
+            align-items: center;
+            padding: 6px;
+            background: #1A2E52;
+            border-radius: 12px;
+            border: 1px solid rgba(108, 187, 251, 0.16);
+            position: absolute;
+            top: 40px;
+            left: 50px;
+            z-index: 2100;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+        }
+
+        .color-palette-inline.show {
+            display: flex;
+        }
+
+        .color-swatch-inline {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            cursor: pointer;
+            padding: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) inset;
+        }
+
+        .color-swatch-inline.selected {
+            outline: 2px solid rgba(255, 255, 255, 0.12);
+            outline-offset: 2px;
+        }
+
+        .color-circle {
+            height: 16px;
+            border-radius: 10px;
+            display: inline-block;
+            cursor: pointer;
+            box-shadow: none;
+            padding: 9px;
+            flex-shrink: 0;
+            margin: 0px 8px;
+        }
+
+        .btn-icon.small {
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            font-size: 14px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: #6CBBFB;
+            cursor: pointer;
+        }
+
+        .btn-icon.small:hover {
+            background: rgba(108, 187, 251, 0.06);
+        }
+
+        /* If a .btn-icon.small is marked loading, show a small spinner overlay but keep the checkmark visible */
+        .btn-icon.small.loading {
+            position: relative;
+            /* keep original color and sizing */
+            color: #6CBBFB;
+        }
+
+        .btn-icon.small.loading::after {
+            content: '';
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(108, 187, 251, 0.28);
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        /* When inline form is open, style the add button to only change its symbol (keep padding/layout) */
+        .btn-add.open {
+            /* Keep original size/padding from .btn-add; only change symbol and visual accent */
+            font-size: 12px;
+            /* match original + size */
+            color: #6CBBFB;
+            border-left: 1px solid rgba(108, 187, 251, 0.16);
+            background: transparent;
+            padding: 8px 14px;
+            border-radius: 0px;
+        }
+
+        .btn-add.open:hover {
+            background: rgba(160, 180, 208, 0.15);
+        }
+
+        /* Make the checkmark look like the small X button (same size, color and hover) */
+        .inline-add-form .btn-icon.small {
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            font-size: 14px;
+            border-radius: 0px;
+            color: #6CBBFB;
+            border-left: 1px solid rgba(108, 187, 251, 0.16);
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .inline-add-form .btn-icon.small:hover {
+            background: rgba(160, 180, 208, 0.15);
+        }
+
+        /* Hide the small cancel button that sits beside the checkmark when the inline form is visible
+           We prefer showing a single X on the add button to close the form */
+
+
+        /* hide native small color inputs (we use a swatch & palette) */
+        .hidden-color-input {
+            display: none;
+        }
+
+        .btn-logout {
+            background: #8B3A3A;
+            color: white;
+            padding: 8px 12px;
+            font-size: 12px;
+            flex: 0 0 30%;
+        }
+
+        .btn-logout:hover {
+            background: #A85252;
+            color: white;
+        }
+
+        .btn-group-mini {
+            border: 1px solid #2A3E5F;
+            border-radius: 6px;
+            background: transparent
+        }
+
+        #logoutCompactBtn {
+            background: transparent;
+            padding: 3px 10px;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .message.success {
+            background: #1B4332;
+            color: #95D5B2;
+            border: 2px solid #40916C;
+        }
+
+        .message.error {
+            background: #6A1B1B;
+            color: #FC8181;
+            border: 2px solid #E53E3E;
+        }
+
+        .message.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .tag-hint {
+            font-size: 11px;
+            color: #8A9FB5;
+            margin-top: 4px;
+        }
+
+        .tag-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .tag-checkbox:hover {
+            background: rgba(108, 187, 251, 0.1);
+        }
+
+        .tag-checkbox input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            cursor: pointer;
+            accent-color: #6CBBFB;
+        }
+
+        .tag-checkbox label {
+            margin: 0;
+            flex: 1;
+            cursor: pointer;
+            font-size: 13px;
+            color: #E0E8F7;
+        }
+
+        .category-checkbox {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .category-checkbox:hover {
+            background: rgba(108, 187, 251, 0.1);
+        }
+
+        .category-checkbox input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            cursor: pointer;
+            accent-color: #6CBBFB;
+        }
+
+        .category-checkbox label {
+            margin: 0;
+            flex: 1;
+            cursor: pointer;
+            font-size: 13px;
+            color: #E0E8F7;
+        }
+
+        .user-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #1A2E52;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+
+        .user-email {
+            flex: 0 0 70%;
+            color: #E0E8F7;
+            font-weight: 500;
+        }
+
+
+
+        .toggle-auth {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 12px;
+            color: #E0E8F7;
+        }
+
+        .toggle-auth a {
+            color: #6CBBFB;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .toggle-auth a:hover {
+            text-decoration: underline;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>📌 Site Organizer</h2>
+            <div class="header-right hidden" id="headerUserInfo">
+                <span class="user-email" id="headerUserEmail"></span>
+                <div class="btn-group-mini">
+                    <button id="logoutCompactBtn" class="btn-icon btn-group-item" title="Sign out" aria-label="Sign out"
+                        onclick="logoutUser()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+                            style="position: relative; bottom: -1px; left: 1px;" aria-hidden="true" focusable="false">
+                            <path d="M16 17l5-5-5-5" stroke="#E57373" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round"></path>
+                            <path d="M21 12H9" stroke="#E57373" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round"></path>
+                            <path d="M9 19H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4" stroke="#E57373" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <!-- Auth Section -->
+        <div id="authSection">
+            <div id="loginForm">
+                <div class="auth-info">Sign in to save your sites</div>
+                <div class="form-group">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" placeholder="your@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required>
+                </div>
+                <button class="btn-save" id="loginBtn">Sign In</button>
+
+            </div>
+
+
+        </div>
+
+        <!-- Site Form -->
+        <div id="siteFormSection" class="hidden">
+
+
+            <form id="siteForm">
+                <div class="form-group">
+                    <label for="siteName">Site Name</label>
+                    <input type="text" id="siteName" placeholder="My Favorite Site" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="url">URL Address</label>
+                    <input type="text" id="url" placeholder="https://example.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="tags"
+                        style="display:flex; align-items:center; gap:6px; justify-content: space-between;">
+                        <span style="display:flex; align-items:center; gap:8px;">
+                            <span>Tags</span>
+                        </span>
+                        <span class="inline-add-wrapper">
+                            <span id="tagsFilterWrapper" class="inline-filter-wrapper">
+                                <button type="button" id="tagsSearchToggle" class="inline-filter-toggle"
+                                    aria-label="Toggle tag search" aria-expanded="false">
+                                    <svg class="inline-filter-icon" width="14" height="14" viewBox="0 0 24 24"
+                                        fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
+                                        focusable="false">
+                                        <circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round"></circle>
+                                        <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round"></path>
+                                    </svg></button>
+                                <input id="tagsSearchInput" class="inline-filter hidden" placeholder="Search tags"
+                                    aria-label="Search tags" />
+                                <button type="button" id="tagsSearchClear" class="btn-add inline-filter-clear hidden"
+                                    title="Clear search" aria-label="Clear search">✕</button>
+                            </span>
+
+                            <span id="addTagForm" class="inline-add-form hidden" aria-hidden="true">
+                                <input type="text" id="newTagName" class="inline-input" placeholder="Tag name" />
+                                <input type="color" id="newTagColor" class="hidden-color-input" value="#667eea" />
+                                <button type="button" id="tagColorBtn" class="color-circle" style="background:#667eea"
+                                    title="Choose color"></button>
+
+                                <div id="tagPalette" class="color-palette-inline" aria-hidden="true">
+                                    <button type="button" class="color-swatch-inline" data-color="#667eea"
+                                        style="background:#667eea" title="Purple"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#6CBBFB"
+                                        style="background:#6CBBFB" title="Blue"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#52A69B"
+                                        style="background:#52A69B" title="Teal"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#D98B8B"
+                                        style="background:#D98B8B" title="Coral"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#E0A96D"
+                                        style="background:#E0A96D" title="Orange"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#D98BAC"
+                                        style="background:#D98BAC" title="Pink"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#D4B86A"
+                                        style="background:#D4B86A" title="Yellow"></button>
+                                </div>
+
+                                <button type="button" id="saveTagBtn" class="btn-icon small"
+                                    aria-label="Save tag">✓</button>
+                            </span>
+                            <button type="button" id="addTagBtn" class="btn-add" aria-label="Add tag">+</button>
+                        </span>
+                    </label>
+                    <div id="tagsCheckboxList"
+                        style="max-height: 150px; overflow-y: auto; border: 2px solid #1A2E52; border-radius: 8px; padding: 8px; background: #1A2E52; display: flex; flex-wrap: wrap; gap: 6px;">
+                        <!-- Dynamically populated with checkboxes -->
+                    </div>
+
+                    <div class="tag-hint">Select one or more tags</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="category"
+                        style="display:flex; align-items:center; gap:6px; justify-content: space-between ;">
+                        <span style="display:flex; align-items:center; gap:8px;">
+                            <span>Categories</span>
+                        </span>
+                        <span class="inline-add-wrapper">
+                            <span id="categoriesFilterWrapper" class="inline-filter-wrapper">
+                                <button type="button" id="categoriesSearchToggle" class="inline-filter-toggle"
+                                    aria-label="Toggle category search" aria-expanded="false">
+                                    <svg class="inline-filter-icon" width="14" height="14" viewBox="0 0 24 24"
+                                        fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
+                                        focusable="false">
+                                        <circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round"></circle>
+                                        <path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2"
+                                            stroke-linecap="round" stroke-linejoin="round"></path>
+                                    </svg></button>
+                                <input id="categoriesSearchInput" class="inline-filter hidden"
+                                    placeholder="Search categories" aria-label="Search categories" />
+                                <button type="button" id="categoriesSearchClear"
+                                    class="btn-add inline-filter-clear hidden" title="Clear search"
+                                    aria-label="Clear search">✕</button>
+                            </span>
+                            <button type="button" id="addCategoryBtn" class="btn-add"
+                                aria-label="Add category">+</button>
+                            <span id="addCategoryForm" class="inline-add-form hidden" aria-hidden="true">
+                                <input type="text" id="newCategoryName" class="inline-input"
+                                    placeholder="Category name" />
+                                <input type="color" id="newCategoryColor" class="hidden-color-input" value="#6CBBFB" />
+                                <button type="button" id="categoryColorBtn" class="color-circle"
+                                    style="background:#6CBBFB" title="Choose color"></button>
+
+                                <div id="categoryPalette" class="color-palette-inline" aria-hidden="true">
+                                    <button type="button" class="color-swatch-inline" data-color="#667eea"
+                                        style="background:#667eea" title="Purple"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#6CBBFB"
+                                        style="background:#6CBBFB" title="Blue"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#52A69B"
+                                        style="background:#52A69B" title="Teal"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#D98B8B"
+                                        style="background:#D98B8B" title="Coral"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#E0A96D"
+                                        style="background:#E0A96D" title="Orange"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#D98BAC"
+                                        style="background:#D98BAC" title="Pink"></button>
+                                    <button type="button" class="color-swatch-inline" data-color="#D4B86A"
+                                        style="background:#D4B86A" title="Yellow"></button>
+                                </div>
+
+                                <button type="button" id="saveCategoryBtn" class="btn-icon small"
+                                    aria-label="Save category">✓</button>
+                            </span>
+                        </span>
+                    </label>
+                    <div id="categoriesCheckboxList"
+                        style="max-height: 150px; overflow-y: auto; border: 2px solid #1A2E52; border-radius: 8px; padding: 8px; background: #1A2E52; display: flex; flex-wrap: wrap; gap: 6px;">
+                        <!-- Dynamically populated with checkboxes -->
+                    </div>
+
+                    <div class="tag-hint">Select one or more categories</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="pricing">Pricing Model</label>
+                    <select id="pricing" required>
+                        <!-- Dynamically populated from config.js -->
+                    </select>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn-cancel" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn-save" id="saveBtn">Save Site</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="vendor/supabase.umd.js"></script>
+    <!-- If the file above is missing, see vendor/README.md for instructions to download the Supabase UMD build (CSP blocks remote CDNs). -->
+    <script src="config.js"></script>
+    <script src="popup.js"></script>
+</body>
+
+</html>
