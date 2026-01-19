@@ -1,0 +1,102 @@
+# .gitignore - sve što ne treba ići u GitHub repozitorij (lokalni fajlovi, build, tajni podaci)
+
+# Operativni sistem
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Logovi i privremeni fajlovi
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.out
+*.err
+*.tmp
+*.temp
+*~
+
+# Node / JavaScript
+node_modules/
+jspm_packages/
+dist/
+build/
+out/
+lib/
+.next/
+.nuxt/
+.vite/
+.cache/
+.parcel-cache/
+.nyc_output/
+coverage/
+
+# Env i tajni fajlovi
+.env
+.env.*.local
+*.env
+secrets*
+credentials*
+*.pem
+*.key
+*.crt
+*.p12
+*.p7b
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+
+# Databaze i testni fajlovi
+*.sqlite3
+*.db
+*.sql
+*.sqlite
+
+# IDE / Editor fajlovi
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+*.iml
+*.swp
+
+# Build artefakti, keševi i binarni fajlovi
+*.class
+*.o
+*.so
+*.dll
+*.exe
+*.dylib
+*.apk
+*.a
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Docker i lokalne konfiguracije
+docker-compose.override.yml
+.docker/
+
+# Specifično za Windows/Mac/Linux temp/lock fajlovi
+*.pid
+*.pid.lock
+*.seed
+tmp/
+temp/
+
+# Napomena: dodati ovdje sve ostale lokalne fajlove koje ne želite u repozitorij (lokalni konfiguracijski fajlovi, backup, lozinke)
