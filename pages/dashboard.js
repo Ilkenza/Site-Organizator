@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { DashboardProvider, useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../context/AuthContext';
@@ -225,13 +224,13 @@ function DashboardContent() {
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     if (!loading && !user) {
-      router.push('/login');
+      window.location.href = '/login';
     }
-  }, [user, loading, router]);
+  }, [user, loading]);
 
   if (loading) {
     return (
