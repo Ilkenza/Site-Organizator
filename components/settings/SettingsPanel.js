@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth, supabase } from '../../context/AuthContext';
-import { exportSites, parseImportFile, importSites } from '../../lib/exportImport';
+// export/import helpers are loaded dynamically in client-only code
 import { useDashboard } from '../../context/DashboardContext';
 import Modal from '../ui/Modal';
 
@@ -700,6 +700,7 @@ export default function SettingsPanel() {
     // Export
     const handleExport = async (format = 'json') => {
         try {
+            const { exportSites } = await import('../../lib/exportImport.js');
             const result = await exportSites(user?.id, format);
             if (!result.success) {
                 setImportMessage({ type: 'error', text: `Export failed: ${result.error}` });
@@ -723,6 +724,7 @@ export default function SettingsPanel() {
         });
 
         try {
+            const { parseImportFile } = await import('../../lib/exportImport.js');
             const data = await parseImportFile(file);
             console.log('File parsed successfully:', {
                 sitesCount: data?.sites?.length || 0,
@@ -758,6 +760,7 @@ export default function SettingsPanel() {
 
         setImportLoading(true);
         try {
+            const { importSites } = await import('../../lib/exportImport.js');
             await importSites(importPreview.sites, user?.id);
             setImportMessage({ type: 'success', text: 'Sites imported successfully!' });
             setImportFile(null);
