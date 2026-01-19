@@ -127,7 +127,7 @@ export default async function handler(req, res) {
       const countsMatch = (scBodyCount === null || scBodyCount === siteCategoriesCount) && (stBodyCount === null || stBodyCount === siteTagsCount);
 
       // Include resolved category info so callers can see what the server matched
-      return res.status(200).json({ success: true, category: cats[0] || null, requestedName: name, data: enriched, debug: { sitesCount: Array.isArray(enriched) ? enriched.length : 0, siteCategoriesCount, siteTagsCount, siteIds: siteIdsList, siteCategories: siteCategories, siteCategoriesDebug: scDebug, siteTagsDebug: stDebug, sitesUrl, sitesCount: Array.isArray(enriched) ? enriched.length : 0, integrity: { siteCategoriesCount, scBodyCount, siteTagsCount, stBodyCount, countsMatch } } });
+      return res.status(200).json({ success: true, category: cats[0] || null, requestedName: name, data: enriched, debug: { siteCategoriesCount, siteTagsCount, siteIds: siteIdsList, siteCategories: siteCategories, siteCategoriesDebug: scDebug, siteTagsDebug: stDebug, sitesUrl, sitesCount: Array.isArray(enriched) ? enriched.length : 0, integrity: { siteCategoriesCount, scBodyCount, siteTagsCount, stBodyCount, countsMatch } } });
     } catch (err) {
       console.warn('category -> sites enrichment failed', err);
       return res.status(200).json({ success: true, data: sites });
