@@ -12,7 +12,7 @@ const Logo = ({ size = 'md' }) => {
     lg: { container: 'w-16 h-16', icon: 'w-8 h-8' },
     xl: { container: 'w-20 h-20', icon: 'w-10 h-10' }
   };
-  
+
   return (
     <div className={`${sizes[size].container} rounded-xl bg-gradient-to-br from-app-accent to-[#4A9FE8] flex items-center justify-center shadow-lg shadow-app-accent/20`}>
       <svg className={`${sizes[size].icon} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -99,11 +99,11 @@ export default function Home() {
                 <br />
                 <span className="text-app-accent">Favorite Websites</span>
               </h1>
-              
+
               <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
                 Save, categorize, and tag your favorite websites. Access them from anywhere with your personal dashboard and browser extension.
               </p>
-              
+
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link
                   href="/login"

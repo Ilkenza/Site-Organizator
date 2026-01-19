@@ -26,7 +26,7 @@ export default function Badge({
 
     // Check if it's a hex color
     const isHexColor = color && color.startsWith('#');
-    
+
     // For hex colors, use inline styles with the actual color
     const hexStyle = isHexColor ? {
         backgroundColor: `${color}20`,
@@ -37,7 +37,7 @@ export default function Badge({
     const colorClass = isHexColor ? '' : (colors[color] || colors.gray);
 
     return (
-        <span 
+        <span
             className={`inline-flex items-center gap-1 rounded-full font-medium ${colorClass} ${sizes[size]} ${className}`}
             style={hexStyle}
         >

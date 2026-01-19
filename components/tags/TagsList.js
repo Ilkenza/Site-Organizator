@@ -114,8 +114,8 @@ export default function TagsList({ onEdit }) {
                         <div
                             key={tag.id}
                             className={`group flex items-center gap-2 border rounded-full px-4 py-2 transition-colors ${selectedTags.has(tag.id)
-                                    ? 'bg-[#A0D8FF]/10 border-[#A0D8FF] hover:border-[#A0D8FF]'
-                                    : 'bg-app-bg-card border-app-border hover:border-app-accent'
+                                ? 'bg-[#A0D8FF]/10 border-[#A0D8FF] hover:border-[#A0D8FF]'
+                                : 'bg-app-bg-card border-app-border hover:border-app-accent'
                                 }`}
                         >
                             {multiSelectMode && (

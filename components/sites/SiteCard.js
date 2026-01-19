@@ -51,12 +51,12 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
 
     return (
         <div className={`group bg-app-bg-light/50 border rounded-xl p-3 sm:p-4 transition-all duration-200 ${selectedSites.has(site.id)
-                ? activeTab === 'favorites'
-                    ? 'border-[#D4B86A] bg-[#D4B86A]/10 hover:border-[#D4B86A]'
-                    : 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
-                : site.is_pinned
-                    ? 'border-[#6CBBFB] bg-[#6CBBFB]/5 hover:border-[#6CBBFB] hover:bg-[#6CBBFB]/10'
-                    : 'border-app-border hover:border-app-accent/30 hover:bg-app-bg-light'
+            ? activeTab === 'favorites'
+                ? 'border-[#D4B86A] bg-[#D4B86A]/10 hover:border-[#D4B86A]'
+                : 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
+            : site.is_pinned
+                ? 'border-[#6CBBFB] bg-[#6CBBFB]/5 hover:border-[#6CBBFB] hover:bg-[#6CBBFB]/10'
+                : 'border-app-border hover:border-app-accent/30 hover:bg-app-bg-light'
             }`}>
             {/* Header: Checkbox, Icon, Name, Actions */}
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 mb-2 sm:mb-3">
@@ -113,8 +113,8 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                                 toggleFavorite(site.id);
                             }}
                             className={`p-1 sm:p-1.5 rounded-lg transition-colors ${site.is_favorite
-                                    ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10'
-                                    : 'text-app-text-secondary hover:text-yellow-400 hover:bg-app-bg-card'
+                                ? 'text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10'
+                                : 'text-app-text-secondary hover:text-yellow-400 hover:bg-app-bg-card'
                                 }`}
                             title={site.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
                         >
@@ -130,8 +130,8 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                                 togglePinned(site.id);
                             }}
                             className={`p-1 sm:p-1.5 rounded-lg transition-colors ${site.is_pinned
-                                    ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-400/10'
-                                    : 'text-app-text-secondary hover:text-blue-400 hover:bg-app-bg-card'
+                                ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-400/10'
+                                : 'text-app-text-secondary hover:text-blue-400 hover:bg-app-bg-card'
                                 }`}
                             title={site.is_pinned ? 'Unpin site' : 'Pin site'}
                         >

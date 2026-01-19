@@ -117,8 +117,8 @@ export default function CategoriesList({ onEdit }) {
                     <div
                         key={category.id}
                         className={`bg-app-bg-light border rounded-lg p-4 transition-colors ${selectedCategories.has(category.id)
-                                ? 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
-                                : 'border-app-border hover:border-app-accent/50'
+                            ? 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
+                            : 'border-app-border hover:border-app-accent/50'
                             }`}
                     >
                         <div className="flex items-start justify-between gap-3 mb-3">

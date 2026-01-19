@@ -116,32 +116,32 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     </svg>
                                 )
                             };
-                            
+
                             return (
-                            <button
-                                key={tab.id}
-                                onClick={() => {
-                                    setActiveTab(tab.id);
-                                    setSelectedCategory(null);
-                                    setSelectedTag(null);
-                                }}
-                                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors border
+                                <button
+                                    key={tab.id}
+                                    onClick={() => {
+                                        setActiveTab(tab.id);
+                                        setSelectedCategory(null);
+                                        setSelectedTag(null);
+                                    }}
+                                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors border
                 ${activeTab === tab.id
-                                        ? 'bg-app-accent/20 text-app-accent border-app-accent/30'
-                                        : 'border-transparent text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary'
-                                    }`}
-                            >
-                                <span className="flex items-center gap-2">
-                                    <span>{iconMap[tab.icon]}</span>
-                                    {tab.label}
-                                </span>
-                                {tab.count !== null && (
-                                    <span className={`text-xs px-1.5 py-0.5 rounded-full 
-                    ${activeTab === tab.id ? 'bg-app-accent text-app-bg-primary' : 'bg-app-bg-light text-app-text-secondary'}`}>
-                                        {tab.count}
+                                            ? 'bg-app-accent/20 text-app-accent border-app-accent/30'
+                                            : 'border-transparent text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <span>{iconMap[tab.icon]}</span>
+                                        {tab.label}
                                     </span>
-                                )}
-                            </button>
+                                    {tab.count !== null && (
+                                        <span className={`text-xs px-1.5 py-0.5 rounded-full 
+                    ${activeTab === tab.id ? 'bg-app-accent text-app-bg-primary' : 'bg-app-bg-light text-app-text-secondary'}`}>
+                                            {tab.count}
+                                        </span>
+                                    )}
+                                </button>
                             );
                         })}
                     </nav>
@@ -191,12 +191,12 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         { label: '↑ Asc', value: 'asc' }
                                     ].map(option => {
                                         // Determine current sort order based on active tab
-                                        const currentSortOrder = activeTab === 'categories' 
-                                            ? sortOrderCategories 
-                                            : activeTab === 'tags' 
-                                                ? sortOrderTags 
+                                        const currentSortOrder = activeTab === 'categories'
+                                            ? sortOrderCategories
+                                            : activeTab === 'tags'
+                                                ? sortOrderTags
                                                 : sortOrder;
-                                        
+
                                         const handleClick = () => {
                                             if (activeTab === 'categories') {
                                                 setSortOrderCategories(option.value);
