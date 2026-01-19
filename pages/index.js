@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Head from 'next/head';
 import { useAuth } from '../context/AuthContext';
@@ -24,13 +23,13 @@ const Logo = ({ size = 'md' }) => {
 
 export default function Home() {
   const { user, loading } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     if (!loading && user) {
-      router.push('/dashboard');
+      window.location.href = '/dashboard';
     }
-  }, [user, loading, router]);
+  }, [user, loading]);
 
   if (loading) {
     return (

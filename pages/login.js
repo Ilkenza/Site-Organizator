@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useRouter } from 'next/router';
 import { useAuth } from '../context/AuthContext';
 import Head from 'next/head';
 
@@ -15,7 +14,6 @@ export default function Login() {
     const [factorId, setFactorId] = useState(null);
 
     const { signIn, supabase } = useAuth();
-    const router = useRouter();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -62,7 +60,8 @@ export default function Login() {
             clearTimeout(timeoutId);
             // No MFA required or already at aal2, proceed to dashboard
             console.log('Login complete, redirecting to /dashboard');
-            router.push('/dashboard');
+            setLoading(false);
+            window.location.href = '/dashboard';
         } catch (err) {
             console.error('Login error:', err);
             setError(err.message || 'Login failed');
