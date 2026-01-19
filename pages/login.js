@@ -15,6 +15,10 @@ export default function Login() {
 
     const { signIn, supabase } = useAuth();
 
+    // Timeout constants
+    const MFA_CHECK_TIMEOUT = 5000; // 5 seconds
+    const MFA_VERIFY_TIMEOUT = 10000; // 10 seconds
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
@@ -40,7 +44,7 @@ export default function Login() {
             // Check if MFA is required by listing factors directly (with timeout)
             const mfaCheckPromise = Promise.race([
                 supabase.auth.mfa.listFactors(),
-                new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: 'MFA check timeout' } }), 5000))
+                new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: 'MFA check timeout' } }), MFA_CHECK_TIMEOUT))
             ]);
 
             const { data: factorsData, error: factorsError } = await mfaCheckPromise;
@@ -100,7 +104,7 @@ export default function Login() {
                     challengeId: challengeData.id,
                     code: mfaCode
                 }),
-                new Promise((resolve) => setTimeout(() => resolve({ error: { message: 'Verification timeout' } }), 10000))
+                new Promise((resolve) => setTimeout(() => resolve({ error: { message: 'Verification timeout' } }), MFA_VERIFY_TIMEOUT))
             ]);
 
             const { error: verifyError } = await verifyPromise;
