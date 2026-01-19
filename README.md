@@ -83,4 +83,6 @@ databaza-next/
 
 MIT
 
+> NOTE: Small whitespace commit to trigger Netlify rebuild after key rotation (safe to remove later).
+
 - Tailwind CSS is configured; edit `styles/globals.css` and `tailwind.config.js` to customize design.
