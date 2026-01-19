@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { exportSites, parseImportFile, importSites } from '../../lib/exportImport';
 import Modal from './Modal';
 import Button from './Button';
 
@@ -17,6 +16,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
         setMessageType('info');
 
         try {
+            const { exportSites } = await import('../../lib/exportImport.js');
             const result = await exportSites(userId, format);
             if (result.success) {
                 setMessage('Sites exported successfully!');
@@ -43,6 +43,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
         setMessageType('info');
 
         try {
+            const { parseImportFile } = await import('../../lib/exportImport.js');
             const data = await parseImportFile(file);
             const sitesCount = data.sites?.length || 0;
             setImportPreview(data);
@@ -67,6 +68,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
         setMessageType('info');
 
         try {
+            const { importSites } = await import('../../lib/exportImport.js');
             const result = await importSites(importPreview.sites, userId);
             if (result.success) {
                 setMessage(`Successfully imported ${importPreview.sites.length} site(s)!`);
