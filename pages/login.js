@@ -23,20 +23,35 @@ export default function Login() {
         setLoading(true);
 
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            console.log('Login attempt for', email);
+            // Fallback timeout to avoid spinner stuck if something hangs
+            const timeoutId = setTimeout(() => {
+                console.warn('Login fallback timeout reached');
+                setLoading(false);
+                setError('Login timed out, please try again');
+            }, 20000);
 
-            if (error) throw error;
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            console.log('signInWithPassword result:', { data, error });
+
+            if (error) {
+                clearTimeout(timeoutId);
+                throw error;
+            }
 
             // Check if MFA is required using Authenticator Assurance Level
-            const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+            const { data: aalData, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+            console.log('AAL response:', { aalData, aalError });
 
             // If user has MFA enrolled (nextLevel is aal2) but current level is only aal1, require MFA
             if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel === 'aal1') {
                 // MFA is required - get the TOTP factor
-                const { data: factorsData } = await supabase.auth.mfa.listFactors();
+                const { data: factorsData, error: factorsError } = await supabase.auth.mfa.listFactors();
+                console.log('MFA factors:', { factorsData, factorsError });
                 const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
 
                 if (totpFactor) {
+                    clearTimeout(timeoutId);
                     setFactorId(totpFactor.id);
                     setMfaRequired(true);
                     setLoading(false);
@@ -44,10 +59,13 @@ export default function Login() {
                 }
             }
 
+            clearTimeout(timeoutId);
             // No MFA required or already at aal2, proceed to dashboard
+            console.log('Login complete, redirecting to /dashboard');
             router.push('/dashboard');
         } catch (err) {
-            setError(err.message);
+            console.error('Login error:', err);
+            setError(err.message || 'Login failed');
             setLoading(false);
         }
     };
