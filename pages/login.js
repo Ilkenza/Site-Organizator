@@ -285,3 +285,8 @@ export default function Login() {
         </>
     );
 }
+
+export async function getServerSideProps() {
+    // Prevent static prerendering for login page (client-only auth flow)
+    return { props: {} };
+}

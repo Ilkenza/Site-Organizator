@@ -294,3 +294,8 @@ export default function Home() {
     </>
   );
 }
+
+export async function getServerSideProps() {
+  // Prevent static prerendering for pages that rely on client auth
+  return { props: {} };
+}

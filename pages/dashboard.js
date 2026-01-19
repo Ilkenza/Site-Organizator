@@ -256,3 +256,8 @@ export default function Dashboard() {
     </>
   );
 }
+
+export async function getServerSideProps() {
+  // Prevent static prerendering for dashboard (client-only auth state)
+  return { props: {} };
+}
