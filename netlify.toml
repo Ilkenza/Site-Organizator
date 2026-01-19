@@ -8,12 +8,12 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Redirects for SPA routing
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-  conditions = {Role = ["admin"]}
+# Redirects for SPA routing (removed - conflicted with Next.js routes or asset requests)
+# [[redirects]]
+#   from = "/*"
+#   to = "/index.html"
+#   status = 200
+#   conditions = {Role = ["admin"]}
 
 # Headers for PWA
 [[headers]]
