@@ -94,7 +94,7 @@ export default function Login() {
             // Run signIn with a 20s timeout to avoid hangs
             const signInPromise = supabase.auth.signInWithPassword({ email, password });
             // If the sign-in resolves late (after our timeout), still capture tokens as a fallback
-            signInPromise.then((result) => {
+            signInPromise.then(async (result) => {
                 try {
                     const sessionFromSignIn = result?.data ?? result;
                     if (sessionFromSignIn?.access_token || sessionFromSignIn?.refresh_token || sessionFromSignIn?.user) {
@@ -110,6 +110,20 @@ export default function Login() {
                         };
                         try { localStorage.setItem(storageKey, JSON.stringify(toStore)); } catch (e) { console.error('Late store fallback failed', e); }
                         try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) {}
+
+                        // Try to set the session in the Supabase client so the user becomes authenticated immediately
+                        try {
+                            const setResp = await supabase.auth.setSession({ access_token: sessionFromSignIn.access_token, refresh_token: sessionFromSignIn.refresh_token });
+                            console.log('Late setSession result', setResp);
+                            if (!setResp?.error) {
+                                alert('Login successful — redirecting to dashboard');
+                                window.location.href = '/dashboard';
+                            } else {
+                                console.error('Late setSession error', setResp.error);
+                            }
+                        } catch (e) {
+                            console.error('Late setSession thrown', e);
+                        }
                     }
                 } catch (e) { console.error('Error processing late signIn response', e); }
             }).catch((e) => console.error('Late signIn promise error', e));
