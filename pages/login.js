@@ -120,7 +120,7 @@ export default function Login() {
 
             console.log('3. Verifying code:', mfaCode, 'challengeId:', challengeData.id);
 
-// Verify MFA code with timeout protection using direct fetch (returns tokens reliably)
+            // Verify MFA code with timeout protection using direct fetch (returns tokens reliably)
             const verifyStart = Date.now();
             console.log('3.1 Starting verify via fetch; timeout (ms):', MFA_VERIFY_TIMEOUT);
 
@@ -138,7 +138,7 @@ export default function Login() {
                     headers: {
                         'Content-Type': 'application/json',
                         'apikey': apiKey,
-                        'Authorization': `Bearer ${ (await supabase.auth.getSession()).data?.session?.access_token || ''}`
+                        'Authorization': `Bearer ${(await supabase.auth.getSession()).data?.session?.access_token || ''}`
                     },
                     body: JSON.stringify({ challenge_id: challengeData.id, code: mfaCode }),
                     signal: controller.signal
