@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Head from 'next/head';
 
@@ -13,12 +13,28 @@ export default function Login() {
     const [mfaCode, setMfaCode] = useState('');
     const [factorId, setFactorId] = useState(null);
 
-    const { signIn, supabase } = useAuth();
+    const { supabase } = useAuth();
+
+    // Debug presence of Supabase config (do NOT log secrets)
+    useEffect(() => {
+        console.log('Login: supabase configured?', {
+            hasSupabase: !!supabase,
+            NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+            NEXT_PUBLIC_SUPABASE_ANON_KEY: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        });
+    }, [supabase]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
+
+        if (!supabase) {
+            console.error('Supabase client not configured - missing NEXT_PUBLIC variables');
+            setError('Login is temporarily unavailable. Please contact the site administrator.');
+            setLoading(false);
+            return;
+        }
 
         try {
             console.log('Login attempt for', email);
@@ -73,6 +89,13 @@ export default function Login() {
         e.preventDefault();
         setError('');
         setLoading(true);
+
+        if (!supabase) {
+            console.error('Supabase client not configured during MFA verify');
+            setError('MFA verification is temporarily unavailable.');
+            setLoading(false);
+            return;
+        }
 
         try {
             console.log('1. Starting MFA verify, factorId:', factorId);
