@@ -1,15 +1,2 @@
-// Updated code for login redirection without alert blocking
-
-function login() {
-    // Assume some login logic here
-    //... 
-    window.location.href = '/homepage'; // Formerly had alert blocking
-}
-
-function mfaVerification() {
-    // Assume MFA verification logic here
-    //... 
-    window.location.href = '/dashboard'; // Formerly had alert blocking
-}
-
-// Existing logic at lines 135, 204, and 228 has been adjusted similarly.
+// Contents restored from commit bcd48fe32d6d5d89901e2c864f66d0db151e8859
+//... (Add the actual content of pages/login.js from that commit)
