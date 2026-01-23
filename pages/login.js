@@ -7,11 +7,40 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [_verifyDebug, setVerifyDebug] = useState(null);
 
     // MFA states
     const [mfaRequired, setMfaRequired] = useState(false);
     const [mfaCode, setMfaCode] = useState('');
     const [factorId, setFactorId] = useState(null);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const _origFetch = window.fetch;
+        window.fetch = async function (input, init) {
+            const res = await _origFetch(input, init);
+            try {
+                const url = typeof input === 'string' ? input : (input && input.url);
+                if (url && url.includes('/auth/v1/factors/') && url.includes('/verify')) {
+                    const cloned = res.clone();
+                    cloned.text().then(t => {
+                        console.log('DEBUG fetch verify response', { url, status: res.status, text: t });
+                        try {
+                            const payload = { time: Date.now(), url, status: res.status, text: t };
+                            localStorage.setItem('debug.supabase.verify', JSON.stringify(payload));
+                            window.__debugSupabaseVerify = payload;
+                            if (typeof setVerifyDebug === 'function') setVerifyDebug(payload);
+                        } catch (e) {
+                            console.error('DEBUG save error', e);
+                        }
+                    }).catch(e => console.error('DEBUG read text error', e));
+                }
+            } catch (e) { console.error('fetch-override-debug error', e); }
+            return res;
+        };
+        return () => { window.fetch = _origFetch };
+    }, []);
+
 
     const { supabase } = useAuth();
 
