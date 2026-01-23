@@ -97,6 +97,18 @@ export default function Login() {
             signInPromise.then(async (result) => {
                 try {
                     const sessionFromSignIn = result?.data ?? result;
+
+                    // If the late response indicates the user has MFA factors, trigger the MFA flow instead of storing tokens
+                    if (sessionFromSignIn?.user?.factors?.length) {
+                        console.log('Late signIn shows user has MFA factors; triggering MFA flow');
+                        try { window.__mfaPending = true; } catch (e) {}
+                        setFactorId(sessionFromSignIn.user.factors[0].id || null);
+                        setMfaRequired(true);
+                        try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) {}
+                        setLoading(false);
+                        return;
+                    }
+
                     if (sessionFromSignIn?.access_token || sessionFromSignIn?.refresh_token || sessionFromSignIn?.user) {
                         console.log('Late signIn response received — storing tokens as fallback');
                         const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
