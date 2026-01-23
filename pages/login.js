@@ -24,6 +24,10 @@ export default function Login() {
         });
     }, [supabase]);
 
+    // Timeout constants
+    const MFA_CHECK_TIMEOUT = 5000; // 5 seconds
+    const MFA_VERIFY_TIMEOUT = 10000; // 10 seconds
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
@@ -53,24 +57,29 @@ export default function Login() {
                 throw error;
             }
 
-            // Check if MFA is required using Authenticator Assurance Level
-            const { data: aalData, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-            console.log('AAL response:', { aalData, aalError });
+            // Check if MFA is required by listing factors directly (with timeout)
+            const mfaCheckPromise = Promise.race([
+                supabase.auth.mfa.listFactors(),
+                new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: 'MFA check timeout' } }), MFA_CHECK_TIMEOUT))
+            ]);
 
-            // If user has MFA enrolled (nextLevel is aal2) but current level is only aal1, require MFA
-            if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel === 'aal1') {
-                // MFA is required - get the TOTP factor
-                const { data: factorsData, error: factorsError } = await supabase.auth.mfa.listFactors();
-                console.log('MFA factors:', { factorsData, factorsError });
-                const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
+            const { data: factorsData, error: factorsError } = await mfaCheckPromise;
+            console.log('MFA factors response:', { factorsData, factorsError });
 
-                if (totpFactor) {
-                    clearTimeout(timeoutId);
-                    setFactorId(totpFactor.id);
-                    setMfaRequired(true);
-                    setLoading(false);
-                    return;
-                }
+            // If we have verified TOTP factors, require MFA
+            const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
+            if (totpFactor && !factorsError) {
+                clearTimeout(timeoutId);
+                setFactorId(totpFactor.id);
+                setMfaRequired(true);
+                setLoading(false);
+                console.log('MFA required, showing MFA prompt');
+                return;
+            }
+
+            // Log if MFA check failed or timed out
+            if (factorsError) {
+                console.warn('MFA check failed or timed out, proceeding without MFA:', factorsError.message);
             }
 
             clearTimeout(timeoutId);
@@ -111,53 +120,28 @@ export default function Login() {
 
             console.log('3. Verifying code:', mfaCode, 'challengeId:', challengeData.id);
 
-            // Get current session for access token
-            const { data: sessionData } = await supabase.auth.getSession();
-            const accessToken = sessionData?.session?.access_token;
+            // Verify MFA code with timeout protection (10 seconds)
+            const verifyPromise = Promise.race([
+                supabase.auth.mfa.verify({
+                    factorId: factorId,
+                    challengeId: challengeData.id,
+                    code: mfaCode
+                }),
+                new Promise((resolve) => setTimeout(() => resolve({ error: { message: 'Verification timeout' } }), MFA_VERIFY_TIMEOUT))
+            ]);
 
-            console.log('3.5 Got access token:', accessToken ? 'yes' : 'no');
+            const { error: verifyError } = await verifyPromise;
+            console.log('4. Verify response:', { verifyError });
 
-            // Use fetch directly as workaround for hanging verify
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/factors/${factorId}/verify`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${accessToken}`
-                    },
-                    body: JSON.stringify({
-                        challenge_id: challengeData.id,
-                        code: mfaCode
-                    })
-                }
-            );
-
-            console.log('4. Fetch response status:', response.status);
-
-            const result = await response.json();
-            console.log('4.5 Fetch response body:', result);
-
-            if (!response.ok) {
-                throw new Error(result.error_description || result.msg || 'Invalid verification code');
+            if (verifyError) {
+                throw new Error(verifyError.message === 'Verification timeout' 
+                    ? 'Verification timed out, please try again' 
+                    : 'Invalid verification code');
             }
 
-            console.log('5. MFA successful, storing tokens...');
+            console.log('5. MFA successful, session automatically updated by Supabase');
 
-            // Store tokens manually in localStorage (Supabase uses this internally)
-            const storageKey = `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`;
-            localStorage.setItem(storageKey, JSON.stringify({
-                access_token: result.access_token,
-                refresh_token: result.refresh_token,
-                expires_at: result.expires_at,
-                expires_in: result.expires_in,
-                token_type: result.token_type,
-                user: result.user
-            }));
-
-            console.log('6. Tokens stored, redirecting...');
-
+            // Session is automatically updated by Supabase SDK
             // MFA successful, proceed to dashboard using window.location for clean reload
             setLoading(false);
             window.location.href = '/dashboard';
