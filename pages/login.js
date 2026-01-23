@@ -93,6 +93,27 @@ export default function Login() {
 
             // Run signIn with a 20s timeout to avoid hangs
             const signInPromise = supabase.auth.signInWithPassword({ email, password });
+            // If the sign-in resolves late (after our timeout), still capture tokens as a fallback
+            signInPromise.then((result) => {
+                try {
+                    const sessionFromSignIn = result?.data ?? result;
+                    if (sessionFromSignIn?.access_token || sessionFromSignIn?.refresh_token || sessionFromSignIn?.user) {
+                        console.log('Late signIn response received — storing tokens as fallback');
+                        const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                        const toStore = {
+                            access_token: sessionFromSignIn?.access_token,
+                            refresh_token: sessionFromSignIn?.refresh_token,
+                            expires_at: sessionFromSignIn?.expires_at,
+                            expires_in: sessionFromSignIn?.expires_in,
+                            token_type: sessionFromSignIn?.token_type,
+                            user: sessionFromSignIn?.user || sessionFromSignIn?.user,
+                        };
+                        try { localStorage.setItem(storageKey, JSON.stringify(toStore)); } catch (e) { console.error('Late store fallback failed', e); }
+                        try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) {}
+                    }
+                } catch (e) { console.error('Error processing late signIn response', e); }
+            }).catch((e) => console.error('Late signIn promise error', e));
+
             let data, error;
             try {
                 const result = await Promise.race([
