@@ -57,6 +57,47 @@ export default function Login() {
                 throw error;
             }
 
+            // If signIn returned a session or tokens, store them as a fallback and wait for session to appear
+            try {
+                const sessionFromSignIn = data?.session || data || null;
+                if (sessionFromSignIn?.access_token || sessionFromSignIn?.refresh_token || sessionFromSignIn?.user) {
+                    console.log('Storing tokens from signIn response as fallback');
+                    const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                    const toStore = {
+                        access_token: sessionFromSignIn?.access_token,
+                        refresh_token: sessionFromSignIn?.refresh_token,
+                        expires_at: sessionFromSignIn?.expires_at,
+                        expires_in: sessionFromSignIn?.expires_in,
+                        token_type: sessionFromSignIn?.token_type,
+                        user: sessionFromSignIn?.user || sessionFromSignIn?.user
+                    };
+                    localStorage.setItem(storageKey, JSON.stringify(toStore));
+
+                    // Poll for session to be visible via SDK
+                    let sessionPresent = false;
+                    const pollStart = Date.now();
+                    const maxPoll = 3000;
+                    while (Date.now() - pollStart < maxPoll) {
+                        try {
+                            const { data: sess } = await supabase.auth.getSession();
+                            if (sess?.session) { sessionPresent = true; break; }
+                        } catch (e) {
+                            // continue
+                        }
+                        await new Promise(r => setTimeout(r, 300));
+                    }
+                    if (sessionPresent) {
+                        console.log('Session visible after sign-in, proceeding');
+                        clearTimeout(timeoutId);
+                        setLoading(false);
+                        window.location.href = '/dashboard';
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('Error storing sign-in tokens fallback:', e?.message || e);
+            }
+
             // Check if MFA is required by listing factors directly (with timeout)
             const mfaCheckPromise = Promise.race([
                 supabase.auth.mfa.listFactors(),
