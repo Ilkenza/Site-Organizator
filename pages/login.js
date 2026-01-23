@@ -120,29 +120,52 @@ export default function Login() {
 
             console.log('3. Verifying code:', mfaCode, 'challengeId:', challengeData.id);
 
-            // Verify MFA code with timeout protection
+// Verify MFA code with timeout protection using direct fetch (returns tokens reliably)
             const verifyStart = Date.now();
-            console.log('3.1 Starting verify; timeout (ms):', MFA_VERIFY_TIMEOUT);
+            console.log('3.1 Starting verify via fetch; timeout (ms):', MFA_VERIFY_TIMEOUT);
 
-            const verifyPromise = Promise.race([
-                supabase.auth.mfa.verify({
-                    factorId: factorId,
-                    challengeId: challengeData.id,
-                    code: mfaCode
-                }),
-                new Promise((resolve) => setTimeout(() => resolve({ error: { message: 'Verification timeout' } }), MFA_VERIFY_TIMEOUT))
-            ]);
+            const rawBase = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').replace(/\/$/, '');
+            const verifyUrl = `${rawBase}/auth/v1/factors/${factorId}/verify`;
+            const apiKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').replace(/^"|"$/g, '');
 
-            const verifyResult = await verifyPromise;
+            const controller = new AbortController();
+            const to = setTimeout(() => controller.abort(), MFA_VERIFY_TIMEOUT);
+
+            let verifyResponse;
+            try {
+                verifyResponse = await fetch(verifyUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': apiKey,
+                        'Authorization': `Bearer ${ (await supabase.auth.getSession()).data?.session?.access_token || ''}`
+                    },
+                    body: JSON.stringify({ challenge_id: challengeData.id, code: mfaCode }),
+                    signal: controller.signal
+                });
+            } catch (fetchErr) {
+                if (fetchErr.name === 'AbortError') {
+                    throw new Error('Verification timed out, please try again');
+                }
+                throw fetchErr;
+            } finally {
+                clearTimeout(to);
+            }
+
             const verifyElapsed = Date.now() - verifyStart;
-            console.log('4. Verify completed; elapsed (ms):', verifyElapsed, 'result:', verifyResult);
+            let verifyResult;
+            try {
+                verifyResult = await verifyResponse.json();
+            } catch (e) {
+                const text = await verifyResponse.text().catch(() => '');
+                verifyResult = { __raw: text };
+            }
 
-            const { error: verifyError } = verifyResult || {};
+            console.log('4. Verify completed; elapsed (ms):', verifyElapsed, 'status:', verifyResponse.status, 'body:', verifyResult);
 
-            if (verifyError) {
-                throw new Error(verifyError.message === 'Verification timeout'
-                    ? 'Verification timed out, please try again'
-                    : 'Invalid verification code');
+            if (!verifyResponse.ok) {
+                const msg = verifyResult?.error_description || verifyResult?.msg || verifyResult?.error || JSON.stringify(verifyResult);
+                throw new Error(msg || 'Invalid verification code');
             }
 
             console.log('5. MFA successful (verify returned OK) — checking session...');
