@@ -24,9 +24,9 @@ export default function Login() {
         });
     }, [supabase]);
 
-    // Timeout constants
-    const MFA_CHECK_TIMEOUT = 5000; // 5 seconds
-    const MFA_VERIFY_TIMEOUT = 10000; // 10 seconds
+    // Timeout constants (increased for production latency and TOTP window)
+    const MFA_CHECK_TIMEOUT = 20000; // 20 seconds
+    const MFA_VERIFY_TIMEOUT = 45000; // 45 seconds
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -120,7 +120,10 @@ export default function Login() {
 
             console.log('3. Verifying code:', mfaCode, 'challengeId:', challengeData.id);
 
-            // Verify MFA code with timeout protection (10 seconds)
+            // Verify MFA code with timeout protection
+            const verifyStart = Date.now();
+            console.log('3.1 Starting verify; timeout (ms):', MFA_VERIFY_TIMEOUT);
+
             const verifyPromise = Promise.race([
                 supabase.auth.mfa.verify({
                     factorId: factorId,
@@ -130,8 +133,11 @@ export default function Login() {
                 new Promise((resolve) => setTimeout(() => resolve({ error: { message: 'Verification timeout' } }), MFA_VERIFY_TIMEOUT))
             ]);
 
-            const { error: verifyError } = await verifyPromise;
-            console.log('4. Verify response:', { verifyError });
+            const verifyResult = await verifyPromise;
+            const verifyElapsed = Date.now() - verifyStart;
+            console.log('4. Verify completed; elapsed (ms):', verifyElapsed, 'result:', verifyResult);
+
+            const { error: verifyError } = verifyResult || {};
 
             if (verifyError) {
                 throw new Error(verifyError.message === 'Verification timeout' 
@@ -139,12 +145,57 @@ export default function Login() {
                     : 'Invalid verification code');
             }
 
-            console.log('5. MFA successful, session automatically updated by Supabase');
+            console.log('5. MFA successful (verify returned OK) — checking session...');
 
-            // Session is automatically updated by Supabase SDK
-            // MFA successful, proceed to dashboard using window.location for clean reload
+            // Try to get updated session from Supabase SDK; give it a short moment to appear
+            let sessionData = null;
+            const maxPollMs = 3000;
+            const pollInterval = 300;
+            const pollStart = Date.now();
+
+            while (Date.now() - pollStart < maxPollMs) {
+                try {
+                    const { data: sess } = await supabase.auth.getSession();
+                    console.log('Post-verify session poll:', sess);
+                    if (sess?.session) { sessionData = sess.session; break; }
+                } catch (e) {
+                    console.warn('Error polling session after verify:', e?.message || e);
+                }
+                await new Promise(r => setTimeout(r, pollInterval));
+            }
+
+            // If session present, redirect. Otherwise, try to store tokens returned in verify result (if present)
+            if (sessionData) {
+                console.log('Session found after verify, redirecting...');
+                setLoading(false);
+                window.location.href = '/dashboard';
+                return;
+            }
+
+            // Fallback: some Supabase setups return tokens directly in result - store them if available
+            const tokenCandidates = verifyResult || {};
+            const access_token = tokenCandidates?.data?.access_token || tokenCandidates?.access_token;
+            const refresh_token = tokenCandidates?.data?.refresh_token || tokenCandidates?.refresh_token;
+            if (access_token && refresh_token) {
+                console.log('Storing tokens from verify response as fallback');
+                const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^\"|\"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                localStorage.setItem(storageKey, JSON.stringify({
+                    access_token,
+                    refresh_token,
+                    expires_at: tokenCandidates?.data?.expires_at || tokenCandidates?.expires_at,
+                    expires_in: tokenCandidates?.data?.expires_in || tokenCandidates?.expires_in,
+                    token_type: tokenCandidates?.data?.token_type || tokenCandidates?.token_type,
+                    user: tokenCandidates?.data?.user || tokenCandidates?.user
+                }));
+                console.log('Fallback tokens stored, reloading...');
+                setLoading(false);
+                window.location.href = '/dashboard';
+                return;
+            }
+
+            console.warn('No session or tokens found after verify; informing user');
+            setError('Verification completed but we could not establish session. Please try signing in again.');
             setLoading(false);
-            window.location.href = '/dashboard';
         } catch (err) {
             console.error('MFA Error:', err);
             setError(err.message || 'Invalid verification code');
