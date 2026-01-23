@@ -140,8 +140,8 @@ export default function Login() {
             const { error: verifyError } = verifyResult || {};
 
             if (verifyError) {
-                throw new Error(verifyError.message === 'Verification timeout' 
-                    ? 'Verification timed out, please try again' 
+                throw new Error(verifyError.message === 'Verification timeout'
+                    ? 'Verification timed out, please try again'
                     : 'Invalid verification code');
             }
 
@@ -178,7 +178,7 @@ export default function Login() {
             const refresh_token = tokenCandidates?.data?.refresh_token || tokenCandidates?.refresh_token;
             if (access_token && refresh_token) {
                 console.log('Storing tokens from verify response as fallback');
-                const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^\"|\"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
                 localStorage.setItem(storageKey, JSON.stringify({
                     access_token,
                     refresh_token,
