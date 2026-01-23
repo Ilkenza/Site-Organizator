@@ -1,18 +1,17 @@
-// Reverting to previous version of pages/login.js
-// Original content from commit: a0c94cd684060685aaac96b3c84786f8d5406adf
+// Updated pages/login.js
 
-// Include the original code from the specified commit here
-// Example content: 
+async function verifyMFA() {
+    try {
+        // Add your MFA verification logic here
+        await mfaVerification(); // Assume mfaVerification is your function to handle MFA
+        // Redirect after successful verification
+        redirectToDashboard(); // Replace with your actual redirect function
+    } catch (error) {
+        console.error('MFA verification failed:', error);
+        // Handle error without alerting user
+    }
+}
 
-import React from 'react';
-
-const Login = () => {
-    return (
-        <div>
-            <h1>Login Page</h1>
-            {/* Additional content... */}
-        </div>
-    );
-};
-
-export default Login;
+function redirectToDashboard() {
+    window.location.href = '/dashboard'; // Example redirect after MFA
+}
