@@ -111,18 +111,23 @@ export default function Login() {
                         try { localStorage.setItem(storageKey, JSON.stringify(toStore)); } catch (e) { console.error('Late store fallback failed', e); }
                         try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) {}
 
-                        // Try to set the session in the Supabase client so the user becomes authenticated immediately
-                        try {
-                            const setResp = await supabase.auth.setSession({ access_token: sessionFromSignIn.access_token, refresh_token: sessionFromSignIn.refresh_token });
-                            console.log('Late setSession result', setResp);
-                            if (!setResp?.error) {
-                                alert('Login successful — redirecting to dashboard');
-                                window.location.href = '/dashboard';
-                            } else {
-                                console.error('Late setSession error', setResp.error);
+                        // If MFA is currently pending, do not auto-establish session yet
+                        if (typeof window !== 'undefined' && window.__mfaPending) {
+                            console.log('Skipping auto setSession because MFA is pending');
+                        } else {
+                            // Try to set the session in the Supabase client so the user becomes authenticated immediately
+                            try {
+                                const setResp = await supabase.auth.setSession({ access_token: sessionFromSignIn.access_token, refresh_token: sessionFromSignIn.refresh_token });
+                                console.log('Late setSession result', setResp);
+                                if (!setResp?.error) {
+                                    alert('Login successful — redirecting to dashboard');
+                                    window.location.href = '/dashboard';
+                                } else {
+                                    console.error('Late setSession error', setResp.error);
+                                }
+                            } catch (e) {
+                                console.error('Late setSession thrown', e);
                             }
-                        } catch (e) {
-                            console.error('Late setSession thrown', e);
                         }
                     }
                 } catch (e) { console.error('Error processing late signIn response', e); }
@@ -209,6 +214,7 @@ export default function Login() {
                 setFactorId(totpFactor.id);
                 console.log('MFA required; showing MFA form');
                 alert('MFA required — please enter your verification code');
+                try { window.__mfaPending = true; } catch(e) {}
                 setMfaRequired(true);
                 setLoading(false);
                 console.log('MFA required, showing MFA prompt');
@@ -483,6 +489,7 @@ export default function Login() {
                                 <button
                                     type="button"
                                     onClick={() => {
+                                        try { window.__mfaPending = false; } catch(e) {}
                                         setMfaRequired(false);
                                         setMfaCode('');
                                         setError('');
