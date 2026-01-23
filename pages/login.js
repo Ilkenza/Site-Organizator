@@ -41,6 +41,18 @@ export default function Login() {
         return () => { window.fetch = _origFetch };
     }, []);
 
+    // Safety guard: if a network call hangs, clear loading after a timeout so button isn't stuck
+    useEffect(() => {
+        if (!loading) return;
+        const t = setTimeout(() => {
+            console.warn('Login flow timeout reached; clearing loading state');
+            setLoading(false);
+            setError('Request timed out. Please try again.');
+            try { window.__debugSupabaseSignInTimeout = { time: Date.now(), email }; } catch (e) { }
+        }, 25000); // 25s
+        return () => clearTimeout(t);
+    }, [loading, email]);
+
 
     const { supabase } = useAuth();
 
@@ -60,6 +72,7 @@ export default function Login() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        console.log('Starting sign-in (handleSubmit) for', email ? email : 'no-email');
         setLoading(true);
 
         if (!supabase) {
@@ -78,8 +91,24 @@ export default function Login() {
                 setError('Login timed out, please try again');
             }, 20000);
 
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-            console.log('signInWithPassword result:', { data, error });
+            // Run signIn with a 20s timeout to avoid hangs
+            const signInPromise = supabase.auth.signInWithPassword({ email, password });
+            let data, error;
+            try {
+                const result = await Promise.race([
+                    signInPromise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('signIn timeout')), 20000)),
+                ]);
+                // SDK returns { data, error } or similar shape
+                data = result?.data ?? result;
+                error = result?.error ?? null;
+                console.log('signInWithPassword result (wrapped):', { data, error });
+            } catch (err) {
+                console.error('signInWithPassword failed or timed out', err);
+                setError('Sign in failed or timed out. Please try again.');
+                setLoading(false);
+                return;
+            }
 
             if (error) {
                 clearTimeout(timeoutId);
@@ -119,6 +148,8 @@ export default function Login() {
                         console.log('Session visible after sign-in, proceeding');
                         clearTimeout(timeoutId);
                         setLoading(false);
+                        console.log('Redirecting to dashboard');
+                        alert('Login successful — redirecting to dashboard');
                         window.location.href = '/dashboard';
                         return;
                     }
@@ -141,6 +172,8 @@ export default function Login() {
             if (totpFactor && !factorsError) {
                 clearTimeout(timeoutId);
                 setFactorId(totpFactor.id);
+                console.log('MFA required; showing MFA form');
+                alert('MFA required — please enter your verification code');
                 setMfaRequired(true);
                 setLoading(false);
                 console.log('MFA required, showing MFA prompt');
