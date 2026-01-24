@@ -79,6 +79,14 @@ export function AuthProvider({ children }) {
         // Initialize auth
         initializeAuth();
 
+        // Safety timeout - if loading doesn't complete in 10 seconds, force it to complete
+        const safetyTimeout = setTimeout(() => {
+            if (isMounted) {
+                console.warn('Auth initialization timed out, forcing loading to false');
+                setLoading(false);
+            }
+        }, 10000);
+
         // Listen for auth changes
         try {
             const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
@@ -123,6 +131,7 @@ export function AuthProvider({ children }) {
         // Cleanup function
         return () => {
             isMounted = false;
+            clearTimeout(safetyTimeout);
             if (subscription) {
                 subscription.unsubscribe();
             }
@@ -144,19 +153,23 @@ export function AuthProvider({ children }) {
     };
 
     const signOut = async () => {
-        if (!supabase) return;
+        // Clear user state immediately to update UI
+        setUser(null);
+
+        if (!supabase) {
+            window.location.href = '/login';
+            return;
+        }
+
         try {
-            const { error } = await supabase.auth.signOut();
-            if (error) {
-                console.error('Sign out error:', error);
-            }
+            // Sign out from Supabase with scope: 'local' to avoid AAL2/MFA blocking issues
+            await supabase.auth.signOut({ scope: 'local' });
         } catch (err) {
             console.error('Sign out exception:', err);
-        } finally {
-            setUser(null);
-            // Redirect to login page
-            window.location.href = '/';
         }
+
+        // Always redirect to login page
+        window.location.href = '/login';
     };
 
     const refreshUser = async () => {
