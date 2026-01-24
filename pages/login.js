@@ -327,55 +327,17 @@ export default function Login() {
 
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
 
-                // Fetch profile data before storing (for avatar/name display)
-                // Use timeout to prevent blocking on slow networks
-                let userWithProfile = session.user;
-                try {
-                    console.log('Fetching profile for user:', session.user.id);
-
-                    // First, set the session so supabase client can make authenticated requests
-                    await supabase.auth.setSession({
-                        access_token: session.access_token,
-                        refresh_token: session.refresh_token
-                    });
-
-                    // Fetch profile with timeout
-                    const profilePromise = supabase
-                        .from('profiles')
-                        .select('avatar_url, name')
-                        .eq('id', session.user.id)
-                        .maybeSingle();
-
-                    const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
-                    );
-
-                    const { data: profile } = await Promise.race([profilePromise, timeoutPromise]);
-                    if (profile) {
-                        console.log('Profile fetched:', profile);
-                        userWithProfile = {
-                            ...session.user,
-                            avatarUrl: profile.avatar_url,
-                            displayName: profile.name,
-                            avatar_url: profile.avatar_url,
-                            name: profile.name
-                        };
-                    }
-                } catch (profileErr) {
-                    console.warn('Profile fetch failed (continuing anyway):', profileErr);
-                }
-
-                // Store tokens with profile data
+                // Store tokens immediately - don't wait for profile
                 localStorage.setItem(storageKey, JSON.stringify({
                     access_token: session.access_token,
                     refresh_token: session.refresh_token,
                     expires_at: session.expires_at,
                     expires_in: session.expires_in,
                     token_type: 'bearer',
-                    user: userWithProfile
+                    user: session.user
                 }));
 
-                console.log('Tokens stored with profile, redirecting...');
+                console.log('Tokens stored, redirecting...');
                 window.location.replace('/dashboard');
                 return;
             }
