@@ -5,27 +5,55 @@ import Button from '../ui/Button';
 import { ConfirmModal } from '../ui/Modal';
 
 export default function Header({ onAddClick, onMenuClick }) {
-    const { user: authUser, signOut } = useAuth();
+    const { user: authUser, signOut, supabase } = useAuth();
 
-    // Fallback: if authUser is null, try to get user from localStorage
+    // Fallback: if authUser is null, try to get user from localStorage AND fetch profile data
     const [localUser, setLocalUser] = useState(null);
     useEffect(() => {
         if (!authUser && typeof window !== 'undefined') {
-            try {
-                const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-                const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                const storedTokens = localStorage.getItem(storageKey);
-                if (storedTokens) {
-                    const tokens = JSON.parse(storedTokens);
-                    if (tokens?.user) {
-                        setLocalUser(tokens.user);
+            const fetchLocalUserWithProfile = async () => {
+                try {
+                    const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                    const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                    const storedTokens = localStorage.getItem(storageKey);
+                    if (storedTokens) {
+                        const tokens = JSON.parse(storedTokens);
+                        if (tokens?.user) {
+                            // Immediately set basic user
+                            setLocalUser(tokens.user);
+
+                            // Fetch profile data to get avatar and displayName
+                            if (supabase) {
+                                try {
+                                    const { data: profile } = await supabase
+                                        .from('profiles')
+                                        .select('avatar_url, name')
+                                        .eq('id', tokens.user.id)
+                                        .maybeSingle();
+
+                                    if (profile) {
+                                        console.log('[Header] Fetched profile for localStorage user');
+                                        setLocalUser({
+                                            ...tokens.user,
+                                            avatarUrl: profile.avatar_url || null,
+                                            displayName: profile.name || null
+                                        });
+                                    }
+                                } catch (err) {
+                                    console.warn('[Header] Failed to fetch profile:', err);
+                                }
+                            }
+                        }
                     }
+                } catch (e) {
+                    console.warn('[Header] Error in fallback user fetch:', e);
                 }
-            } catch (e) { }
+            };
+            fetchLocalUserWithProfile();
         } else if (authUser) {
             setLocalUser(null); // Clear fallback when real user is available
         }
-    }, [authUser]);
+    }, [authUser, supabase]);
 
     // Use authUser if available, otherwise fallback to localUser
     const user = authUser || localUser;

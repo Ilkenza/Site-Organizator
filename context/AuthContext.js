@@ -254,6 +254,27 @@ export function AuthProvider({ children }) {
                                     const tokens = JSON.parse(storedTokens);
                                     if (tokens?.access_token && tokens?.user) {
                                         console.log('[AuthContext] localStorage still has valid tokens, keeping user');
+
+                                        // Fetch profile data if user doesn't have it yet
+                                        try {
+                                            const { data: profile } = await supabase
+                                                .from('profiles')
+                                                .select('avatar_url, name')
+                                                .eq('id', tokens.user.id)
+                                                .maybeSingle();
+
+                                            if (profile) {
+                                                console.log('[AuthContext] Updating user with profile data');
+                                                setUser({
+                                                    ...tokens.user,
+                                                    avatarUrl: profile.avatar_url || null,
+                                                    displayName: profile.name || null
+                                                });
+                                            }
+                                        } catch (err) {
+                                            console.warn('[AuthContext] Failed to fetch profile:', err);
+                                        }
+
                                         // Don't clear the flag while tokens exist
                                         return;
                                     }
@@ -277,7 +298,25 @@ export function AuthProvider({ children }) {
                                         console.log('[AuthContext] localStorage has valid tokens - NOT clearing user, event:', _event);
                                         // Set the flag and restore user from tokens
                                         userSetFromLocalStorageRef.current = true;
-                                        setUser(tokens.user);
+
+                                        // Fetch profile data to get avatar and displayName
+                                        try {
+                                            const { data: profile } = await supabase
+                                                .from('profiles')
+                                                .select('avatar_url, name')
+                                                .eq('id', tokens.user.id)
+                                                .maybeSingle();
+
+                                            console.log('[AuthContext] Fetched profile for restored user:', { hasAvatar: !!profile?.avatar_url, hasName: !!profile?.name });
+                                            setUser({
+                                                ...tokens.user,
+                                                avatarUrl: profile?.avatar_url || null,
+                                                displayName: profile?.name || null
+                                            });
+                                        } catch (err) {
+                                            console.warn('[AuthContext] Failed to fetch profile for restored user:', err);
+                                            setUser(tokens.user);
+                                        }
                                         return;
                                     }
                                 }
