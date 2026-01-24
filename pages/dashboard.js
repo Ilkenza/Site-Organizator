@@ -229,6 +229,17 @@ export default function Dashboard() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    let isMounted = true;
+
+    // Timeout fallback: ensure authChecked is set after max 5 seconds
+    // This prevents infinite loading if auth check hangs
+    const timeoutFallback = setTimeout(() => {
+      if (isMounted && !authChecked) {
+        console.warn('Auth check timed out after 5s, forcing authChecked to true');
+        setAuthChecked(true);
+      }
+    }, 5000);
+
     // Add a small delay to allow session to propagate after redirect
     const checkAuth = async () => {
       if (!loading) {
@@ -238,22 +249,38 @@ export default function Dashboard() {
             const { data } = await supabase.auth.getSession();
             if (!data?.session) {
               console.log('No session found after final check, redirecting to login');
+              if (isMounted) setAuthChecked(true); // Set before redirect
               window.location.href = '/login';
+              return;
             }
             // If session found, AuthContext will update user via onAuthStateChange
           } catch (e) {
             console.warn('Final session check failed:', e);
+            if (isMounted) setAuthChecked(true); // Set before redirect
             window.location.href = '/login';
+            return;
           }
         }
-        setAuthChecked(true);
+        if (isMounted) setAuthChecked(true);
+      } else {
+        // If still loading, try again after a short delay (but respect the 5s timeout)
+        setTimeout(() => {
+          if (isMounted && !authChecked) {
+            checkAuth();
+          }
+        }, 200);
       }
     };
 
     // Small delay to ensure AuthContext has time to process the session
     const timer = setTimeout(checkAuth, 100);
-    return () => clearTimeout(timer);
-  }, [user, loading, supabase]);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+      clearTimeout(timeoutFallback);
+    };
+  }, [user, loading, supabase, authChecked]);
 
   if (loading || !authChecked) {
     return (

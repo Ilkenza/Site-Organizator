@@ -28,7 +28,8 @@ export function AuthProvider({ children }) {
                 // Retry logic for session - sometimes needs a moment after redirect
                 let session = null;
                 let retryCount = 0;
-                const maxRetries = 2;
+                const maxRetries = 4; // Increased retries for mobile/slow networks
+                const retryDelay = 150; // ms between retries
 
                 while (!session && retryCount < maxRetries) {
                     const { data, error } = await supabase.auth.getSession();
@@ -47,7 +48,7 @@ export function AuthProvider({ children }) {
                     retryCount++;
                     if (retryCount < maxRetries) {
                         console.log(`Session not found, retry ${retryCount}/${maxRetries}...`);
-                        await new Promise(r => setTimeout(r, 100)); // Reduced from 150ms for faster response
+                        await new Promise(r => setTimeout(r, retryDelay));
                     }
                 }
 
@@ -63,17 +64,46 @@ export function AuthProvider({ children }) {
                                 console.log('Found tokens in localStorage, attempting to restore session...');
                                 const tokens = JSON.parse(storedTokens);
                                 if (tokens?.access_token && tokens?.refresh_token) {
-                                    const { data: setSessionData, error: setSessionError } = await supabase.auth.setSession({
-                                        access_token: tokens.access_token,
-                                        refresh_token: tokens.refresh_token
-                                    });
-                                    if (setSessionError) {
-                                        console.warn('Failed to restore session from localStorage:', setSessionError.message);
-                                        // Clear invalid tokens
-                                        localStorage.removeItem(storageKey);
-                                    } else if (setSessionData?.session) {
-                                        console.log('Session restored from localStorage successfully');
-                                        session = setSessionData.session;
+                                    // Wrap setSession in a timeout to prevent indefinite blocking (mobile fix)
+                                    const SET_SESSION_TIMEOUT = 3000; // 3 seconds max for setSession
+                                    try {
+                                        const setSessionPromise = supabase.auth.setSession({
+                                            access_token: tokens.access_token,
+                                            refresh_token: tokens.refresh_token
+                                        });
+
+                                        const timeoutPromise = new Promise((_, reject) =>
+                                            setTimeout(() => reject(new Error('setSession timeout')), SET_SESSION_TIMEOUT)
+                                        );
+
+                                        const { data: setSessionData, error: setSessionError } = await Promise.race([
+                                            setSessionPromise,
+                                            timeoutPromise
+                                        ]);
+
+                                        if (setSessionError) {
+                                            console.warn('Failed to restore session from localStorage:', setSessionError.message);
+                                            // Clear invalid tokens
+                                            localStorage.removeItem(storageKey);
+                                        } else if (setSessionData?.session) {
+                                            console.log('Session restored from localStorage successfully');
+                                            session = setSessionData.session;
+                                        }
+                                    } catch (timeoutErr) {
+                                        console.warn('setSession timed out, using tokens directly:', timeoutErr.message);
+                                        // Even if setSession times out, try to use the tokens directly
+                                        // The user object from stored tokens can be used as fallback
+                                        if (tokens.user) {
+                                            console.log('Using user from stored tokens as fallback');
+                                            session = {
+                                                access_token: tokens.access_token,
+                                                refresh_token: tokens.refresh_token,
+                                                user: tokens.user,
+                                                expires_at: tokens.expires_at,
+                                                expires_in: tokens.expires_in,
+                                                token_type: tokens.token_type || 'bearer'
+                                            };
+                                        }
                                     }
                                 }
                             }
@@ -124,13 +154,21 @@ export function AuthProvider({ children }) {
         // Initialize auth
         initializeAuth();
 
-        // Safety timeout - if loading doesn't complete in 2.5 seconds, force it to complete
+        // Safety timeout - if loading doesn't complete in 5 seconds, force it to complete
+        // Increased for mobile networks where setSession can be slow
         const safetyTimeout = setTimeout(() => {
-            if (isMounted) {
-                console.warn('Auth initialization timed out, forcing loading to false');
+            if (isMounted && loading) {
+                console.warn('Auth initialization timed out after 5s, forcing loading to false');
                 setLoading(false);
+                // Also try one more time to get session in background
+                supabase.auth.getSession().then(({ data }) => {
+                    if (isMounted && data?.session?.user) {
+                        console.log('Late session recovery successful');
+                        setUser(data.session.user);
+                    }
+                }).catch(() => { });
             }
-        }, 2500);
+        }, 5000);
 
         // Listen for auth changes
         try {
