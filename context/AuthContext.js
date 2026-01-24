@@ -571,6 +571,7 @@ export function AuthProvider({ children }) {
         if (!user.avatarUrl && !user.displayName) return;
 
         try {
+            const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
             const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
             const storedData = localStorage.getItem(storageKey);
             if (storedData) {
