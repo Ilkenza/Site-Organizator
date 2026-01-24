@@ -140,6 +140,10 @@ export default function Login() {
             const timeoutId = setTimeout(() => {
                 console.warn('Login fallback timeout reached');
                 setSigning(false);
+                // Reset MFA state on timeout
+                setMfaRequired(false);
+                setMfaWaiting(false);
+                setFactorId(null);
                 setError('Login timed out, please try again');
             }, 20000);
 
@@ -225,11 +229,19 @@ export default function Login() {
                 console.error('signInWithPassword failed or timed out', err);
                 setError('Sign in failed or timed out. Please try again.');
                 setSigning(false);
+                // Reset MFA state if sign-in failed
+                setMfaRequired(false);
+                setMfaWaiting(false);
+                setFactorId(null);
                 return;
             }
 
             if (error) {
                 clearTimeout(timeoutId);
+                // Reset MFA state on sign-in error
+                setMfaRequired(false);
+                setMfaWaiting(false);
+                setFactorId(null);
                 throw error;
             }
 
@@ -349,6 +361,10 @@ export default function Login() {
             console.error('Login error:', err);
             setError(err.message || 'Login failed');
             setSigning(false);
+            // Reset MFA state on any login error
+            setMfaRequired(false);
+            setMfaWaiting(false);
+            setFactorId(null);
         }
     };
 
