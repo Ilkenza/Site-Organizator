@@ -86,23 +86,24 @@ export default function Login() {
 
     // Safety guard: if a network call hangs, clear loading after a timeout so button isn't stuck
     useEffect(() => {
-        if (!loading) return;
+        if (!loading && !signing) return;
         // Use longer timeout during MFA verify (mobile networks can be slow)
-        const timeoutMs = mfaVerifying ? 60000 : 30000; // 60s for MFA, 30s otherwise
+        const timeoutMs = mfaVerifying ? 120000 : 50000; // 120s for MFA verify, 50s for sign in
         const t = setTimeout(() => {
             // Don't clear loading if redirect is in progress or MFA verify still running
             if (typeof window !== 'undefined' && window.__redirecting) {
                 console.log('Timeout reached but redirect in progress, keeping loading state');
                 return;
             }
-            console.warn('Login flow timeout reached; clearing loading state');
+            console.warn('Login flow timeout reached; clearing all loading states');
             setLoading(false);
             setMfaVerifying(false);
+            setSigning(false);
             setError('Request timed out. Please try again.');
             try { window.__debugSupabaseSignInTimeout = { time: Date.now(), email }; } catch (e) { }
         }, timeoutMs);
         return () => clearTimeout(t);
-    }, [loading, email, mfaVerifying]);
+    }, [loading, signing, email, mfaVerifying]);
 
 
     const { supabase } = useAuth();
