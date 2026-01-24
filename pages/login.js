@@ -498,11 +498,11 @@ export default function Login() {
 
                 // ALWAYS store tokens to localStorage FIRST (before any async operations)
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                
+
                 // Extract user from verifyResult - check all possible locations
                 const storedUser = verifyResult?.user || verifyResult?.data?.user;
                 console.log('DEBUG: User from verifyResult:', storedUser ? 'present' : 'missing', storedUser?.email);
-                
+
                 const toStore = {
                     access_token,
                     refresh_token,
@@ -513,11 +513,11 @@ export default function Login() {
                 };
                 console.log('DEBUG: Storing to localStorage with key:', storageKey);
                 console.log('DEBUG: Token payload has user:', !!toStore.user);
-                
+
                 try {
                     localStorage.setItem(storageKey, JSON.stringify(toStore));
                     console.log('Tokens stored to localStorage with key:', storageKey);
-                    
+
                     // Verify storage
                     const verify = localStorage.getItem(storageKey);
                     const parsed = verify ? JSON.parse(verify) : null;
