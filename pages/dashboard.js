@@ -231,6 +231,26 @@ export default function Dashboard() {
 
     let isMounted = true;
 
+    // Helper to check if tokens exist in localStorage (indicates valid session even if SDK doesn't see it yet)
+    const hasLocalStorageTokens = () => {
+      try {
+        const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+        const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+        const storedTokens = localStorage.getItem(storageKey);
+        if (storedTokens) {
+          const tokens = JSON.parse(storedTokens);
+          // Check if tokens have user and access_token (valid session)
+          if (tokens?.access_token && tokens?.user) {
+            console.log('[Dashboard] Found valid tokens in localStorage');
+            return true;
+          }
+        }
+      } catch (e) {
+        console.warn('[Dashboard] Error checking localStorage tokens:', e);
+      }
+      return false;
+    };
+
     // Timeout fallback: ensure authChecked is set after max 5 seconds
     // This prevents infinite loading if auth check hangs
     const timeoutFallback = setTimeout(() => {
@@ -244,10 +264,51 @@ export default function Dashboard() {
     const checkAuth = async () => {
       if (!loading) {
         if (!user && supabase) {
-          // One final attempt to get session (race condition protection)
+          // CRITICAL: Check localStorage FIRST before redirecting
+          // After MFA login, tokens are in localStorage but SDK may not have processed them yet
+          if (hasLocalStorageTokens()) {
+            console.log('[Dashboard] Tokens exist in localStorage, waiting for AuthContext to process...');
+            // Don't redirect - tokens exist, just wait for AuthContext to catch up
+            // Try to help by calling getSession which may trigger onAuthStateChange
+            try {
+              const { data } = await supabase.auth.getSession();
+              if (data?.session) {
+                console.log('[Dashboard] Session recovered via getSession');
+              } else {
+                // Try setSession with localStorage tokens as a fallback
+                try {
+                  const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                  const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                  const tokens = JSON.parse(localStorage.getItem(storageKey));
+                  if (tokens?.access_token && tokens?.refresh_token) {
+                    console.log('[Dashboard] Attempting setSession with localStorage tokens...');
+                    await supabase.auth.setSession({
+                      access_token: tokens.access_token,
+                      refresh_token: tokens.refresh_token
+                    });
+                  }
+                } catch (setSessionErr) {
+                  console.warn('[Dashboard] setSession fallback failed:', setSessionErr);
+                }
+              }
+            } catch (e) {
+              console.warn('[Dashboard] getSession during token wait failed:', e);
+            }
+            // Set authChecked but don't redirect - let AuthContext handle it
+            if (isMounted) setAuthChecked(true);
+            return;
+          }
+
+          // No tokens in localStorage - do final SDK check before redirecting
           try {
             const { data } = await supabase.auth.getSession();
             if (!data?.session) {
+              // Double-check localStorage one more time (race condition)
+              if (hasLocalStorageTokens()) {
+                console.log('[Dashboard] Late localStorage token found, not redirecting');
+                if (isMounted) setAuthChecked(true);
+                return;
+              }
               console.log('No session found after final check, redirecting to login');
               if (isMounted) setAuthChecked(true); // Set before redirect
               window.location.href = '/login';
@@ -256,6 +317,12 @@ export default function Dashboard() {
             // If session found, AuthContext will update user via onAuthStateChange
           } catch (e) {
             console.warn('Final session check failed:', e);
+            // Even on error, check localStorage before redirecting
+            if (hasLocalStorageTokens()) {
+              console.log('[Dashboard] localStorage tokens exist despite SDK error, not redirecting');
+              if (isMounted) setAuthChecked(true);
+              return;
+            }
             if (isMounted) setAuthChecked(true); // Set before redirect
             window.location.href = '/login';
             return;
@@ -272,8 +339,8 @@ export default function Dashboard() {
       }
     };
 
-    // Small delay to ensure AuthContext has time to process the session
-    const timer = setTimeout(checkAuth, 100);
+    // Longer delay after MFA to allow session to propagate (300ms instead of 100ms)
+    const timer = setTimeout(checkAuth, 300);
 
     return () => {
       isMounted = false;
