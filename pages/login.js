@@ -327,14 +327,36 @@ export default function Login() {
 
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
 
-                // Store tokens immediately - don't wait for profile
+                // Fetch profile data before storing to include avatar and displayName
+                let userWithProfile = session.user;
+                try {
+                    console.log('Fetching profile before redirect...');
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('avatar_url, name')
+                        .eq('id', session.user.id)
+                        .maybeSingle();
+
+                    if (profile) {
+                        console.log('Profile fetched:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
+                        userWithProfile = {
+                            ...session.user,
+                            avatarUrl: profile.avatar_url || null,
+                            displayName: profile.name || null
+                        };
+                    }
+                } catch (profileErr) {
+                    console.warn('Failed to fetch profile before redirect:', profileErr);
+                }
+
+                // Store tokens with profile data
                 localStorage.setItem(storageKey, JSON.stringify({
                     access_token: session.access_token,
                     refresh_token: session.refresh_token,
                     expires_at: session.expires_at,
                     expires_in: session.expires_in,
                     token_type: 'bearer',
-                    user: session.user
+                    user: userWithProfile
                 }));
 
                 console.log('Tokens stored, redirecting...');
