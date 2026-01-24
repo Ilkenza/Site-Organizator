@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { fetchAPI } from '../lib/supabase';
 import { useAuth, supabase } from './AuthContext';
 
@@ -37,6 +37,10 @@ export function DashboardProvider({ children }) {
     // Favorites and Pinned state
     const [favoriteSites, setFavoriteSites] = useState(new Set());
     const [pinnedSites, setPinnedSites] = useState(new Set());
+
+    // Refs to prevent premature data clearing during auth transitions
+    const hadUserRef = useRef(false);
+    const clearDataTimeoutRef = useRef(null);
 
     // Show toast notification
     const showToast = useCallback((message, type = 'info', duration = 3000) => {
@@ -139,14 +143,75 @@ export function DashboardProvider({ children }) {
     }, []);
 
     // Fetch data when user changes
+    // PROTECTION: Don't clear data just because user became null temporarily
+    // Check localStorage for valid tokens before clearing, and use debounce
     useEffect(() => {
+        // Clear any pending clear timeout
+        if (clearDataTimeoutRef.current) {
+            clearTimeout(clearDataTimeoutRef.current);
+            clearDataTimeoutRef.current = null;
+        }
+
         if (user) {
+            hadUserRef.current = true;
             fetchData();
         } else {
-            setSites([]);
-            setCategories([]);
-            setTags([]);
+            // Before clearing data, check if tokens still exist in localStorage
+            // This prevents data loss during temporary auth state transitions
+            const hasValidTokens = (() => {
+                if (typeof window === 'undefined') return false;
+                try {
+                    // Check for Supabase auth tokens in localStorage
+                    const keys = Object.keys(localStorage);
+                    for (const key of keys) {
+                        if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                            const stored = localStorage.getItem(key);
+                            if (stored) {
+                                const parsed = JSON.parse(stored);
+                                // Check if tokens exist and aren't expired
+                                if (parsed?.access_token && parsed?.expires_at) {
+                                    const expiresAt = parsed.expires_at * 1000; // Convert to ms
+                                    if (Date.now() < expiresAt) {
+                                        console.log('[DashboardContext] User is null but valid tokens found - NOT clearing data');
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[DashboardContext] Error checking localStorage tokens:', e);
+                }
+                return false;
+            })();
+
+            // Only clear data if there are no valid tokens
+            // Use debounce if we recently had a user (auth transition in progress)
+            if (!hasValidTokens) {
+                const clearData = () => {
+                    console.log('[DashboardContext] No valid tokens found - clearing data');
+                    setSites([]);
+                    setCategories([]);
+                    setTags([]);
+                    setStats({ sites: 0, categories: 0, tags: 0 });
+                    hadUserRef.current = false;
+                };
+
+                // If we had a user recently, wait 500ms before clearing (gives time for auth to recover)
+                if (hadUserRef.current) {
+                    console.log('[DashboardContext] User became null but had user recently - waiting 500ms before clearing');
+                    clearDataTimeoutRef.current = setTimeout(clearData, 500);
+                } else {
+                    clearData();
+                }
+            }
         }
+
+        return () => {
+            if (clearDataTimeoutRef.current) {
+                clearTimeout(clearDataTimeoutRef.current);
+            }
+        };
     }, [user, fetchData]);
 
     // Real-time subscription for automatic data refresh

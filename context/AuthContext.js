@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const AuthContext = createContext({});
@@ -13,6 +13,8 @@ export const supabase = supabaseUrl && supabaseAnonKey
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    // Track when user was set from localStorage to prevent onAuthStateChange from overwriting
+    const userSetFromLocalStorageRef = useRef(false);
 
     useEffect(() => {
         if (!supabase) {
@@ -108,6 +110,7 @@ export function AuthProvider({ children }) {
                                 // CRITICAL: If setSession didn't return a session but tokens exist with user, use them directly
                                 if (!session && tokens.user) {
                                     console.log('[AuthContext] Using user from stored tokens as fallback (setSessionSucceeded:', setSessionSucceeded, ')');
+                                    userSetFromLocalStorageRef.current = true;
                                     session = {
                                         access_token: tokens.access_token,
                                         refresh_token: tokens.refresh_token,
@@ -188,6 +191,7 @@ export function AuthProvider({ children }) {
                                 const tokens = JSON.parse(storedTokens);
                                 if (tokens?.user) {
                                     console.log('[AuthContext] Late session recovery using tokens from localStorage');
+                                    userSetFromLocalStorageRef.current = true;
                                     setUser(tokens.user);
                                 }
                             }
@@ -231,7 +235,25 @@ export function AuthProvider({ children }) {
                             setUser(session.user);
                         }
                     } else {
-                        setUser(null);
+                        // Only set user to null if:
+                        // 1. This is an explicit sign-out event, OR
+                        // 2. User was NOT recovered from localStorage
+                        // This prevents onAuthStateChange from overwriting the user we just set from MFA verification
+                        if (_event === 'SIGNED_OUT') {
+                            console.log('[AuthContext] SIGNED_OUT event, clearing user');
+                            userSetFromLocalStorageRef.current = false;
+                            setUser(null);
+                        } else if (userSetFromLocalStorageRef.current) {
+                            console.log('[AuthContext] Ignoring null session - user was set from localStorage, event:', _event);
+                            // Don't overwrite the user, but try to verify the session is still valid
+                            // After a short delay, clear the flag to allow future auth state changes
+                            setTimeout(() => {
+                                userSetFromLocalStorageRef.current = false;
+                            }, 5000);
+                        } else {
+                            console.log('[AuthContext] No session and no localStorage recovery, clearing user, event:', _event);
+                            setUser(null);
+                        }
                     }
                 }
             );
@@ -265,6 +287,8 @@ export function AuthProvider({ children }) {
     };
 
     const signOut = async () => {
+        // Clear the localStorage recovery flag
+        userSetFromLocalStorageRef.current = false;
         // Clear user state immediately to update UI
         setUser(null);
 
@@ -341,6 +365,7 @@ export function AuthProvider({ children }) {
                 const tokens = JSON.parse(storedTokens);
                 if (tokens?.user && tokens?.access_token) {
                     console.log('[AuthContext] Emergency recovery: setting user from localStorage');
+                    userSetFromLocalStorageRef.current = true;
 
                     // Fetch fresh profile data after emergency recovery
                     const fetchProfileData = async () => {
