@@ -231,13 +231,35 @@ export default function Login() {
                         await new Promise(r => setTimeout(r, 300));
                     }
                     if (sessionPresent) {
-                        console.log('Session visible after sign-in, proceeding');
+                        console.log('Session visible after sign-in, checking MFA before redirect');
                         clearTimeout(timeoutId);
-                        setLoading(false);
-                        console.log('Redirecting to dashboard');
+
+                        // Check for MFA factors before redirecting — if TOTP is verified, require MFA verification first
+                        try {
+                            const mfaCheckPromise = Promise.race([
+                                supabase.auth.mfa.listFactors(),
+                                new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: 'MFA check timeout' } }), MFA_CHECK_TIMEOUT))
+                            ]);
+                            const { data: factorsData, error: factorsError } = await mfaCheckPromise;
+                            const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
+                            if (totpFactor && !factorsError) {
+                                console.log('MFA required after sign-in; showing MFA prompt');
+                                setFactorId(totpFactor.id);
+                                postAlertLoading('MFA required — please enter your verification code');
+                                setTimeout(() => { try { setLoading(true); } catch (e) { } }, 10);
+                                try { window.__mfaPending = true; window.__suppressAlertsDuringMfa = true; } catch (e) { }
+                                setMfaRequired(true);
+                                setLoading(false);
+                                console.log('MFA required, showing MFA prompt');
+                                return;
+                            }
+                        } catch (e) {
+                            console.warn('MFA check failed during post-signin handling, proceeding with redirect:', e?.message || e);
+                        }
+
+                        // No MFA required — proceed to complete login
+                        console.log('No MFA required, redirecting to dashboard');
                         completeLogin({ showAlert: false });
-                        try { setLoading(true); } catch (e) { }
-                        window.location.href = '/dashboard';
                         return;
                     }
                 }
