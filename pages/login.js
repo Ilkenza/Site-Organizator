@@ -442,9 +442,22 @@ export default function Login() {
 
             // If session present, redirect. Otherwise, try to store tokens returned in verify result (if present)
             if (sessionData) {
-                console.log('Session found after verify, redirecting (keeping MFA UI visible)...');
+                console.log('Session found after verify, confirming session before redirect...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
-                // Keep loading=true and mfaRequired=true so MFA UI with spinner stays visible during redirect
+
+                // Ensure session is fully established before redirecting
+                try {
+                    await supabase.auth.setSession({
+                        access_token: sessionData.access_token,
+                        refresh_token: sessionData.refresh_token
+                    });
+                    console.log('Session confirmed, redirecting now...');
+                } catch (e) {
+                    console.warn('Session confirmation failed, proceeding anyway:', e);
+                }
+
+                // Small delay to ensure state is stable
+                await new Promise(r => setTimeout(r, 100));
                 window.location.replace('/dashboard');
                 return;
             }
@@ -464,18 +477,21 @@ export default function Login() {
                     token_type: tokenCandidates?.data?.token_type || tokenCandidates?.token_type,
                     user: tokenCandidates?.data?.user || tokenCandidates?.user
                 }));
-                console.log('Fallback tokens stored, attempting to set session and reload...');
+                console.log('Fallback tokens stored, setting session before redirect...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
-                // Keep loading=true and mfaRequired=true so MFA UI with spinner stays visible during redirect
+
                 // Try to set session with the SDK so app state stabilizes before redirecting
                 try {
                     const setResp2 = await supabase.auth.setSession({ access_token, refresh_token });
                     console.log('Fallback verify setSession result', setResp2);
                     if (!setResp2?.error) {
+                        await new Promise(r => setTimeout(r, 100));
                         window.location.replace('/dashboard');
                         return;
                     }
                 } catch (e) { console.warn('Fallback setSession failed', e); }
+
+                await new Promise(r => setTimeout(r, 100));
                 window.location.replace('/dashboard');
                 return;
             }
