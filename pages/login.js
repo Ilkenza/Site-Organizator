@@ -412,199 +412,153 @@ export default function Login() {
             return;
         }
 
+        // Set a global timeout that will reset everything if nothing happens
+        const globalTimeout = setTimeout(() => {
+            console.error('GLOBAL TIMEOUT: MFA verify took too long');
+            setLoading(false);
+            setMfaVerifying(false);
+            setSigning(false);
+            setError('Request timed out. Please try again.');
+        }, 45000); // 45 seconds max
+
         try {
             console.log('1. Starting MFA verify, factorId:', factorId);
 
-            // Create MFA challenge with timeout
-            console.log('1.1 Creating challenge with 30s timeout...');
-            const challengePromise = supabase.auth.mfa.challenge({ factorId: factorId });
-            const challengeTimeout = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Challenge creation timed out')), 30000)
-            );
-            
-            const { data: challengeData, error: challengeError } = await Promise.race([
-                challengePromise,
-                challengeTimeout
-            ]);
+            // Create MFA challenge - simpler approach without timeout wrapper
+            console.log('1.1 Creating challenge...');
+            const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
+                factorId: factorId
+            });
 
             console.log('2. Challenge response:', { challengeData, challengeError });
 
-            if (challengeError) throw challengeError;
+            if (challengeError) {
+                clearTimeout(globalTimeout);
+                throw challengeError;
+            }
+
+            if (!challengeData?.id) {
+                clearTimeout(globalTimeout);
+                throw new Error('No challenge ID received');
+            }
 
             console.log('3. Verifying code:', mfaCode, 'challengeId:', challengeData.id);
 
-            // Verify MFA code with timeout protection using direct fetch (returns tokens reliably)
-            const verifyStart = Date.now();
-            console.log('3.1 Starting verify via fetch; timeout (ms):', MFA_VERIFY_TIMEOUT);
+            // Use Supabase SDK verify method instead of direct fetch (more reliable on mobile)
+            console.log('3.1 Using SDK verify method...');
+            const { data: verifyData, error: verifyError } = await supabase.auth.mfa.verify({
+                factorId: factorId,
+                challengeId: challengeData.id,
+                code: mfaCode
+            });
 
-            const rawBase = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').replace(/\/$/, '');
-            const verifyUrl = `${rawBase}/auth/v1/factors/${factorId}/verify`;
-            const apiKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').replace(/^"|"$/g, '');
+            console.log('4. Verify response:', { verifyData, verifyError });
 
-            // Use saved AAL1 token first, fallback to current session token
-            let authToken = aal1Token;
-            if (!authToken) {
-                const currentSession = (await supabase.auth.getSession()).data?.session;
-                authToken = currentSession?.access_token || '';
-            }
-            console.log('3.2 Using auth token:', authToken ? 'present' : 'missing');
-
-            if (!authToken) {
-                throw new Error('No authentication token available. Please sign in again.');
+            if (verifyError) {
+                clearTimeout(globalTimeout);
+                throw verifyError;
             }
 
-            const controller = new AbortController();
-            const to = setTimeout(() => controller.abort(), MFA_VERIFY_TIMEOUT);
+            console.log('5. MFA successful — extracting tokens from verifyData...');
 
-            let verifyResponse;
-            try {
-                verifyResponse = await fetch(verifyUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'apikey': apiKey,
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({ challenge_id: challengeData.id, code: mfaCode }),
-                    signal: controller.signal
-                });
-            } catch (fetchErr) {
-                if (fetchErr.name === 'AbortError') {
-                    throw new Error('Verification timed out, please try again');
-                }
-                throw fetchErr;
-            } finally {
-                clearTimeout(to);
-            }
+            // Extract tokens from SDK response
+            const access_token = verifyData?.session?.access_token || verifyData?.access_token;
+            const refresh_token = verifyData?.session?.refresh_token || verifyData?.refresh_token;
+            const user = verifyData?.session?.user || verifyData?.user;
 
-            const verifyElapsed = Date.now() - verifyStart;
-            let verifyResult;
-            try {
-                verifyResult = await verifyResponse.json();
-            } catch (e) {
-                const text = await verifyResponse.text().catch(() => '');
-                verifyResult = { __raw: text };
-            }
+            console.log('DEBUG: Extracted tokens:', {
+                hasAccess: !!access_token,
+                hasRefresh: !!refresh_token,
+                hasUser: !!user
+            });
 
-            console.log('4. Verify completed; elapsed (ms):', verifyElapsed, 'status:', verifyResponse.status, 'body:', verifyResult);
+            if (access_token && refresh_token && user) {
+                console.log('Found tokens in verifyData, storing and redirecting...');
+                clearTimeout(globalTimeout);
 
-            if (!verifyResponse.ok) {
-                const msg = verifyResult?.error_description || verifyResult?.msg || verifyResult?.error || JSON.stringify(verifyResult);
-                throw new Error(msg || 'Invalid verification code');
-            }
-
-            console.log('5. MFA successful (verify returned OK) — extracting tokens from verifyResult...');
-
-            // Extract tokens from verifyResult (check direct properties first, then nested in .data)
-            const tokenCandidates = verifyResult || {};
-            const access_token = tokenCandidates?.access_token || tokenCandidates?.data?.access_token;
-            const refresh_token = tokenCandidates?.refresh_token || tokenCandidates?.data?.refresh_token;
-
-            if (access_token && refresh_token) {
-                console.log('Found AAL2 tokens in verifyResult, storing and redirecting...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
 
-                // ALWAYS store tokens to localStorage FIRST (before any async operations)
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
 
-                // Extract user from verifyResult - check all possible locations
-                const storedUser = verifyResult?.user || verifyResult?.data?.user;
-                console.log('DEBUG: User from verifyResult:', storedUser ? 'present' : 'missing', storedUser?.email);
+                // Try to fetch profile but don't let it block redirect
+                let userWithProfile = user;
+                try {
+                    console.log('DEBUG: Quick profile fetch (5s timeout)...');
+                    const profilePromise = supabase
+                        .from('profiles')
+                        .select('avatar_url, name')
+                        .eq('id', user.id)
+                        .maybeSingle();
 
-                // Fetch profile data BEFORE storing to localStorage
-                let userWithProfile = storedUser;
-                if (storedUser?.id) {
-                    try {
-                        console.log('DEBUG: Fetching profile data for user:', storedUser.id);
-                        const profilePromise = supabase
-                            .from('profiles')
-                            .select('avatar_url, name')
-                            .eq('id', storedUser.id)
-                            .maybeSingle();
-                        
-                        const profileTimeout = new Promise((resolve) => 
-                            setTimeout(() => {
-                                console.warn('DEBUG: Profile fetch timed out after 10s');
-                                resolve({ data: null });
-                            }, 10000)
-                        );
+                    const profileTimeout = new Promise((resolve) =>
+                        setTimeout(() => resolve({ data: null }), 5000) // Shorter 5s timeout
+                    );
 
-                        const { data: profile } = await Promise.race([profilePromise, profileTimeout]);
+                    const { data: profile } = await Promise.race([profilePromise, profileTimeout]);
 
-                        if (profile) {
-                            console.log('DEBUG: Profile fetched:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
-                            userWithProfile = {
-                                ...storedUser,
-                                avatarUrl: profile.avatar_url || null,
-                                avatar_url: profile.avatar_url || null,
-                                displayName: profile.name || null,
-                                name: profile.name || null
-                            };
-                        } else {
-                            console.log('DEBUG: No profile data found or timeout');
-                        }
-                    } catch (profileErr) {
-                        console.warn('DEBUG: Failed to fetch profile, continuing with basic user:', profileErr);
+                    if (profile) {
+                        console.log('DEBUG: Profile fetched');
+                        userWithProfile = {
+                            ...user,
+                            avatarUrl: profile.avatar_url || null,
+                            avatar_url: profile.avatar_url || null,
+                            displayName: profile.name || null,
+                            name: profile.name || null
+                        };
                     }
+                } catch (profileErr) {
+                    console.warn('DEBUG: Profile fetch failed, using basic user');
                 }
 
                 const toStore = {
                     access_token,
                     refresh_token,
-                    expires_at: verifyResult?.expires_at,
-                    expires_in: verifyResult?.expires_in,
-                    token_type: verifyResult?.token_type || 'bearer',
+                    expires_at: verifyData?.session?.expires_at || verifyData?.expires_at,
+                    expires_in: verifyData?.session?.expires_in || verifyData?.expires_in,
+                    token_type: 'bearer',
                     user: userWithProfile
                 };
-                console.log('DEBUG: Storing to localStorage with key:', storageKey);
-                console.log('DEBUG: Token payload has user:', !!toStore.user, 'with profile:', !!toStore.user?.avatarUrl);
 
-                try {
-                    localStorage.setItem(storageKey, JSON.stringify(toStore));
-                    console.log('Tokens stored to localStorage with key:', storageKey);
+                console.log('DEBUG: Storing to localStorage');
+                localStorage.setItem(storageKey, JSON.stringify(toStore));
 
-                    // Verify storage
-                    const verify = localStorage.getItem(storageKey);
-                    const parsed = verify ? JSON.parse(verify) : null;
-                    console.log('DEBUG: Verification - stored user:', !!parsed?.user, parsed?.user?.email, 'avatar:', !!parsed?.user?.avatarUrl);
-                } catch (e) {
-                    console.error('Failed to store tokens:', e);
-                }
-
-                // Fire setSession in background (don't await) - it's a "nice to have"
-                supabase.auth.setSession({ access_token, refresh_token })
-                    .then(r => console.log('Background setSession completed:', r?.error ? 'error' : 'success'))
-                    .catch(e => console.warn('Background setSession failed:', e));
-
-                // Set redirect flag and redirect immediately
+                // Set redirect flag and redirect
                 try { window.__redirecting = true; } catch (e) { }
                 console.log('Redirecting to dashboard...');
-                window.location.replace('/dashboard');
+
+                // Small delay to ensure localStorage write completes
+                setTimeout(() => {
+                    window.location.replace('/dashboard');
+                }, 100);
                 return;
             }
 
-            // No tokens found in verifyResult
-            console.warn('No tokens found in verifyResult after MFA verify');
-            try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
-            setMfaWaiting(false);
-            setMfaRequired(false);
-            setMfaVerifying(false);
-            setError('Verification completed but no tokens received. Please try signing in again.');
-            setLoading(false);
+            // No tokens found
+            clearTimeout(globalTimeout);
+            console.warn('No tokens found in verifyData');
+            throw new Error('Verification completed but no session received');
+
         } catch (err) {
+            clearTimeout(globalTimeout);
             console.error('MFA Error:', err);
-            console.error('MFA Error stack:', err?.stack);
+            console.error('MFA Error details:', { message: err?.message, code: err?.code });
+
             try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
             setMfaWaiting(false);
             setMfaRequired(false);
             setMfaVerifying(false);
-            setSigning(false); // Also reset signing state
-            
-            // Show user-friendly error message
-            let errorMsg = err.message || 'Invalid verification code';
-            if (errorMsg.includes('timed out') || errorMsg.includes('timeout')) {
+            setSigning(false);
+
+            // User-friendly error messages
+            let errorMsg = 'Invalid verification code';
+            if (err?.message?.includes('Invalid TOTP code') || err?.message?.includes('invalid')) {
+                errorMsg = 'Invalid code. Please try again.';
+            } else if (err?.message?.includes('timeout') || err?.message?.includes('timed out')) {
                 errorMsg = 'Request timed out. Please check your connection and try again.';
+            } else if (err?.message) {
+                errorMsg = err.message;
             }
+
             setError(errorMsg);
             setLoading(false);
         }
