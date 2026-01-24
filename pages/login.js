@@ -52,8 +52,10 @@ export default function Login() {
     // MFA states
     const [mfaRequired, setMfaRequired] = useState(false);
     const [mfaWaiting, setMfaWaiting] = useState(false); // true while we wait for server to confirm factorId
+    const [mfaVerifying, setMfaVerifying] = useState(false); // true while MFA verify is in progress
     const [mfaCode, setMfaCode] = useState('');
     const [factorId, setFactorId] = useState(null);
+    const [aal1Token, setAal1Token] = useState(null); // Store AAL1 token from sign-in for MFA verify
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -85,19 +87,22 @@ export default function Login() {
     // Safety guard: if a network call hangs, clear loading after a timeout so button isn't stuck
     useEffect(() => {
         if (!loading) return;
+        // Use longer timeout during MFA verify (mobile networks can be slow)
+        const timeoutMs = mfaVerifying ? 60000 : 30000; // 60s for MFA, 30s otherwise
         const t = setTimeout(() => {
-            // Don't clear loading if redirect is in progress
+            // Don't clear loading if redirect is in progress or MFA verify still running
             if (typeof window !== 'undefined' && window.__redirecting) {
                 console.log('Timeout reached but redirect in progress, keeping loading state');
                 return;
             }
             console.warn('Login flow timeout reached; clearing loading state');
             setLoading(false);
+            setMfaVerifying(false);
             setError('Request timed out. Please try again.');
             try { window.__debugSupabaseSignInTimeout = { time: Date.now(), email }; } catch (e) { }
-        }, 25000); // 25s
+        }, timeoutMs);
         return () => clearTimeout(t);
-    }, [loading, email]);
+    }, [loading, email, mfaVerifying]);
 
 
     const { supabase } = useAuth();
@@ -111,9 +116,9 @@ export default function Login() {
         });
     }, [supabase]);
 
-    // Timeout constants (increased for production latency and TOTP window)
-    const MFA_CHECK_TIMEOUT = 20000; // 20 seconds
-    const MFA_VERIFY_TIMEOUT = 45000; // 45 seconds
+    // Timeout constants (increased for mobile/slow networks)
+    const MFA_CHECK_TIMEOUT = 15000; // 15 seconds
+    const MFA_VERIFY_TIMEOUT = 55000; // 55 seconds (mobile networks can be slow)
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -137,18 +142,11 @@ export default function Login() {
         try {
             console.log('Login attempt for', email);
 
-            // Clear any stale tokens before attempting login
+            // Sign out locally only (don't clear tokens from other devices)
             try {
-                const keys = Object.keys(localStorage);
-                keys.forEach(key => {
-                    if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-                        localStorage.removeItem(key);
-                    }
-                });
-                // Also try to sign out any existing session
                 await supabase.auth.signOut({ scope: 'local' }).catch(() => { });
             } catch (e) {
-                console.warn('Error clearing stale session:', e);
+                console.warn('Error clearing local session:', e);
             }
 
             // Fallback timeout to avoid spinner stuck if something hangs
@@ -173,6 +171,12 @@ export default function Login() {
                     if (sessionFromSignIn?.user?.factors?.length) {
                         console.log('Late signIn shows user has MFA factors; triggering MFA flow');
                         try { window.__mfaPending = true; } catch (e) { }
+                        // Save AAL1 token for MFA verify
+                        if (sessionFromSignIn?.session?.access_token) {
+                            setAal1Token(sessionFromSignIn.session.access_token);
+                        } else if (sessionFromSignIn?.access_token) {
+                            setAal1Token(sessionFromSignIn.access_token);
+                        }
                         setFactorId(sessionFromSignIn.user.factors[0].id || null);
                         setMfaRequired(true);
                         setMfaWaiting(false);
@@ -304,6 +308,11 @@ export default function Login() {
                             const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
                             if (totpFactor && !factorsError) {
                                 console.log('MFA required after sign-in; showing MFA prompt');
+                                // Save AAL1 token for MFA verify
+                                const currentSession = (await supabase.auth.getSession()).data?.session;
+                                if (currentSession?.access_token) {
+                                    setAal1Token(currentSession.access_token);
+                                }
                                 setFactorId(totpFactor.id);
                                 setMfaWaiting(false);
                                 postNotice('MFA required — please enter your verification code');
@@ -341,6 +350,11 @@ export default function Login() {
             const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
             if (totpFactor && !factorsError) {
                 clearTimeout(timeoutId);
+                // Save AAL1 token for MFA verify
+                const currentSession = (await supabase.auth.getSession()).data?.session;
+                if (currentSession?.access_token) {
+                    setAal1Token(currentSession.access_token);
+                }
                 setFactorId(totpFactor.id);
                 setMfaWaiting(false);
                 console.log('MFA required; showing MFA form');
@@ -387,11 +401,13 @@ export default function Login() {
         e.preventDefault();
         setError('');
         setLoading(true);
+        setMfaVerifying(true);
 
         if (!supabase) {
             console.error('Supabase client not configured during MFA verify');
             setError('MFA verification is temporarily unavailable.');
             setLoading(false);
+            setMfaVerifying(false);
             return;
         }
 
@@ -417,6 +433,18 @@ export default function Login() {
             const verifyUrl = `${rawBase}/auth/v1/factors/${factorId}/verify`;
             const apiKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').replace(/^"|"$/g, '');
 
+            // Use saved AAL1 token first, fallback to current session token
+            let authToken = aal1Token;
+            if (!authToken) {
+                const currentSession = (await supabase.auth.getSession()).data?.session;
+                authToken = currentSession?.access_token || '';
+            }
+            console.log('3.2 Using auth token:', authToken ? 'present' : 'missing');
+
+            if (!authToken) {
+                throw new Error('No authentication token available. Please sign in again.');
+            }
+
             const controller = new AbortController();
             const to = setTimeout(() => controller.abort(), MFA_VERIFY_TIMEOUT);
 
@@ -427,7 +455,7 @@ export default function Login() {
                     headers: {
                         'Content-Type': 'application/json',
                         'apikey': apiKey,
-                        'Authorization': `Bearer ${(await supabase.auth.getSession()).data?.session?.access_token || ''}`
+                        'Authorization': `Bearer ${authToken}`
                     },
                     body: JSON.stringify({ challenge_id: challengeData.id, code: mfaCode }),
                     signal: controller.signal
@@ -502,6 +530,7 @@ export default function Login() {
             try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
             setMfaWaiting(false);
             setMfaRequired(false);
+            setMfaVerifying(false);
             setError('Verification completed but no tokens received. Please try signing in again.');
             setLoading(false);
         } catch (err) {
@@ -509,6 +538,7 @@ export default function Login() {
             try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
             setMfaWaiting(false);
             setMfaRequired(false);
+            setMfaVerifying(false);
             setError(err.message || 'Invalid verification code');
             setLoading(false);
         }
@@ -633,6 +663,7 @@ export default function Login() {
                                         setMfaCode('');
                                         setError('');
                                         setMfaWaiting(false);
+                                        setAal1Token(null);
                                     }}
                                     className="w-full py-2 text-app-text-secondary hover:text-app-text-primary text-sm transition-colors"
                                 >
