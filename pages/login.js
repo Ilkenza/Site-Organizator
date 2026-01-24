@@ -301,35 +301,14 @@ export default function Login() {
 
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
 
-                // Quick profile fetch (don't block on failure)
-                let user = session.user;
-                try {
-                    const { data: profile } = await supabase
-                        .from('profiles')
-                        .select('avatar_url, name')
-                        .eq('id', user.id)
-                        .maybeSingle();
-
-                    if (profile) {
-                        user = {
-                            ...user,
-                            avatarUrl: profile.avatar_url,
-                            avatar_url: profile.avatar_url,
-                            displayName: profile.name,
-                            name: profile.name
-                        };
-                    }
-                } catch (e) {
-                    console.warn('Profile fetch failed, using basic user');
-                }
-
+                // Store tokens immediately - don't wait for profile
                 localStorage.setItem(storageKey, JSON.stringify({
                     access_token: session.access_token,
                     refresh_token: session.refresh_token,
                     expires_at: session.expires_at,
                     expires_in: session.expires_in,
                     token_type: 'bearer',
-                    user: user
+                    user: session.user
                 }));
 
                 console.log('Tokens stored, redirecting...');
