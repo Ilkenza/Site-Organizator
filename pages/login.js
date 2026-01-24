@@ -468,14 +468,14 @@ export default function Login() {
                 console.log('Found AAL2 tokens in verifyResult, setting session via SDK...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
 
-                // Use setSession with a 3-second timeout via Promise.race
-                // Even if setSession times out, redirect anyway - SDK will pick up session on reload
+                // Use setSession with a longer timeout (8s) to ensure it completes
+                let setSessionSucceeded = false;
                 const setSessionWithTimeout = async () => {
                     const timeoutPromise = new Promise((resolve) => {
                         setTimeout(() => {
-                            console.log('setSession timed out after 3s, proceeding with redirect anyway');
+                            console.log('setSession timed out after 8s');
                             resolve({ timedOut: true });
-                        }, 3000);
+                        }, 8000);
                     });
 
                     const setSessionPromise = supabase.auth.setSession({
@@ -483,6 +483,7 @@ export default function Login() {
                         refresh_token
                     }).then(result => {
                         console.log('setSession completed:', result.error ? 'error' : 'success', result);
+                        if (!result.error) setSessionSucceeded = true;
                         return { ...result, timedOut: false };
                     }).catch(err => {
                         console.error('setSession threw:', err);
@@ -492,10 +493,33 @@ export default function Login() {
                     return Promise.race([setSessionPromise, timeoutPromise]);
                 };
 
-                // Run setSession with timeout, but always redirect after
-                await setSessionWithTimeout();
+                // Run setSession with timeout
+                const setSessionResult = await setSessionWithTimeout();
 
-                // Redirect to dashboard (tokens will work on reload even if setSession failed/timed out)
+                // If setSession failed or timed out, manually store tokens to localStorage
+                if (!setSessionSucceeded) {
+                    console.log('setSession did not succeed, manually storing tokens to localStorage...');
+                    const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                    const toStore = {
+                        access_token,
+                        refresh_token,
+                        expires_at: verifyResult?.expires_at,
+                        expires_in: verifyResult?.expires_in,
+                        token_type: verifyResult?.token_type || 'bearer',
+                        user: verifyResult?.user
+                    };
+                    try {
+                        localStorage.setItem(storageKey, JSON.stringify(toStore));
+                        console.log('Manually stored tokens to localStorage');
+                    } catch (e) {
+                        console.error('Failed to store tokens:', e);
+                    }
+                }
+
+                // Add delay to ensure localStorage write and SDK state are stable before navigation
+                await new Promise(r => setTimeout(r, 300));
+
+                // Redirect to dashboard
                 try { window.__redirecting = true; } catch (e) { }
                 console.log('Redirecting to dashboard...');
                 window.location.replace('/dashboard');
