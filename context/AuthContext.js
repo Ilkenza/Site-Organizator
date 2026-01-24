@@ -127,29 +127,43 @@ export function AuthProvider({ children }) {
                     }
                 }
                 if (session?.user) {
-                    try {
-                        // Fetch user profile including avatar and name
-                        const { data: profile, error: profileError } = await supabase
-                            .from('profiles')
-                            .select('*')
-                            .eq('id', session.user.id)
-                            .maybeSingle();
+                    // Check if user already has profile data (from localStorage)
+                    const hasProfileData = session.user.avatarUrl !== undefined || session.user.displayName !== undefined;
 
-                        if (!isMounted) return;
-
-                        if (profileError && profileError.code !== 'PGRST116') {
-                            console.warn('Profile fetch error:', profileError.message);
-                        }
-
-                        setUser({
-                            ...session.user,
-                            avatarUrl: profile?.avatar_url || null,
-                            displayName: profile?.name || null,
-                        });
-                    } catch (err) {
-                        if (!isMounted) return;
-                        console.error('Error fetching profile:', err);
+                    if (hasProfileData) {
+                        console.log('[AuthContext] User already has profile data from localStorage, skipping fetch');
                         setUser(session.user);
+                    } else {
+                        console.log('[AuthContext] Fetching profile data for user:', session.user.id);
+                        try {
+                            // Fetch user profile including avatar and name
+                            const { data: profile, error: profileError } = await supabase
+                                .from('profiles')
+                                .select('avatar_url, name')
+                                .eq('id', session.user.id)
+                                .maybeSingle();
+
+                            if (!isMounted) return;
+
+                            if (profileError && profileError.code !== 'PGRST116') {
+                                console.warn('[AuthContext] Profile fetch error:', profileError.message);
+                            }
+
+                            if (profile) {
+                                console.log('[AuthContext] Profile fetched successfully');
+                                setUser({
+                                    ...session.user,
+                                    avatarUrl: profile.avatar_url || null,
+                                    displayName: profile.name || null,
+                                });
+                            } else {
+                                setUser(session.user);
+                            }
+                        } catch (err) {
+                            if (!isMounted) return;
+                            console.error('[AuthContext] Error fetching profile:', err);
+                            setUser(session.user);
+                        }
                     }
                 } else {
                     setUser(null);

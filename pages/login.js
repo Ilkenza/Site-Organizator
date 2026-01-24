@@ -503,16 +503,42 @@ export default function Login() {
                 const storedUser = verifyResult?.user || verifyResult?.data?.user;
                 console.log('DEBUG: User from verifyResult:', storedUser ? 'present' : 'missing', storedUser?.email);
 
+                // Fetch profile data BEFORE storing to localStorage
+                let userWithProfile = storedUser;
+                if (storedUser?.id) {
+                    try {
+                        console.log('DEBUG: Fetching profile data for user:', storedUser.id);
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('avatar_url, name')
+                            .eq('id', storedUser.id)
+                            .maybeSingle();
+
+                        if (profile) {
+                            console.log('DEBUG: Profile fetched:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
+                            userWithProfile = {
+                                ...storedUser,
+                                avatarUrl: profile.avatar_url || null,
+                                avatar_url: profile.avatar_url || null,
+                                displayName: profile.name || null,
+                                name: profile.name || null
+                            };
+                        }
+                    } catch (profileErr) {
+                        console.warn('DEBUG: Failed to fetch profile, continuing with basic user:', profileErr);
+                    }
+                }
+
                 const toStore = {
                     access_token,
                     refresh_token,
                     expires_at: verifyResult?.expires_at,
                     expires_in: verifyResult?.expires_in,
                     token_type: verifyResult?.token_type || 'bearer',
-                    user: storedUser
+                    user: userWithProfile
                 };
                 console.log('DEBUG: Storing to localStorage with key:', storageKey);
-                console.log('DEBUG: Token payload has user:', !!toStore.user);
+                console.log('DEBUG: Token payload has user:', !!toStore.user, 'with profile:', !!toStore.user?.avatarUrl);
 
                 try {
                     localStorage.setItem(storageKey, JSON.stringify(toStore));
@@ -521,7 +547,7 @@ export default function Login() {
                     // Verify storage
                     const verify = localStorage.getItem(storageKey);
                     const parsed = verify ? JSON.parse(verify) : null;
-                    console.log('DEBUG: Verification - stored user:', !!parsed?.user, parsed?.user?.email);
+                    console.log('DEBUG: Verification - stored user:', !!parsed?.user, parsed?.user?.email, 'avatar:', !!parsed?.user?.avatarUrl);
                 } catch (e) {
                     console.error('Failed to store tokens:', e);
                 }
