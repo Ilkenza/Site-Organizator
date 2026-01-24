@@ -8,19 +8,11 @@ export default function Login() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // Helper: show an alert, then switch to the loading screen so the UI stays in loading state during redirect
-    // Also set a short-lived suppression flag so subsequent user clicks cannot re-open the same alert
+    // Helper: silently log a message and switch to the loading screen so the UI stays in loading state during redirect
+    // IMPORTANT: do NOT show a browser alert here — we only want the loading button visible.
     const postAlertLoading = (msg) => {
-        try { alert(msg); } finally {
-            try { setLoading(true); } catch (e) { }
-            try {
-                if (typeof window !== 'undefined') {
-                    // Suppress repeated alerts for a short duration (5s)
-                    window.__suppressRepeatedAlerts = true;
-                    setTimeout(() => { try { window.__suppressRepeatedAlerts = false; } catch (e) { } }, 5000);
-                }
-            } catch (e) { }
-        }
+        try { console.log(msg); } catch (e) { }
+        try { setLoading(true); } catch (e) { }
     };
 
     // Helper to complete login and redirect. If MFA is active, suppress the alert and keep the loading screen.
@@ -33,7 +25,6 @@ export default function Login() {
             try { alert('Login successful — redirecting to dashboard'); } catch (e) { }
         }
         try { setLoading(true); } catch (e) { }
-        try { if (typeof window !== 'undefined') { window.__suppressRepeatedAlerts = false; } } catch (e) { }
         window.location.href = '/dashboard';
     };
 
@@ -43,10 +34,6 @@ export default function Login() {
         const originalAlert = window.alert;
         window.alert = (msg) => {
             if (window.__suppressAlertsDuringMfa) {
-                try { setLoading(true); } catch (e) { }
-                return;
-            }
-            if (window.__suppressRepeatedAlerts) {
                 try { setLoading(true); } catch (e) { }
                 return;
             }
