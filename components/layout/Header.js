@@ -6,7 +6,7 @@ import { ConfirmModal } from '../ui/Modal';
 
 export default function Header({ onAddClick, onMenuClick }) {
     const { user: authUser, signOut } = useAuth();
-    
+
     // Fallback: if authUser is null, try to get user from localStorage
     const [localUser, setLocalUser] = useState(null);
     useEffect(() => {
@@ -21,15 +21,15 @@ export default function Header({ onAddClick, onMenuClick }) {
                         setLocalUser(tokens.user);
                     }
                 }
-            } catch (e) {}
+            } catch (e) { }
         } else if (authUser) {
             setLocalUser(null); // Clear fallback when real user is available
         }
     }, [authUser]);
-    
+
     // Use authUser if available, otherwise fallback to localUser
     const user = authUser || localUser;
-    
+
     const {
         activeTab,
         searchQuery,
