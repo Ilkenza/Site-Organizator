@@ -327,17 +327,41 @@ export default function Login() {
 
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
 
-                // Store tokens immediately - don't wait for profile
+                // Fetch profile data before storing (for avatar/name display)
+                let userWithProfile = session.user;
+                try {
+                    console.log('Fetching profile for user:', session.user.id);
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('avatar_url, name')
+                        .eq('id', session.user.id)
+                        .maybeSingle();
+
+                    if (profile) {
+                        console.log('Profile fetched:', profile);
+                        userWithProfile = {
+                            ...session.user,
+                            avatarUrl: profile.avatar_url,
+                            displayName: profile.name,
+                            avatar_url: profile.avatar_url,
+                            name: profile.name
+                        };
+                    }
+                } catch (profileErr) {
+                    console.warn('Profile fetch failed (continuing anyway):', profileErr);
+                }
+
+                // Store tokens with profile data
                 localStorage.setItem(storageKey, JSON.stringify({
                     access_token: session.access_token,
                     refresh_token: session.refresh_token,
                     expires_at: session.expires_at,
                     expires_in: session.expires_in,
                     token_type: 'bearer',
-                    user: session.user
+                    user: userWithProfile
                 }));
 
-                console.log('Tokens stored, redirecting...');
+                console.log('Tokens stored with profile, redirecting...');
                 window.location.replace('/dashboard');
                 return;
             }
