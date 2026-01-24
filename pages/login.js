@@ -7,6 +7,8 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    // Signing indicates we're processing the initial email/password sign-in (no spinner on the Sign In button)
+    const [signing, setSigning] = useState(false);
 
     // Helper: silently log a message and switch to the loading screen so the UI stays in loading state during redirect
     // IMPORTANT: do NOT show a browser alert here — we only want the loading button visible.
@@ -108,13 +110,14 @@ export default function Login() {
         e.preventDefault();
         setError('');
         console.log('Starting sign-in (handleSubmit) for', email ? email : 'no-email');
-        setLoading(true);
+        // Use a non-spinning signing state so the Sign In button is disabled but does not show a spinner
+        setSigning(true);
 
         if (!supabase) {
             console.error('Supabase client not configured - missing NEXT_PUBLIC variables');
             setError('Login is temporarily unavailable. Please contact the site administrator.');
-            setLoading(false);
-            return;
+            setSigning(false);
+            return; 
         }
 
         try {
@@ -122,7 +125,7 @@ export default function Login() {
             // Fallback timeout to avoid spinner stuck if something hangs
             const timeoutId = setTimeout(() => {
                 console.warn('Login fallback timeout reached');
-                setLoading(false);
+                setSigning(false);
                 setError('Login timed out, please try again');
             }, 20000);
 
@@ -140,8 +143,8 @@ export default function Login() {
                         setFactorId(sessionFromSignIn.user.factors[0].id || null);
                         setMfaRequired(true);
                         try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) { }
-                        setLoading(false);
-                        return;
+                        setSigning(false);
+                        return; 
                     }
 
                     if (sessionFromSignIn?.access_token || sessionFromSignIn?.refresh_token || sessionFromSignIn?.user) {
@@ -167,7 +170,7 @@ export default function Login() {
                                 const setResp = await supabase.auth.setSession({ access_token: sessionFromSignIn.access_token, refresh_token: sessionFromSignIn.refresh_token });
                                 console.log('Late setSession result', setResp);
                                 if (!setResp?.error) {
-                                    try { setLoading(false); } catch (e) { }
+                                    try { setSigning(false); } catch (e) { }
                                     completeLogin({ showAlert: false });
                                     window.location.href = '/dashboard';
                                 } else {
@@ -194,8 +197,8 @@ export default function Login() {
             } catch (err) {
                 console.error('signInWithPassword failed or timed out', err);
                 setError('Sign in failed or timed out. Please try again.');
-                setLoading(false);
-                return;
+                setSigning(false);
+                return; 
             }
 
             if (error) {
@@ -235,6 +238,7 @@ export default function Login() {
                     if (sessionPresent) {
                         console.log('Session visible after sign-in, checking MFA before redirect');
                         clearTimeout(timeoutId);
+                        setSigning(false);
 
                         // Check for MFA factors before redirecting — if TOTP is verified, require MFA verification first
                         try {
@@ -251,9 +255,9 @@ export default function Login() {
                                 setTimeout(() => { try { setLoading(true); } catch (e) { } }, 10);
                                 try { window.__mfaPending = true; window.__suppressAlertsDuringMfa = true; } catch (e) { }
                                 setMfaRequired(true);
-                                setLoading(false);
+                                setSigning(false);
                                 console.log('MFA required, showing MFA prompt');
-                                return;
+                                return; 
                             }
                         } catch (e) {
                             console.warn('MFA check failed during post-signin handling, proceeding with redirect:', e?.message || e);
@@ -288,9 +292,9 @@ export default function Login() {
                 setTimeout(() => { try { setLoading(true); } catch (e) { } }, 10);
                 try { window.__mfaPending = true; } catch (e) { }
                 setMfaRequired(true);
-                setLoading(false);
+                setSigning(false);
                 console.log('MFA required, showing MFA prompt');
-                return;
+                return; 
             }
 
             // Log if MFA check failed or timed out
@@ -301,12 +305,12 @@ export default function Login() {
             clearTimeout(timeoutId);
             // No MFA required or already at aal2, proceed to dashboard
             console.log('Login complete, redirecting to /dashboard');
-            setLoading(false);
+            setSigning(false);
             window.location.href = '/dashboard';
         } catch (err) {
             console.error('Login error:', err);
             setError(err.message || 'Login failed');
-            setLoading(false);
+            setSigning(false);
         }
     };
 
@@ -507,15 +511,10 @@ export default function Login() {
 
                                 <button
                                     type="submit"
-                                    disabled={loading}
+                                    disabled={signing}
                                     className="w-full py-3 px-4 bg-btn-primary hover:bg-btn-hover text-app-accent font-medium rounded-xl border border-[#2A5A8A] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:text-app-accentLight"
                                 >
-                                    {loading ? (
-                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                        </svg>
-                                    ) : 'Sign In'}
+                                    Sign In
                                 </button>
                             </form>
                         ) : (
