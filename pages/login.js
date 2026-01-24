@@ -132,6 +132,7 @@ export default function Login() {
                                 const setResp = await supabase.auth.setSession({ access_token: sessionFromSignIn.access_token, refresh_token: sessionFromSignIn.refresh_token });
                                 console.log('Late setSession result', setResp);
                                 if (!setResp?.error) {
+                                    try { setLoading(false); } catch(e) {}
                                     alert('Login successful — redirecting to dashboard');
                                     window.location.href = '/dashboard';
                                 } else {
