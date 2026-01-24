@@ -168,18 +168,39 @@ export function AuthProvider({ children }) {
         // Initialize auth
         initializeAuth();
 
-        // Safety timeout - if loading doesn't complete in 5 seconds, force it to complete
-        // Increased for mobile networks where setSession can be slow
+        // Safety timeout - reduced to 3s to match dashboard timeout
         const safetyTimeout = setTimeout(() => {
             if (isMounted && loading) {
-                console.warn('[AuthContext] Auth initialization timed out after 5s, forcing loading to false');
+                console.warn('[AuthContext] Auth initialization timed out after 3s, forcing loading to false');
                 setLoading(false);
 
                 // Try getSession one more time
-                supabase.auth.getSession().then(({ data }) => {
+                supabase.auth.getSession().then(async ({ data }) => {
                     if (isMounted && data?.session?.user) {
                         console.log('[AuthContext] Late session recovery successful via getSession');
-                        setUser(data.session.user);
+
+                        // Fetch profile data to get avatar and displayName
+                        try {
+                            const { data: profile } = await supabase
+                                .from('profiles')
+                                .select('avatar_url, name')
+                                .eq('id', data.session.user.id)
+                                .maybeSingle();
+
+                            if (profile) {
+                                console.log('[AuthContext] Late recovery: fetched profile data');
+                                setUser({
+                                    ...data.session.user,
+                                    avatarUrl: profile.avatar_url || null,
+                                    displayName: profile.name || null
+                                });
+                            } else {
+                                setUser(data.session.user);
+                            }
+                        } catch (err) {
+                            console.warn('[AuthContext] Late recovery: failed to fetch profile:', err);
+                            setUser(data.session.user);
+                        }
                     } else if (isMounted && typeof window !== 'undefined') {
                         // CRITICAL FALLBACK: Check localStorage directly for tokens
                         try {
@@ -192,7 +213,29 @@ export function AuthProvider({ children }) {
                                 if (tokens?.user) {
                                     console.log('[AuthContext] Late session recovery using tokens from localStorage');
                                     userSetFromLocalStorageRef.current = true;
-                                    setUser(tokens.user);
+
+                                    // Fetch profile data
+                                    try {
+                                        const { data: profile } = await supabase
+                                            .from('profiles')
+                                            .select('avatar_url, name')
+                                            .eq('id', tokens.user.id)
+                                            .maybeSingle();
+
+                                        if (profile) {
+                                            console.log('[AuthContext] Late recovery localStorage: fetched profile');
+                                            setUser({
+                                                ...tokens.user,
+                                                avatarUrl: profile.avatar_url || null,
+                                                displayName: profile.name || null
+                                            });
+                                        } else {
+                                            setUser(tokens.user);
+                                        }
+                                    } catch (err) {
+                                        console.warn('[AuthContext] Late recovery localStorage: failed to fetch profile:', err);
+                                        setUser(tokens.user);
+                                    }
                                 }
                             }
                         } catch (e) {
@@ -201,7 +244,7 @@ export function AuthProvider({ children }) {
                     }
                 }).catch(() => { });
             }
-        }, 5000);
+        }, 3000);
 
         // Listen for auth changes
         try {
