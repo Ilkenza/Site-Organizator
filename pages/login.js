@@ -114,6 +114,32 @@ export default function Login() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        // Check if user already has a valid AAL2 session in localStorage
+        try {
+            const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+            const stored = localStorage.getItem(storageKey);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                // Check if token has AAL2 (completed MFA) and not expired
+                if (parsed?.access_token) {
+                    const payload = JSON.parse(atob(parsed.access_token.split('.')[1]));
+                    const isExpired = payload.exp * 1000 < Date.now();
+                    if (!isExpired && payload.aal === 'aal2') {
+                        console.log('Already have valid AAL2 session, redirecting...');
+                        window.location.replace('/dashboard');
+                        return;
+                    }
+                    // Clear old/invalid session
+                    if (isExpired) {
+                        console.log('Clearing expired session');
+                        localStorage.removeItem(storageKey);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Session check failed:', e);
+        }
         setSigning(true);
         setMfaRequired(false);
         setMfaWaiting(false);
@@ -128,9 +154,9 @@ export default function Login() {
         try {
             console.log('Sign in attempt for', email);
 
-            // Create a timeout promise
+            // Create a timeout promise - increased for slow mobile networks
             const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Connection timed out')), 25000);
+                setTimeout(() => reject(new Error('Connection timed out')), 45000);
             });
 
             // Race between signIn and timeout
