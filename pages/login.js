@@ -10,14 +10,14 @@ export default function Login() {
 
     // Helper: show an alert, then switch to the loading screen so the UI stays in loading state during redirect
     const postAlertLoading = (msg) => {
-        try { alert(msg); } finally { try { setLoading(true); } catch(e) {} }
+        try { alert(msg); } finally { try { setLoading(true); } catch (e) { } }
     };
 
     // Ensure any alert shown while on this page results in the loading screen remaining visible
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const originalAlert = window.alert;
-        window.alert = (msg) => { originalAlert(msg); try { setLoading(true); } catch(e) {} };
+        window.alert = (msg) => { originalAlert(msg); try { setLoading(true); } catch (e) { } };
         return () => { window.alert = originalAlert; };
     }, [setLoading]);
     const [_verifyDebug, setVerifyDebug] = useState(null);
@@ -114,10 +114,10 @@ export default function Login() {
                     // If the late response indicates the user has MFA factors, trigger the MFA flow instead of storing tokens
                     if (sessionFromSignIn?.user?.factors?.length) {
                         console.log('Late signIn shows user has MFA factors; triggering MFA flow');
-                        try { window.__mfaPending = true; } catch (e) {}
+                        try { window.__mfaPending = true; } catch (e) { }
                         setFactorId(sessionFromSignIn.user.factors[0].id || null);
                         setMfaRequired(true);
-                        try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) {}
+                        try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) { }
                         setLoading(false);
                         return;
                     }
@@ -134,7 +134,7 @@ export default function Login() {
                             user: sessionFromSignIn?.user || sessionFromSignIn?.user,
                         };
                         try { localStorage.setItem(storageKey, JSON.stringify(toStore)); } catch (e) { console.error('Late store fallback failed', e); }
-                        try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) {}
+                        try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) { }
 
                         // If MFA is currently pending, do not auto-establish session yet
                         if (typeof window !== 'undefined' && window.__mfaPending) {
@@ -145,7 +145,7 @@ export default function Login() {
                                 const setResp = await supabase.auth.setSession({ access_token: sessionFromSignIn.access_token, refresh_token: sessionFromSignIn.refresh_token });
                                 console.log('Late setSession result', setResp);
                                 if (!setResp?.error) {
-                                    try { setLoading(false); } catch(e) {}
+                                    try { setLoading(false); } catch (e) { }
                                     postAlertLoading('Login successful — redirecting to dashboard');
                                     window.location.href = '/dashboard';
                                 } else {
@@ -216,7 +216,7 @@ export default function Login() {
                         setLoading(false);
                         console.log('Redirecting to dashboard');
                         alert('Login successful — redirecting to dashboard');
-                        try { setLoading(true); } catch(e) {}
+                        try { setLoading(true); } catch (e) { }
                         window.location.href = '/dashboard';
                         return;
                     }
@@ -240,8 +240,9 @@ export default function Login() {
                 clearTimeout(timeoutId);
                 setFactorId(totpFactor.id);
                 console.log('MFA required; showing MFA form');
-                alert('MFA required — please enter your verification code');
-                try { window.__mfaPending = true; } catch(e) {}
+                postAlertLoading('MFA required — please enter your verification code');
+                setTimeout(() => { try { setLoading(true); } catch (e) { } }, 10);
+                try { window.__mfaPending = true; } catch (e) { }
                 setMfaRequired(true);
                 setLoading(false);
                 console.log('MFA required, showing MFA prompt');
@@ -516,7 +517,7 @@ export default function Login() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        try { window.__mfaPending = false; } catch(e) {}
+                                        try { window.__mfaPending = false; } catch (e) { }
                                         setMfaRequired(false);
                                         setMfaCode('');
                                         setError('');
