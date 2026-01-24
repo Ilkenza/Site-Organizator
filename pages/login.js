@@ -441,7 +441,12 @@ export default function Login() {
 
             // If session present, redirect. Otherwise, try to store tokens returned in verify result (if present)
             if (sessionData) {
-                console.log('Session found after verify, redirecting...');
+                console.log('Session found after verify, clearing MFA state and redirecting...');
+                try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
+                setMfaRequired(false);
+                setMfaWaiting(false);
+                setMfaCode('');
+                try { setSigning(false); } catch (e) { }
                 setLoading(false);
                 window.location.href = '/dashboard';
                 return;
@@ -463,16 +468,27 @@ export default function Login() {
                     user: tokenCandidates?.data?.user || tokenCandidates?.user
                 }));
                 console.log('Fallback tokens stored, reloading...');
+                try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
+                setMfaRequired(false);
+                setMfaWaiting(false);
+                setMfaCode('');
+                try { setSigning(false); } catch (e) { }
                 setLoading(false);
                 window.location.href = '/dashboard';
                 return;
             }
 
             console.warn('No session or tokens found after verify; informing user');
+            try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
+            setMfaWaiting(false);
+            setMfaRequired(false);
             setError('Verification completed but we could not establish session. Please try signing in again.');
             setLoading(false);
         } catch (err) {
             console.error('MFA Error:', err);
+            try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
+            setMfaWaiting(false);
+            setMfaRequired(false);
             setError(err.message || 'Invalid verification code');
             setLoading(false);
         }
