@@ -245,13 +245,46 @@ export function AuthProvider({ children }) {
                             setUser(null);
                         } else if (userSetFromLocalStorageRef.current) {
                             console.log('[AuthContext] Ignoring null session - user was set from localStorage, event:', _event);
-                            // Don't overwrite the user, but try to verify the session is still valid
-                            // After a short delay, clear the flag to allow future auth state changes
-                            setTimeout(() => {
+                            // Check if localStorage still has valid tokens - only then keep ignoring
+                            try {
+                                const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                                const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                                const storedTokens = localStorage.getItem(storageKey);
+                                if (storedTokens) {
+                                    const tokens = JSON.parse(storedTokens);
+                                    if (tokens?.access_token && tokens?.user) {
+                                        console.log('[AuthContext] localStorage still has valid tokens, keeping user');
+                                        // Don't clear the flag while tokens exist
+                                        return;
+                                    }
+                                }
+                                // Tokens gone - clear the flag and user
+                                console.log('[AuthContext] localStorage tokens gone, clearing user');
                                 userSetFromLocalStorageRef.current = false;
-                            }, 5000);
+                                setUser(null);
+                            } catch (e) {
+                                console.warn('[AuthContext] Error checking tokens in onAuthStateChange:', e);
+                            }
                         } else {
-                            console.log('[AuthContext] No session and no localStorage recovery, clearing user, event:', _event);
+                            // ALSO check localStorage before clearing - tokens might exist even if flag is false
+                            try {
+                                const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                                const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                                const storedTokens = localStorage.getItem(storageKey);
+                                if (storedTokens) {
+                                    const tokens = JSON.parse(storedTokens);
+                                    if (tokens?.access_token && tokens?.user) {
+                                        console.log('[AuthContext] localStorage has valid tokens - NOT clearing user, event:', _event);
+                                        // Set the flag and restore user from tokens
+                                        userSetFromLocalStorageRef.current = true;
+                                        setUser(tokens.user);
+                                        return;
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('[AuthContext] Error checking localStorage in else branch:', e);
+                            }
+                            console.log('[AuthContext] No session and no localStorage tokens, clearing user, event:', _event);
                             setUser(null);
                         }
                     }

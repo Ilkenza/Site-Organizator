@@ -5,7 +5,31 @@ import Button from '../ui/Button';
 import { ConfirmModal } from '../ui/Modal';
 
 export default function Header({ onAddClick, onMenuClick }) {
-    const { user, signOut } = useAuth();
+    const { user: authUser, signOut } = useAuth();
+    
+    // Fallback: if authUser is null, try to get user from localStorage
+    const [localUser, setLocalUser] = useState(null);
+    useEffect(() => {
+        if (!authUser && typeof window !== 'undefined') {
+            try {
+                const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                const storedTokens = localStorage.getItem(storageKey);
+                if (storedTokens) {
+                    const tokens = JSON.parse(storedTokens);
+                    if (tokens?.user) {
+                        setLocalUser(tokens.user);
+                    }
+                }
+            } catch (e) {}
+        } else if (authUser) {
+            setLocalUser(null); // Clear fallback when real user is available
+        }
+    }, [authUser]);
+    
+    // Use authUser if available, otherwise fallback to localUser
+    const user = authUser || localUser;
+    
     const {
         activeTab,
         searchQuery,
