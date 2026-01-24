@@ -476,30 +476,13 @@ export default function Login() {
                     token_type: tokenCandidates?.token_type || tokenCandidates?.data?.token_type,
                     user: tokenCandidates?.user || tokenCandidates?.data?.user
                 }));
-                console.log('AAL2 tokens stored, setting session with SDK...');
+                console.log('AAL2 tokens stored in localStorage, redirecting immediately...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
 
-                // Set session with the SDK using the AAL2 tokens
-                try {
-                    const setResp = await supabase.auth.setSession({ access_token, refresh_token });
-                    console.log('setSession with AAL2 tokens result:', setResp);
-                    if (!setResp?.error) {
-                        await new Promise(r => setTimeout(r, 100));
-                        try { window.__redirecting = true; } catch (e) { }
-                        console.log('Redirecting to dashboard with AAL2 session...');
-                        window.location.replace('/dashboard');
-                        return;
-                    } else {
-                        console.warn('setSession returned error, but tokens are stored - redirecting anyway:', setResp.error);
-                    }
-                } catch (e) {
-                    console.warn('setSession threw error, but tokens are stored - redirecting anyway:', e);
-                }
-
-                // Tokens are stored, redirect even if setSession had issues
-                await new Promise(r => setTimeout(r, 100));
+                // Tokens are stored in localStorage, SDK will pick them up on page load
+                // Skip setSession call entirely to avoid blocking - just redirect immediately
                 try { window.__redirecting = true; } catch (e) { }
-                console.log('Redirecting to dashboard (tokens stored)...');
+                console.log('Redirecting to dashboard (tokens stored, skipping setSession)...');
                 window.location.replace('/dashboard');
                 return;
             }
