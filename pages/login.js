@@ -442,13 +442,9 @@ export default function Login() {
 
             // If session present, redirect. Otherwise, try to store tokens returned in verify result (if present)
             if (sessionData) {
-                console.log('Session found after verify, clearing MFA state and redirecting...');
+                console.log('Session found after verify, redirecting (keeping MFA UI visible)...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
-                setMfaRequired(false);
-                setMfaWaiting(false);
-                setMfaCode('');
-                try { setSigning(false); } catch (e) { }
-                setLoading(false);
+                // Keep loading=true and mfaRequired=true so MFA UI with spinner stays visible during redirect
                 window.location.replace('/dashboard');
                 return;
             }
@@ -470,21 +466,16 @@ export default function Login() {
                 }));
                 console.log('Fallback tokens stored, attempting to set session and reload...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
-                setMfaRequired(false);
-                setMfaWaiting(false);
-                setMfaCode('');
-                try { setSigning(false); } catch (e) { }
+                // Keep loading=true and mfaRequired=true so MFA UI with spinner stays visible during redirect
                 // Try to set session with the SDK so app state stabilizes before redirecting
                 try {
                     const setResp2 = await supabase.auth.setSession({ access_token, refresh_token });
                     console.log('Fallback verify setSession result', setResp2);
                     if (!setResp2?.error) {
-                        setLoading(false);
                         window.location.replace('/dashboard');
                         return;
                     }
                 } catch (e) { console.warn('Fallback setSession failed', e); }
-                setLoading(false);
                 window.location.replace('/dashboard');
                 return;
             }
