@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
                 // Retry logic for session - sometimes needs a moment after redirect
                 let session = null;
                 let retryCount = 0;
-                const maxRetries = 3;
+                const maxRetries = 2; // Reduced from 3 for faster response
 
                 while (!session && retryCount < maxRetries) {
                     const { data, error } = await supabase.auth.getSession();
@@ -47,7 +47,7 @@ export function AuthProvider({ children }) {
                     retryCount++;
                     if (retryCount < maxRetries) {
                         console.log(`Session not found, retry ${retryCount}/${maxRetries}...`);
-                        await new Promise(r => setTimeout(r, 300));
+                        await new Promise(r => setTimeout(r, 150)); // Reduced from 300ms for faster response
                     }
                 }
                 if (session?.user) {
@@ -92,13 +92,13 @@ export function AuthProvider({ children }) {
         // Initialize auth
         initializeAuth();
 
-        // Safety timeout - if loading doesn't complete in 10 seconds, force it to complete
+        // Safety timeout - if loading doesn't complete in 4 seconds, force it to complete
         const safetyTimeout = setTimeout(() => {
             if (isMounted) {
                 console.warn('Auth initialization timed out, forcing loading to false');
                 setLoading(false);
             }
-        }, 10000);
+        }, 4000);
 
         // Listen for auth changes
         try {
