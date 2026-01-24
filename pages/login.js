@@ -17,6 +17,9 @@ export default function Login() {
         try { setLoading(true); } catch (e) { }
     };
 
+    // Silent notice for user-facing messages where we DO NOT want to show a loading spinner
+    const postNotice = (msg) => { try { console.log(msg); } catch (e) { } };
+
     // Helper to complete login and redirect. If MFA is active, suppress the alert and keep the loading screen.
     const completeLogin = ({ showAlert = false } = {}) => {
         if (typeof window !== 'undefined') {
@@ -270,8 +273,7 @@ export default function Login() {
                                 console.log('MFA required after sign-in; showing MFA prompt');
                                 setFactorId(totpFactor.id);
                                 setMfaWaiting(false);
-                                postAlertLoading('MFA required — please enter your verification code');
-                                setTimeout(() => { try { setLoading(true); } catch (e) { } }, 10);
+                                postNotice('MFA required — please enter your verification code');
                                 try { window.__mfaPending = true; window.__suppressAlertsDuringMfa = true; } catch (e) { }
                                 setMfaRequired(true);
                                 setSigning(false);
@@ -309,8 +311,7 @@ export default function Login() {
                 setFactorId(totpFactor.id);
                 setMfaWaiting(false);
                 console.log('MFA required; showing MFA form');
-                postAlertLoading('MFA required — please enter your verification code');
-                setTimeout(() => { try { setLoading(true); } catch (e) { } }, 10);
+                postNotice('MFA required — please enter your verification code');
                 try { window.__mfaPending = true; } catch (e) { }
                 setMfaRequired(true);
                 setSigning(false);
@@ -577,7 +578,7 @@ export default function Login() {
 
                                 <button
                                     type="submit"
-                                    disabled={loading || mfaCode.length !== 6}
+                                    disabled={loading || mfaWaiting || mfaCode.length !== 6}
                                     className="w-full py-3 px-4 bg-btn-primary hover:bg-btn-hover text-app-accent font-medium rounded-xl border border-[#2A5A8A] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:text-app-accentLight"
                                 >
                                     {loading ? (
