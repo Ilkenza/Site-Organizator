@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
                 // Retry logic for session - sometimes needs a moment after redirect
                 let session = null;
                 let retryCount = 0;
-                const maxRetries = 2; // Reduced from 3 for faster response
+                const maxRetries = 2;
 
                 while (!session && retryCount < maxRetries) {
                     const { data, error } = await supabase.auth.getSession();
@@ -47,7 +47,39 @@ export function AuthProvider({ children }) {
                     retryCount++;
                     if (retryCount < maxRetries) {
                         console.log(`Session not found, retry ${retryCount}/${maxRetries}...`);
-                        await new Promise(r => setTimeout(r, 150)); // Reduced from 300ms for faster response
+                        await new Promise(r => setTimeout(r, 100)); // Reduced from 150ms for faster response
+                    }
+                }
+
+                // Fallback: If getSession returned null, check localStorage for tokens (mobile MFA fix)
+                if (!session && typeof window !== 'undefined') {
+                    try {
+                        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                        const projectRef = supabaseUrl.replace(/^"|"$/g, '').split('//')[1]?.split('.')[0];
+                        if (projectRef) {
+                            const storageKey = `sb-${projectRef}-auth-token`;
+                            const storedTokens = localStorage.getItem(storageKey);
+                            if (storedTokens) {
+                                console.log('Found tokens in localStorage, attempting to restore session...');
+                                const tokens = JSON.parse(storedTokens);
+                                if (tokens?.access_token && tokens?.refresh_token) {
+                                    const { data: setSessionData, error: setSessionError } = await supabase.auth.setSession({
+                                        access_token: tokens.access_token,
+                                        refresh_token: tokens.refresh_token
+                                    });
+                                    if (setSessionError) {
+                                        console.warn('Failed to restore session from localStorage:', setSessionError.message);
+                                        // Clear invalid tokens
+                                        localStorage.removeItem(storageKey);
+                                    } else if (setSessionData?.session) {
+                                        console.log('Session restored from localStorage successfully');
+                                        session = setSessionData.session;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Error checking localStorage for tokens:', e);
                     }
                 }
                 if (session?.user) {
@@ -92,13 +124,13 @@ export function AuthProvider({ children }) {
         // Initialize auth
         initializeAuth();
 
-        // Safety timeout - if loading doesn't complete in 4 seconds, force it to complete
+        // Safety timeout - if loading doesn't complete in 2.5 seconds, force it to complete
         const safetyTimeout = setTimeout(() => {
             if (isMounted) {
                 console.warn('Auth initialization timed out, forcing loading to false');
                 setLoading(false);
             }
-        }, 4000);
+        }, 2500);
 
         // Listen for auth changes
         try {

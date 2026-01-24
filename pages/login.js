@@ -465,61 +465,32 @@ export default function Login() {
             const refresh_token = tokenCandidates?.refresh_token || tokenCandidates?.data?.refresh_token;
 
             if (access_token && refresh_token) {
-                console.log('Found AAL2 tokens in verifyResult, setting session via SDK...');
+                console.log('Found AAL2 tokens in verifyResult, storing and redirecting...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
 
-                // Use setSession with a longer timeout (8s) to ensure it completes
-                let setSessionSucceeded = false;
-                const setSessionWithTimeout = async () => {
-                    const timeoutPromise = new Promise((resolve) => {
-                        setTimeout(() => {
-                            console.log('setSession timed out after 8s');
-                            resolve({ timedOut: true });
-                        }, 8000);
-                    });
-
-                    const setSessionPromise = supabase.auth.setSession({
-                        access_token,
-                        refresh_token
-                    }).then(result => {
-                        console.log('setSession completed:', result.error ? 'error' : 'success', result);
-                        if (!result.error) setSessionSucceeded = true;
-                        return { ...result, timedOut: false };
-                    }).catch(err => {
-                        console.error('setSession threw:', err);
-                        return { error: err, timedOut: false };
-                    });
-
-                    return Promise.race([setSessionPromise, timeoutPromise]);
+                // ALWAYS store tokens to localStorage FIRST (before any async operations)
+                const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                const toStore = {
+                    access_token,
+                    refresh_token,
+                    expires_at: verifyResult?.expires_at,
+                    expires_in: verifyResult?.expires_in,
+                    token_type: verifyResult?.token_type || 'bearer',
+                    user: verifyResult?.user
                 };
-
-                // Run setSession with timeout
-                const setSessionResult = await setSessionWithTimeout();
-
-                // If setSession failed or timed out, manually store tokens to localStorage
-                if (!setSessionSucceeded) {
-                    console.log('setSession did not succeed, manually storing tokens to localStorage...');
-                    const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                    const toStore = {
-                        access_token,
-                        refresh_token,
-                        expires_at: verifyResult?.expires_at,
-                        expires_in: verifyResult?.expires_in,
-                        token_type: verifyResult?.token_type || 'bearer',
-                        user: verifyResult?.user
-                    };
-                    try {
-                        localStorage.setItem(storageKey, JSON.stringify(toStore));
-                        console.log('Manually stored tokens to localStorage');
-                    } catch (e) {
-                        console.error('Failed to store tokens:', e);
-                    }
+                try {
+                    localStorage.setItem(storageKey, JSON.stringify(toStore));
+                    console.log('Tokens stored to localStorage with key:', storageKey);
+                } catch (e) {
+                    console.error('Failed to store tokens:', e);
                 }
 
-                // Add delay to ensure localStorage write and SDK state are stable before navigation
-                await new Promise(r => setTimeout(r, 300));
+                // Fire setSession in background (don't await) - it's a "nice to have"
+                supabase.auth.setSession({ access_token, refresh_token })
+                    .then(r => console.log('Background setSession completed:', r?.error ? 'error' : 'success'))
+                    .catch(e => console.warn('Background setSession failed:', e));
 
-                // Redirect to dashboard
+                // Set redirect flag and redirect immediately
                 try { window.__redirecting = true; } catch (e) { }
                 console.log('Redirecting to dashboard...');
                 window.location.replace('/dashboard');
