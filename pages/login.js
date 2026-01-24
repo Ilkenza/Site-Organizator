@@ -210,12 +210,25 @@ export default function Login() {
         }, 60000);
 
         try {
-            console.log('MFA verify starting, factorId:', factorId);
+            console.log('MFA verify starting, factorId:', factorId, 'supabase:', !!supabase);
+
+            // Validate inputs
+            if (!supabase) {
+                throw new Error('Supabase not initialized');
+            }
+            if (!factorId) {
+                throw new Error('No MFA factor ID');
+            }
+            if (!mfaCode || mfaCode.length !== 6) {
+                throw new Error('Invalid MFA code');
+            }
 
             // Step 1: Create challenge with timeout
+            console.log('Creating challenge for factor:', factorId);
             let challengeData, challengeError;
             try {
                 const challengePromise = supabase.auth.mfa.challenge({ factorId });
+                console.log('Challenge promise created');
                 const challengeTimeout = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error('Challenge timed out')), 45000)
                 );
