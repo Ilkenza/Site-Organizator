@@ -223,9 +223,14 @@ export default function Login() {
                 challengeData = result.data;
                 challengeError = result.error;
             } catch (timeoutErr) {
+                console.error('Challenge error:', timeoutErr?.message || timeoutErr);
                 clearTimeout(hardTimeout);
                 setLoading(false);
-                setError('Connection timed out. Please try again.');
+                if (timeoutErr?.message?.includes('timed out')) {
+                    setError('Connection timed out. Please try again.');
+                } else {
+                    setError(timeoutErr?.message || 'Challenge failed. Please try again.');
+                }
                 return;
             }
 
@@ -251,9 +256,14 @@ export default function Login() {
                 verifyData = result.data;
                 verifyError = result.error;
             } catch (timeoutErr) {
+                console.error('Verify error:', timeoutErr?.message || timeoutErr);
                 clearTimeout(hardTimeout);
                 setLoading(false);
-                setError('Verification timed out. Please try again.');
+                if (timeoutErr?.message?.includes('timed out')) {
+                    setError('Verification timed out. Please try again.');
+                } else {
+                    setError(timeoutErr?.message || 'Verification failed. Please try again.');
+                }
                 return;
             }
 
