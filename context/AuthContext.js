@@ -55,61 +55,72 @@ export function AuthProvider({ children }) {
                 // Fallback: If getSession returned null, check localStorage for tokens (mobile MFA fix)
                 if (!session && typeof window !== 'undefined') {
                     try {
-                        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-                        const projectRef = supabaseUrl.replace(/^"|"$/g, '').split('//')[1]?.split('.')[0];
-                        if (projectRef) {
-                            const storageKey = `sb-${projectRef}-auth-token`;
-                            const storedTokens = localStorage.getItem(storageKey);
-                            if (storedTokens) {
-                                console.log('Found tokens in localStorage, attempting to restore session...');
-                                const tokens = JSON.parse(storedTokens);
-                                if (tokens?.access_token && tokens?.refresh_token) {
-                                    // Wrap setSession in a timeout to prevent indefinite blocking (mobile fix)
-                                    const SET_SESSION_TIMEOUT = 3000; // 3 seconds max for setSession
-                                    try {
-                                        const setSessionPromise = supabase.auth.setSession({
-                                            access_token: tokens.access_token,
-                                            refresh_token: tokens.refresh_token
-                                        });
+                        // IMPORTANT: Use EXACT same key format as login.js
+                        const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                        const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                        console.log('[AuthContext] Checking localStorage with key:', storageKey);
+                        
+                        const storedTokens = localStorage.getItem(storageKey);
+                        console.log('[AuthContext] Tokens found in localStorage:', !!storedTokens);
+                        
+                        if (storedTokens) {
+                            console.log('[AuthContext] Found tokens in localStorage, attempting to restore session...');
+                            const tokens = JSON.parse(storedTokens);
+                            console.log('[AuthContext] Parsed tokens - has access_token:', !!tokens?.access_token, ', has refresh_token:', !!tokens?.refresh_token, ', has user:', !!tokens?.user);
+                            
+                            if (tokens?.access_token && tokens?.refresh_token) {
+                                // Wrap setSession in a timeout to prevent indefinite blocking (mobile fix)
+                                const SET_SESSION_TIMEOUT = 3000; // 3 seconds max for setSession
+                                let setSessionSucceeded = false;
+                                
+                                try {
+                                    const setSessionPromise = supabase.auth.setSession({
+                                        access_token: tokens.access_token,
+                                        refresh_token: tokens.refresh_token
+                                    });
 
-                                        const timeoutPromise = new Promise((_, reject) =>
-                                            setTimeout(() => reject(new Error('setSession timeout')), SET_SESSION_TIMEOUT)
-                                        );
+                                    const timeoutPromise = new Promise((_, reject) =>
+                                        setTimeout(() => reject(new Error('setSession timeout')), SET_SESSION_TIMEOUT)
+                                    );
 
-                                        const { data: setSessionData, error: setSessionError } = await Promise.race([
-                                            setSessionPromise,
-                                            timeoutPromise
-                                        ]);
+                                    const { data: setSessionData, error: setSessionError } = await Promise.race([
+                                        setSessionPromise,
+                                        timeoutPromise
+                                    ]);
 
-                                        if (setSessionError) {
-                                            console.warn('Failed to restore session from localStorage:', setSessionError.message);
-                                            // Clear invalid tokens
+                                    console.log('[AuthContext] setSession result - error:', setSessionError?.message, ', has session:', !!setSessionData?.session);
+
+                                    if (setSessionError) {
+                                        console.warn('[AuthContext] Failed to restore session from localStorage:', setSessionError.message);
+                                        // Only clear tokens if it's an auth error, not a network error
+                                        if (setSessionError.message?.includes('invalid') || setSessionError.message?.includes('expired')) {
                                             localStorage.removeItem(storageKey);
-                                        } else if (setSessionData?.session) {
-                                            console.log('Session restored from localStorage successfully');
-                                            session = setSessionData.session;
                                         }
-                                    } catch (timeoutErr) {
-                                        console.warn('setSession timed out, using tokens directly:', timeoutErr.message);
-                                        // Even if setSession times out, try to use the tokens directly
-                                        // The user object from stored tokens can be used as fallback
-                                        if (tokens.user) {
-                                            console.log('Using user from stored tokens as fallback');
-                                            session = {
-                                                access_token: tokens.access_token,
-                                                refresh_token: tokens.refresh_token,
-                                                user: tokens.user,
-                                                expires_at: tokens.expires_at,
-                                                expires_in: tokens.expires_in,
-                                                token_type: tokens.token_type || 'bearer'
-                                            };
-                                        }
+                                    } else if (setSessionData?.session) {
+                                        console.log('[AuthContext] Session restored from localStorage successfully');
+                                        session = setSessionData.session;
+                                        setSessionSucceeded = true;
                                     }
+                                } catch (timeoutErr) {
+                                    console.warn('[AuthContext] setSession timed out:', timeoutErr.message);
+                                }
+                                
+                                // CRITICAL: If setSession didn't return a session but tokens exist with user, use them directly
+                                if (!session && tokens.user) {
+                                    console.log('[AuthContext] Using user from stored tokens as fallback (setSessionSucceeded:', setSessionSucceeded, ')');
+                                    session = {
+                                        access_token: tokens.access_token,
+                                        refresh_token: tokens.refresh_token,
+                                        user: tokens.user,
+                                        expires_at: tokens.expires_at,
+                                        expires_in: tokens.expires_in,
+                                        token_type: tokens.token_type || 'bearer'
+                                    };
                                 }
                             }
                         }
                     } catch (e) {
-                        console.warn('Error checking localStorage for tokens:', e);
+                        console.warn('[AuthContext] Error checking localStorage for tokens:', e);
                     }
                 }
                 if (session?.user) {
@@ -158,13 +169,31 @@ export function AuthProvider({ children }) {
         // Increased for mobile networks where setSession can be slow
         const safetyTimeout = setTimeout(() => {
             if (isMounted && loading) {
-                console.warn('Auth initialization timed out after 5s, forcing loading to false');
+                console.warn('[AuthContext] Auth initialization timed out after 5s, forcing loading to false');
                 setLoading(false);
-                // Also try one more time to get session in background
+                
+                // Try getSession one more time
                 supabase.auth.getSession().then(({ data }) => {
                     if (isMounted && data?.session?.user) {
-                        console.log('Late session recovery successful');
+                        console.log('[AuthContext] Late session recovery successful via getSession');
                         setUser(data.session.user);
+                    } else if (isMounted && typeof window !== 'undefined') {
+                        // CRITICAL FALLBACK: Check localStorage directly for tokens
+                        try {
+                            const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                            const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                            const storedTokens = localStorage.getItem(storageKey);
+                            
+                            if (storedTokens) {
+                                const tokens = JSON.parse(storedTokens);
+                                if (tokens?.user) {
+                                    console.log('[AuthContext] Late session recovery using tokens from localStorage');
+                                    setUser(tokens.user);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[AuthContext] Late localStorage fallback failed:', e);
+                        }
                     }
                 }).catch(() => { });
             }
@@ -299,6 +328,29 @@ export function AuthProvider({ children }) {
             console.error('Error refreshing user:', error);
         }
     };
+
+    // Emergency user recovery - if user is null but tokens exist in localStorage, set user directly
+    useEffect(() => {
+        if (user || loading) return; // Already have user or still loading
+        
+        if (typeof window === 'undefined') return;
+        
+        try {
+            const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+            const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+            const storedTokens = localStorage.getItem(storageKey);
+            
+            if (storedTokens) {
+                const tokens = JSON.parse(storedTokens);
+                if (tokens?.user && tokens?.access_token) {
+                    console.log('[AuthContext] Emergency recovery: setting user from localStorage');
+                    setUser(tokens.user);
+                }
+            }
+        } catch (e) {
+            console.warn('[AuthContext] Error in emergency user recovery:', e);
+        }
+    }, [user, loading]);
 
     const value = {
         user,
