@@ -148,6 +148,15 @@ export default function Login() {
                     }
 
                     if (sessionFromSignIn?.access_token || sessionFromSignIn?.refresh_token || sessionFromSignIn?.user) {
+                        // Require MFA: if the user object does not indicate MFA factors, reject login
+                        const hasFactors = !!(sessionFromSignIn?.user?.factors?.length);
+                        if (!hasFactors) {
+                            console.warn('Account does not have MFA factors — blocking login');
+                            setSigning(false);
+                            setError('Multi-factor authentication is required for this account. Please enable MFA before signing in.');
+                            return;
+                        }
+
                         console.log('Late signIn response received — storing tokens as fallback');
                         const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
                         const toStore = {
@@ -263,10 +272,11 @@ export default function Login() {
                             console.warn('MFA check failed during post-signin handling, proceeding with redirect:', e?.message || e);
                         }
 
-                        // No MFA required — proceed to complete login
-                        console.log('No MFA required, redirecting to dashboard');
-                        completeLogin({ showAlert: false });
-                        return;
+                        // IMPORTANT: Do not allow login to proceed if no verified TOTP factor exists
+                        console.warn('Blocking login: account does not have verified TOTP MFA factor');
+                        setSigning(false);
+                        setError('Multi-factor authentication is required for this account. Please enable MFA before signing in.');
+                        return; 
                     }
                 }
             } catch (e) {
@@ -294,6 +304,15 @@ export default function Login() {
                 setMfaRequired(true);
                 setSigning(false);
                 console.log('MFA required, showing MFA prompt');
+                return;
+            }
+
+            // If we reached here and there is no verified TOTP factor, block login (MFA required policy)
+            if (!totpFactor && !factorsError) {
+                clearTimeout(timeoutId);
+                console.warn('Blocking login: account does not have verified TOTP MFA factor');
+                setSigning(false);
+                setError('Multi-factor authentication is required for this account. Please enable MFA before signing in.');
                 return;
             }
 
