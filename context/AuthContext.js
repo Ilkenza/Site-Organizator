@@ -59,20 +59,20 @@ export function AuthProvider({ children }) {
                         const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
                         const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
                         console.log('[AuthContext] Checking localStorage with key:', storageKey);
-                        
+
                         const storedTokens = localStorage.getItem(storageKey);
                         console.log('[AuthContext] Tokens found in localStorage:', !!storedTokens);
-                        
+
                         if (storedTokens) {
                             console.log('[AuthContext] Found tokens in localStorage, attempting to restore session...');
                             const tokens = JSON.parse(storedTokens);
                             console.log('[AuthContext] Parsed tokens - has access_token:', !!tokens?.access_token, ', has refresh_token:', !!tokens?.refresh_token, ', has user:', !!tokens?.user);
-                            
+
                             if (tokens?.access_token && tokens?.refresh_token) {
                                 // Wrap setSession in a timeout to prevent indefinite blocking (mobile fix)
                                 const SET_SESSION_TIMEOUT = 3000; // 3 seconds max for setSession
                                 let setSessionSucceeded = false;
-                                
+
                                 try {
                                     const setSessionPromise = supabase.auth.setSession({
                                         access_token: tokens.access_token,
@@ -104,7 +104,7 @@ export function AuthProvider({ children }) {
                                 } catch (timeoutErr) {
                                     console.warn('[AuthContext] setSession timed out:', timeoutErr.message);
                                 }
-                                
+
                                 // CRITICAL: If setSession didn't return a session but tokens exist with user, use them directly
                                 if (!session && tokens.user) {
                                     console.log('[AuthContext] Using user from stored tokens as fallback (setSessionSucceeded:', setSessionSucceeded, ')');
@@ -171,7 +171,7 @@ export function AuthProvider({ children }) {
             if (isMounted && loading) {
                 console.warn('[AuthContext] Auth initialization timed out after 5s, forcing loading to false');
                 setLoading(false);
-                
+
                 // Try getSession one more time
                 supabase.auth.getSession().then(({ data }) => {
                     if (isMounted && data?.session?.user) {
@@ -183,7 +183,7 @@ export function AuthProvider({ children }) {
                             const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
                             const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
                             const storedTokens = localStorage.getItem(storageKey);
-                            
+
                             if (storedTokens) {
                                 const tokens = JSON.parse(storedTokens);
                                 if (tokens?.user) {
@@ -332,14 +332,14 @@ export function AuthProvider({ children }) {
     // Emergency user recovery - if user is null but tokens exist in localStorage, set user directly
     useEffect(() => {
         if (user || loading) return; // Already have user or still loading
-        
+
         if (typeof window === 'undefined') return;
-        
+
         try {
             const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
             const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
             const storedTokens = localStorage.getItem(storageKey);
-            
+
             if (storedTokens) {
                 const tokens = JSON.parse(storedTokens);
                 if (tokens?.user && tokens?.access_token) {
