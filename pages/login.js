@@ -415,10 +415,17 @@ export default function Login() {
         try {
             console.log('1. Starting MFA verify, factorId:', factorId);
 
-            // Create MFA challenge
-            const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
-                factorId: factorId
-            });
+            // Create MFA challenge with timeout
+            console.log('1.1 Creating challenge with 30s timeout...');
+            const challengePromise = supabase.auth.mfa.challenge({ factorId: factorId });
+            const challengeTimeout = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Challenge creation timed out')), 30000)
+            );
+            
+            const { data: challengeData, error: challengeError } = await Promise.race([
+                challengePromise,
+                challengeTimeout
+            ]);
 
             console.log('2. Challenge response:', { challengeData, challengeError });
 
@@ -509,11 +516,20 @@ export default function Login() {
                 if (storedUser?.id) {
                     try {
                         console.log('DEBUG: Fetching profile data for user:', storedUser.id);
-                        const { data: profile } = await supabase
+                        const profilePromise = supabase
                             .from('profiles')
                             .select('avatar_url, name')
                             .eq('id', storedUser.id)
                             .maybeSingle();
+                        
+                        const profileTimeout = new Promise((resolve) => 
+                            setTimeout(() => {
+                                console.warn('DEBUG: Profile fetch timed out after 10s');
+                                resolve({ data: null });
+                            }, 10000)
+                        );
+
+                        const { data: profile } = await Promise.race([profilePromise, profileTimeout]);
 
                         if (profile) {
                             console.log('DEBUG: Profile fetched:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
@@ -524,6 +540,8 @@ export default function Login() {
                                 displayName: profile.name || null,
                                 name: profile.name || null
                             };
+                        } else {
+                            console.log('DEBUG: No profile data found or timeout');
                         }
                     } catch (profileErr) {
                         console.warn('DEBUG: Failed to fetch profile, continuing with basic user:', profileErr);
@@ -575,11 +593,19 @@ export default function Login() {
             setLoading(false);
         } catch (err) {
             console.error('MFA Error:', err);
+            console.error('MFA Error stack:', err?.stack);
             try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
             setMfaWaiting(false);
             setMfaRequired(false);
             setMfaVerifying(false);
-            setError(err.message || 'Invalid verification code');
+            setSigning(false); // Also reset signing state
+            
+            // Show user-friendly error message
+            let errorMsg = err.message || 'Invalid verification code';
+            if (errorMsg.includes('timed out') || errorMsg.includes('timeout')) {
+                errorMsg = 'Request timed out. Please check your connection and try again.';
+            }
+            setError(errorMsg);
             setLoading(false);
         }
     };
