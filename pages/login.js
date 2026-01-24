@@ -86,6 +86,11 @@ export default function Login() {
     useEffect(() => {
         if (!loading) return;
         const t = setTimeout(() => {
+            // Don't clear loading if redirect is in progress
+            if (typeof window !== 'undefined' && window.__redirecting) {
+                console.log('Timeout reached but redirect in progress, keeping loading state');
+                return;
+            }
             console.warn('Login flow timeout reached; clearing loading state');
             setLoading(false);
             setError('Request timed out. Please try again.');
@@ -456,13 +461,14 @@ export default function Login() {
                     console.warn('Session confirmation failed, proceeding anyway:', e);
                 }
 
-                // Small delay to ensure state is stable
+                // Set redirect flag to prevent timeout from clearing loading state
                 await new Promise(r => setTimeout(r, 100));
+                try { window.__redirecting = true; } catch (e) { }
                 window.location.replace('/dashboard');
                 return;
             }
 
-            // Fallback: some Supabase setups return tokens directly in result - store them if available
+            // Fallback: some Supabase setups return tokens directly in verify result - store them if available
             const tokenCandidates = verifyResult || {};
             const access_token = tokenCandidates?.data?.access_token || tokenCandidates?.access_token;
             const refresh_token = tokenCandidates?.data?.refresh_token || tokenCandidates?.refresh_token;
@@ -486,12 +492,14 @@ export default function Login() {
                     console.log('Fallback verify setSession result', setResp2);
                     if (!setResp2?.error) {
                         await new Promise(r => setTimeout(r, 100));
+                        try { window.__redirecting = true; } catch (e) { }
                         window.location.replace('/dashboard');
                         return;
                     }
                 } catch (e) { console.warn('Fallback setSession failed', e); }
 
                 await new Promise(r => setTimeout(r, 100));
+                try { window.__redirecting = true; } catch (e) { }
                 window.location.replace('/dashboard');
                 return;
             }
