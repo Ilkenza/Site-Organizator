@@ -122,13 +122,12 @@ export default function SettingsPanel() {
                 let browser = 'Unknown Browser';
                 let os = 'Unknown OS';
 
-                // Detect browser (order matters - check specific browsers first)
-                if (navigator.brave && navigator.brave.isBrave) browser = 'Brave';
-                else if (ua.includes('Firefox')) browser = 'Firefox';
+                // Detect browser
+                if (ua.includes('Firefox')) browser = 'Firefox';
                 else if (ua.includes('Edg')) browser = 'Edge';
-                else if (ua.includes('OPR') || ua.includes('Opera')) browser = 'Opera';
                 else if (ua.includes('Chrome')) browser = 'Chrome';
                 else if (ua.includes('Safari')) browser = 'Safari';
+                else if (ua.includes('Opera') || ua.includes('OPR')) browser = 'Opera';
 
                 // Detect OS
                 if (ua.includes('Windows')) os = 'Windows';
@@ -1092,7 +1091,7 @@ export default function SettingsPanel() {
                                     : 'bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF]'
                                     }`}
                             >
-                                {mfaEnabled ? 'Disable' : mfaFactorId ? 'Continue Setup' : 'Enable'}
+                                {mfaEnabled ? 'Manage' : mfaFactorId ? 'Continue Setup' : 'Enable'}
                             </button>
                         </div>
 
