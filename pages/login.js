@@ -125,33 +125,51 @@ export default function Login() {
             return;
         }
 
-        // Hard timeout - if anything takes longer than 30s, reset
-        const hardTimeout = setTimeout(() => {
-            console.warn('HARD TIMEOUT: Sign in took too long');
-            setSigning(false);
-            setError('Login timed out. Please try again.');
-        }, 30000);
-
         try {
             console.log('Sign in attempt for', email);
 
-            // Skip signOut - it causes issues on mobile
-            // Just try to sign in directly
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            // Create a timeout promise
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Connection timed out')), 25000);
+            });
+
+            // Race between signIn and timeout
+            const signInPromise = supabase.auth.signInWithPassword({ email, password });
+
+            let result;
+            try {
+                result = await Promise.race([signInPromise, timeoutPromise]);
+            } catch (timeoutErr) {
+                console.error('SignIn timed out');
+                setSigning(false);
+                setError('Connection timed out. Please check your internet and try again.');
+                return;
+            }
+
+            const { data, error } = result;
 
             if (error) {
-                clearTimeout(hardTimeout);
                 throw error;
             }
 
             console.log('SignIn result:', { hasSession: !!data?.session, hasUser: !!data?.user });
 
-            // Check for MFA
-            const { data: factorsData } = await supabase.auth.mfa.listFactors();
+            // Check for MFA with timeout
+            let factorsData = null;
+            try {
+                const factorsPromise = supabase.auth.mfa.listFactors();
+                const factorsTimeout = new Promise((resolve) => {
+                    setTimeout(() => resolve({ data: null }), 10000);
+                });
+                const factorsResult = await Promise.race([factorsPromise, factorsTimeout]);
+                factorsData = factorsResult?.data;
+            } catch (e) {
+                console.warn('MFA check failed:', e);
+            }
+
             const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
 
             if (totpFactor) {
-                clearTimeout(hardTimeout);
                 console.log('MFA required, showing MFA form');
 
                 // Save AAL1 token
@@ -167,28 +185,21 @@ export default function Login() {
             }
 
             // No MFA - block login (MFA required policy)
-            clearTimeout(hardTimeout);
             setSigning(false);
             setError('Multi-factor authentication is required. Please enable MFA.');
 
         } catch (err) {
-            clearTimeout(hardTimeout);
-            console.error('Login error:', err);
+            console.error('SignIn error:', err);
             setSigning(false);
-            setError(err?.message || 'Login failed');
+            setError(err?.message || 'Sign in failed');
         }
     };
 
+    // MFA Verification Handler
     const handleMfaVerify = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
-
-        if (!supabase) {
-            setError('MFA verification is temporarily unavailable.');
-            setLoading(false);
-            return;
-        }
 
         // Hard timeout - reset everything after 30s
         const hardTimeout = setTimeout(() => {
@@ -201,10 +212,22 @@ export default function Login() {
         try {
             console.log('MFA verify starting, factorId:', factorId);
 
-            // Step 1: Create challenge
-            const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
-                factorId: factorId
-            });
+            // Step 1: Create challenge with timeout
+            let challengeData, challengeError;
+            try {
+                const challengePromise = supabase.auth.mfa.challenge({ factorId });
+                const challengeTimeout = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Challenge timed out')), 15000)
+                );
+                const result = await Promise.race([challengePromise, challengeTimeout]);
+                challengeData = result.data;
+                challengeError = result.error;
+            } catch (timeoutErr) {
+                clearTimeout(hardTimeout);
+                setLoading(false);
+                setError('Connection timed out. Please try again.');
+                return;
+            }
 
             if (challengeError) {
                 clearTimeout(hardTimeout);
@@ -213,12 +236,26 @@ export default function Login() {
 
             console.log('Challenge created:', challengeData?.id);
 
-            // Step 2: Verify code
-            const { data: verifyData, error: verifyError } = await supabase.auth.mfa.verify({
-                factorId: factorId,
-                challengeId: challengeData.id,
-                code: mfaCode
-            });
+            // Step 2: Verify code with timeout
+            let verifyData, verifyError;
+            try {
+                const verifyPromise = supabase.auth.mfa.verify({
+                    factorId: factorId,
+                    challengeId: challengeData.id,
+                    code: mfaCode
+                });
+                const verifyTimeout = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Verify timed out')), 15000)
+                );
+                const result = await Promise.race([verifyPromise, verifyTimeout]);
+                verifyData = result.data;
+                verifyError = result.error;
+            } catch (timeoutErr) {
+                clearTimeout(hardTimeout);
+                setLoading(false);
+                setError('Verification timed out. Please try again.');
+                return;
+            }
 
             if (verifyError) {
                 clearTimeout(hardTimeout);
