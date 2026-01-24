@@ -25,18 +25,31 @@ export function AuthProvider({ children }) {
 
         const initializeAuth = async () => {
             try {
-                // Check active session with error handling
-                const { data, error } = await supabase.auth.getSession();
+                // Retry logic for session - sometimes needs a moment after redirect
+                let session = null;
+                let retryCount = 0;
+                const maxRetries = 3;
 
-                if (!isMounted) return;
+                while (!session && retryCount < maxRetries) {
+                    const { data, error } = await supabase.auth.getSession();
 
-                if (error) {
-                    console.warn('Session check error:', error.message);
-                    setLoading(false);
-                    return;
+                    if (!isMounted) return;
+
+                    if (error) {
+                        console.warn('Session check error (attempt ' + (retryCount + 1) + '):', error.message);
+                    }
+
+                    if (data?.session) {
+                        session = data.session;
+                        break;
+                    }
+
+                    retryCount++;
+                    if (retryCount < maxRetries) {
+                        console.log(`Session not found, retry ${retryCount}/${maxRetries}...`);
+                        await new Promise(r => setTimeout(r, 300));
+                    }
                 }
-
-                const session = data?.session;
                 if (session?.user) {
                     try {
                         // Fetch user profile including avatar and name

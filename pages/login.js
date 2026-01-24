@@ -457,69 +457,57 @@ export default function Login() {
                 throw new Error(msg || 'Invalid verification code');
             }
 
-            console.log('5. MFA successful (verify returned OK) — extracting tokens from verifyResult FIRST...');
+            console.log('5. MFA successful (verify returned OK) — extracting tokens from verifyResult...');
 
-            // PRIORITY: Extract tokens from verifyResult FIRST (contains correct AAL2 tokens)
-            // The verifyResult contains access_token directly (not nested in data based on logs)
+            // Extract tokens from verifyResult (check direct properties first, then nested in .data)
             const tokenCandidates = verifyResult || {};
             const access_token = tokenCandidates?.access_token || tokenCandidates?.data?.access_token;
             const refresh_token = tokenCandidates?.refresh_token || tokenCandidates?.data?.refresh_token;
 
             if (access_token && refresh_token) {
-                console.log('Found AAL2 tokens in verifyResult, using them immediately');
-                const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                localStorage.setItem(storageKey, JSON.stringify({
-                    access_token,
-                    refresh_token,
-                    expires_at: tokenCandidates?.expires_at || tokenCandidates?.data?.expires_at,
-                    expires_in: tokenCandidates?.expires_in || tokenCandidates?.data?.expires_in,
-                    token_type: tokenCandidates?.token_type || tokenCandidates?.data?.token_type,
-                    user: tokenCandidates?.user || tokenCandidates?.data?.user
-                }));
-                console.log('AAL2 tokens stored in localStorage, redirecting immediately...');
+                console.log('Found AAL2 tokens in verifyResult, setting session via SDK...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
 
-                // Tokens are stored in localStorage, SDK will pick them up on page load
-                // Skip setSession call entirely to avoid blocking - just redirect immediately
+                // Use setSession with a 3-second timeout via Promise.race
+                // Even if setSession times out, redirect anyway - SDK will pick up session on reload
+                const setSessionWithTimeout = async () => {
+                    const timeoutPromise = new Promise((resolve) => {
+                        setTimeout(() => {
+                            console.log('setSession timed out after 3s, proceeding with redirect anyway');
+                            resolve({ timedOut: true });
+                        }, 3000);
+                    });
+
+                    const setSessionPromise = supabase.auth.setSession({
+                        access_token,
+                        refresh_token
+                    }).then(result => {
+                        console.log('setSession completed:', result.error ? 'error' : 'success', result);
+                        return { ...result, timedOut: false };
+                    }).catch(err => {
+                        console.error('setSession threw:', err);
+                        return { error: err, timedOut: false };
+                    });
+
+                    return Promise.race([setSessionPromise, timeoutPromise]);
+                };
+
+                // Run setSession with timeout, but always redirect after
+                await setSessionWithTimeout();
+
+                // Redirect to dashboard (tokens will work on reload even if setSession failed/timed out)
                 try { window.__redirecting = true; } catch (e) { }
-                console.log('Redirecting to dashboard (tokens stored, skipping setSession)...');
-                window.location.replace('/dashboard');
-                return;
-            }
-
-            // FALLBACK: No tokens in verifyResult, try polling for session (may be stale AAL1)
-            console.log('No tokens in verifyResult, falling back to session polling...');
-            let sessionData = null;
-            const maxPollMs = 3000;
-            const pollInterval = 300;
-            const pollStart = Date.now();
-
-            while (Date.now() - pollStart < maxPollMs) {
-                try {
-                    const { data: sess } = await supabase.auth.getSession();
-                    console.log('Post-verify session poll:', sess);
-                    if (sess?.session) { sessionData = sess.session; break; }
-                } catch (e) {
-                    console.warn('Error polling session after verify:', e?.message || e);
-                }
-                await new Promise(r => setTimeout(r, pollInterval));
-            }
-
-            // If session present from polling, redirect
-            if (sessionData) {
-                console.log('Session found via polling (fallback), redirecting...');
-                try { window.__redirecting = true; } catch (e) { }
-                try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
                 console.log('Redirecting to dashboard...');
                 window.location.replace('/dashboard');
                 return;
             }
 
-            console.warn('No session or tokens found after verify; informing user');
+            // No tokens found in verifyResult
+            console.warn('No tokens found in verifyResult after MFA verify');
             try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
             setMfaWaiting(false);
             setMfaRequired(false);
-            setError('Verification completed but we could not establish session. Please try signing in again.');
+            setError('Verification completed but no tokens received. Please try signing in again.');
             setLoading(false);
         } catch (err) {
             console.error('MFA Error:', err);

@@ -223,16 +223,39 @@ function DashboardContent() {
 }
 
 export default function Dashboard() {
-  const { user, loading } = useAuth();
+  const { user, loading, supabase } = useAuth();
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!loading && !user) {
-      window.location.href = '/login';
-    }
-  }, [user, loading]);
 
-  if (loading) {
+    // Add a small delay to allow session to propagate after redirect
+    const checkAuth = async () => {
+      if (!loading) {
+        if (!user && supabase) {
+          // One final attempt to get session (race condition protection)
+          try {
+            const { data } = await supabase.auth.getSession();
+            if (!data?.session) {
+              console.log('No session found after final check, redirecting to login');
+              window.location.href = '/login';
+            }
+            // If session found, AuthContext will update user via onAuthStateChange
+          } catch (e) {
+            console.warn('Final session check failed:', e);
+            window.location.href = '/login';
+          }
+        }
+        setAuthChecked(true);
+      }
+    };
+
+    // Small delay to ensure AuthContext has time to process the session
+    const timer = setTimeout(checkAuth, 100);
+    return () => clearTimeout(timer);
+  }, [user, loading, supabase]);
+
+  if (loading || !authChecked) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: '#6CBBFB' }}></div>
