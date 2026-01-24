@@ -121,9 +121,9 @@ export default function Login() {
         console.log('Starting sign-in (handleSubmit) for', email ? email : 'no-email');
         // Use a non-spinning signing state so the Sign In button is disabled but does not show a spinner
         setSigning(true);
-        // Immediately show MFA UI in waiting mode (we require MFA for all accounts)
-        setMfaRequired(true);
-        setMfaWaiting(true);
+        // Don't show MFA UI yet - wait for server to confirm credentials first
+        setMfaRequired(false);
+        setMfaWaiting(false);
         setFactorId(null);
         setError('');
 
