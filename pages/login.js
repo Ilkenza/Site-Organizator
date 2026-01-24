@@ -136,6 +136,21 @@ export default function Login() {
 
         try {
             console.log('Login attempt for', email);
+
+            // Clear any stale tokens before attempting login
+            try {
+                const keys = Object.keys(localStorage);
+                keys.forEach(key => {
+                    if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+                // Also try to sign out any existing session
+                await supabase.auth.signOut({ scope: 'local' }).catch(() => { });
+            } catch (e) {
+                console.warn('Error clearing stale session:', e);
+            }
+
             // Fallback timeout to avoid spinner stuck if something hangs
             const timeoutId = setTimeout(() => {
                 console.warn('Login fallback timeout reached');
