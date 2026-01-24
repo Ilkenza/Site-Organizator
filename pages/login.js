@@ -30,7 +30,7 @@ export default function Login() {
             try { alert('Login successful — redirecting to dashboard'); } catch (e) { }
         }
         try { setLoading(true); } catch (e) { }
-        window.location.href = '/dashboard';
+        window.location.replace('/dashboard');
     };
 
     // Ensure any alert shown while on this page results in the loading screen remaining visible (unless suppressed during MFA)
@@ -192,8 +192,9 @@ export default function Login() {
                                 console.log('Late setSession result', setResp);
                                 if (!setResp?.error) {
                                     try { setSigning(false); } catch (e) { }
+                                    try { await supabase.auth.getSession(); } catch (e) { }
                                     completeLogin({ showAlert: false });
-                                    window.location.href = '/dashboard';
+                                    window.location.replace('/dashboard');
                                 } else {
                                     console.error('Late setSession error', setResp.error);
                                 }
@@ -338,7 +339,7 @@ export default function Login() {
             // No MFA required or already at aal2, proceed to dashboard
             console.log('Login complete, redirecting to /dashboard');
             setSigning(false);
-            window.location.href = '/dashboard';
+            window.location.replace('/dashboard');
         } catch (err) {
             console.error('Login error:', err);
             setError(err.message || 'Login failed');
@@ -448,7 +449,6 @@ export default function Login() {
                 setMfaCode('');
                 try { setSigning(false); } catch (e) { }
                 setLoading(false);
-                // Use replace so the user cannot navigate back to a failed login state
                 window.location.replace('/dashboard');
                 return;
             }
@@ -468,26 +468,23 @@ export default function Login() {
                     token_type: tokenCandidates?.data?.token_type || tokenCandidates?.token_type,
                     user: tokenCandidates?.data?.user || tokenCandidates?.user
                 }));
-
-                // Try to set session in supabase client so AuthProvider sees it immediately
-                try {
-                    const setResp = await supabase.auth.setSession({ access_token, refresh_token });
-                    console.log('setSession after verify result:', setResp);
-                    if (setResp?.error) {
-                        console.warn('setSession returned error after verify:', setResp.error);
-                    }
-                } catch (e) {
-                    console.error('Error calling setSession after verify:', e);
-                }
-
-                console.log('Fallback tokens stored, redirecting...');
+                console.log('Fallback tokens stored, attempting to set session and reload...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
                 setMfaRequired(false);
                 setMfaWaiting(false);
                 setMfaCode('');
                 try { setSigning(false); } catch (e) { }
+                // Try to set session with the SDK so app state stabilizes before redirecting
+                try {
+                    const setResp2 = await supabase.auth.setSession({ access_token, refresh_token });
+                    console.log('Fallback verify setSession result', setResp2);
+                    if (!setResp2?.error) {
+                        setLoading(false);
+                        window.location.replace('/dashboard');
+                        return;
+                    }
+                } catch (e) { console.warn('Fallback setSession failed', e); }
                 setLoading(false);
-                // Use replace so the back button doesn't return to an inconsistent state
                 window.location.replace('/dashboard');
                 return;
             }
