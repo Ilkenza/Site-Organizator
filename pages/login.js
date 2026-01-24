@@ -48,6 +48,7 @@ export default function Login() {
 
     // MFA states
     const [mfaRequired, setMfaRequired] = useState(false);
+    const [mfaWaiting, setMfaWaiting] = useState(false); // true while we wait for server to confirm factorId
     const [mfaCode, setMfaCode] = useState('');
     const [factorId, setFactorId] = useState(null);
 
@@ -112,6 +113,11 @@ export default function Login() {
         console.log('Starting sign-in (handleSubmit) for', email ? email : 'no-email');
         // Use a non-spinning signing state so the Sign In button is disabled but does not show a spinner
         setSigning(true);
+        // Immediately show MFA UI in waiting mode (we require MFA for all accounts)
+        setMfaRequired(true);
+        setMfaWaiting(true);
+        setFactorId(null);
+        setError('');
 
         if (!supabase) {
             console.error('Supabase client not configured - missing NEXT_PUBLIC variables');
@@ -142,6 +148,7 @@ export default function Login() {
                         try { window.__mfaPending = true; } catch (e) { }
                         setFactorId(sessionFromSignIn.user.factors[0].id || null);
                         setMfaRequired(true);
+                        setMfaWaiting(false);
                         try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) { }
                         setSigning(false);
                         return;
@@ -153,6 +160,8 @@ export default function Login() {
                         if (!hasFactors) {
                             console.warn('Account does not have MFA factors — blocking login');
                             setSigning(false);
+                            setMfaRequired(false);
+                            setMfaWaiting(false);
                             setError('Multi-factor authentication is required for this account. Please enable MFA before signing in.');
                             return;
                         }
@@ -260,6 +269,7 @@ export default function Login() {
                             if (totpFactor && !factorsError) {
                                 console.log('MFA required after sign-in; showing MFA prompt');
                                 setFactorId(totpFactor.id);
+                                setMfaWaiting(false);
                                 postAlertLoading('MFA required — please enter your verification code');
                                 setTimeout(() => { try { setLoading(true); } catch (e) { } }, 10);
                                 try { window.__mfaPending = true; window.__suppressAlertsDuringMfa = true; } catch (e) { }
@@ -276,7 +286,7 @@ export default function Login() {
                         console.warn('Blocking login: account does not have verified TOTP MFA factor');
                         setSigning(false);
                         setError('Multi-factor authentication is required for this account. Please enable MFA before signing in.');
-                        return; 
+                        return;
                     }
                 }
             } catch (e) {
@@ -297,6 +307,7 @@ export default function Login() {
             if (totpFactor && !factorsError) {
                 clearTimeout(timeoutId);
                 setFactorId(totpFactor.id);
+                setMfaWaiting(false);
                 console.log('MFA required; showing MFA form');
                 postAlertLoading('MFA required — please enter your verification code');
                 setTimeout(() => { try { setLoading(true); } catch (e) { } }, 10);
@@ -312,6 +323,7 @@ export default function Login() {
                 clearTimeout(timeoutId);
                 console.warn('Blocking login: account does not have verified TOTP MFA factor');
                 setSigning(false);
+                setMfaWaiting(false);
                 setError('Multi-factor authentication is required for this account. Please enable MFA before signing in.');
                 return;
             }
@@ -583,6 +595,7 @@ export default function Login() {
                                         setMfaRequired(false);
                                         setMfaCode('');
                                         setError('');
+                                        setMfaWaiting(false);
                                     }}
                                     className="w-full py-2 text-app-text-secondary hover:text-app-text-primary text-sm transition-colors"
                                 >
