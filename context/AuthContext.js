@@ -504,11 +504,14 @@ export function AuthProvider({ children }) {
                         console.log('[AuthContext] Emergency recovery: user has profile data, using directly');
                         setUser(tokens.user);
                     } else {
-                        // Fetch fresh profile data synchronously
+                        // Set user immediately (without profile) to avoid null state
+                        console.log('[AuthContext] Emergency recovery: setting user immediately, then fetching profile');
+                        setUser(tokens.user);
+
+                        // Fetch fresh profile data asynchronously and update
                         (async () => {
                             try {
                                 if (!supabase) {
-                                    setUser(tokens.user);
                                     return;
                                 }
 
@@ -521,13 +524,28 @@ export function AuthProvider({ children }) {
 
                                 if (!error && profile) {
                                     console.log('[AuthContext] Emergency recovery: fetched profile data');
-                                    setUser({
+                                    const updatedUser = {
                                         ...tokens.user,
                                         avatar_url: profile.avatar_url,
                                         avatarUrl: profile.avatar_url,
                                         displayName: profile.name,
                                         name: profile.name
-                                    });
+                                    };
+                                    setUser(updatedUser);
+
+                                    // Save profile to localStorage for next refresh
+                                    try {
+                                        const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                                        const storedData = localStorage.getItem(storageKey);
+                                        if (storedData) {
+                                            const parsed = JSON.parse(storedData);
+                                            parsed.user = updatedUser;
+                                            localStorage.setItem(storageKey, JSON.stringify(parsed));
+                                            console.log('[AuthContext] Emergency recovery: saved profile to localStorage');
+                                        }
+                                    } catch (e) {
+                                        console.warn('[AuthContext] Failed to save profile to localStorage:', e);
+                                    }
                                 } else {
                                     console.log('[AuthContext] Emergency recovery: no profile found, using basic user');
                                     setUser(tokens.user);
@@ -544,6 +562,36 @@ export function AuthProvider({ children }) {
             console.warn('[AuthContext] Error in emergency user recovery:', e);
         }
     }, [user, loading]);
+
+    // Sync user profile data to localStorage whenever user changes
+    useEffect(() => {
+        if (!user || !user.id) return;
+
+        // Only sync if user has profile data
+        if (!user.avatarUrl && !user.displayName) return;
+
+        try {
+            const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+            const storedData = localStorage.getItem(storageKey);
+            if (storedData) {
+                const parsed = JSON.parse(storedData);
+                // Check if localStorage user is missing profile data
+                if (parsed?.user && (parsed.user.avatarUrl !== user.avatarUrl || parsed.user.displayName !== user.displayName)) {
+                    parsed.user = {
+                        ...parsed.user,
+                        avatarUrl: user.avatarUrl,
+                        avatar_url: user.avatarUrl,
+                        displayName: user.displayName,
+                        name: user.displayName
+                    };
+                    localStorage.setItem(storageKey, JSON.stringify(parsed));
+                    console.log('[AuthContext] Synced profile data to localStorage');
+                }
+            }
+        } catch (e) {
+            console.warn('[AuthContext] Failed to sync profile to localStorage:', e);
+        }
+    }, [user]);
 
     const value = {
         user,
