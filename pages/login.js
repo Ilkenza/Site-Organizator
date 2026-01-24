@@ -14,7 +14,7 @@ export default function Login() {
     };
 
     // Helper to complete login and redirect. If MFA is active, suppress the alert and keep the loading screen.
-    const completeLogin = ({ showAlert = true } = {}) => {
+    const completeLogin = ({ showAlert = false } = {}) => {
         if (typeof window !== 'undefined') {
             if (window.__suppressAlertsDuringMfa) showAlert = false;
             window.__suppressAlertsDuringMfa = false;
@@ -166,7 +166,7 @@ export default function Login() {
                                 console.log('Late setSession result', setResp);
                                 if (!setResp?.error) {
                                     try { setLoading(false); } catch (e) { }
-                                    completeLogin();
+                                    completeLogin({ showAlert: false });
                                     window.location.href = '/dashboard';
                                 } else {
                                     console.error('Late setSession error', setResp.error);
@@ -235,7 +235,7 @@ export default function Login() {
                         clearTimeout(timeoutId);
                         setLoading(false);
                         console.log('Redirecting to dashboard');
-                        completeLogin();
+                        completeLogin({ showAlert: false });
                         try { setLoading(true); } catch (e) { }
                         window.location.href = '/dashboard';
                         return;
