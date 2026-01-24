@@ -117,7 +117,7 @@ export default function Login() {
             console.error('Supabase client not configured - missing NEXT_PUBLIC variables');
             setError('Login is temporarily unavailable. Please contact the site administrator.');
             setSigning(false);
-            return; 
+            return;
         }
 
         try {
@@ -144,7 +144,7 @@ export default function Login() {
                         setMfaRequired(true);
                         try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) { }
                         setSigning(false);
-                        return; 
+                        return;
                     }
 
                     if (sessionFromSignIn?.access_token || sessionFromSignIn?.refresh_token || sessionFromSignIn?.user) {
@@ -198,7 +198,7 @@ export default function Login() {
                 console.error('signInWithPassword failed or timed out', err);
                 setError('Sign in failed or timed out. Please try again.');
                 setSigning(false);
-                return; 
+                return;
             }
 
             if (error) {
@@ -257,7 +257,7 @@ export default function Login() {
                                 setMfaRequired(true);
                                 setSigning(false);
                                 console.log('MFA required, showing MFA prompt');
-                                return; 
+                                return;
                             }
                         } catch (e) {
                             console.warn('MFA check failed during post-signin handling, proceeding with redirect:', e?.message || e);
@@ -294,7 +294,7 @@ export default function Login() {
                 setMfaRequired(true);
                 setSigning(false);
                 console.log('MFA required, showing MFA prompt');
-                return; 
+                return;
             }
 
             // Log if MFA check failed or timed out
