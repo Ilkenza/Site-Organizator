@@ -7,6 +7,19 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    // Helper: show an alert, then switch to the loading screen so the UI stays in loading state during redirect
+    const postAlertLoading = (msg) => {
+        try { alert(msg); } finally { try { setLoading(true); } catch(e) {} }
+    };
+
+    // Ensure any alert shown while on this page results in the loading screen remaining visible
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const originalAlert = window.alert;
+        window.alert = (msg) => { originalAlert(msg); try { setLoading(true); } catch(e) {} };
+        return () => { window.alert = originalAlert; };
+    }, [setLoading]);
     const [_verifyDebug, setVerifyDebug] = useState(null);
 
     // MFA states
@@ -133,7 +146,7 @@ export default function Login() {
                                 console.log('Late setSession result', setResp);
                                 if (!setResp?.error) {
                                     try { setLoading(false); } catch(e) {}
-                                    alert('Login successful — redirecting to dashboard');
+                                    postAlertLoading('Login successful — redirecting to dashboard');
                                     window.location.href = '/dashboard';
                                 } else {
                                     console.error('Late setSession error', setResp.error);
@@ -203,6 +216,7 @@ export default function Login() {
                         setLoading(false);
                         console.log('Redirecting to dashboard');
                         alert('Login successful — redirecting to dashboard');
+                        try { setLoading(true); } catch(e) {}
                         window.location.href = '/dashboard';
                         return;
                     }
