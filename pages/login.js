@@ -117,8 +117,8 @@ export default function Login() {
     }, [supabase]);
 
     // Timeout constants (increased for mobile/slow networks)
-    const MFA_CHECK_TIMEOUT = 15000; // 15 seconds
-    const MFA_VERIFY_TIMEOUT = 55000; // 55 seconds (mobile networks can be slow)
+    const MFA_CHECK_TIMEOUT = 20000; // 20 seconds
+    const MFA_VERIFY_TIMEOUT = 90000; // 90 seconds (mobile networks can be very slow)
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -158,7 +158,7 @@ export default function Login() {
                 setMfaWaiting(false);
                 setFactorId(null);
                 setError('Login timed out, please try again');
-            }, 20000);
+            }, 40000);
 
             // Run signIn with a 20s timeout to avoid hangs
             const signInPromise = supabase.auth.signInWithPassword({ email, password });
@@ -238,7 +238,7 @@ export default function Login() {
             try {
                 const result = await Promise.race([
                     signInPromise,
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('signIn timeout')), 20000)),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('signIn timeout')), 40000)),
                 ]);
                 // SDK returns { data, error } or similar shape
                 data = result?.data ?? result;
@@ -651,7 +651,12 @@ export default function Login() {
                                     disabled={signing}
                                     className="w-full py-3 px-4 bg-btn-primary hover:bg-btn-hover text-app-accent font-medium rounded-xl border border-[#2A5A8A] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:text-app-accentLight"
                                 >
-                                    Sign In
+                                    {signing ? (
+                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                    ) : 'Sign In'}
                                 </button>
                             </form>
                         ) : (
