@@ -72,42 +72,8 @@ export default function SettingsPanel() {
         }
         if (user?.displayName) {
             setDisplayName(user.displayName);
-        } else if (user?.name) {
-            setDisplayName(user.name);
         }
-    }, [user?.avatar_url, user?.avatarUrl, user?.displayName, user?.name]);
-
-    // Fallback: fetch profile directly if user doesn't have profile data
-    useEffect(() => {
-        const fetchProfileIfMissing = async () => {
-            if (!user?.id || !supabase) return;
-            // Check if we already have profile data
-            if (user?.avatarUrl || user?.avatar_url || user?.displayName || user?.name) return;
-
-            try {
-                console.log('[SettingsPanel] Fetching profile for user without profile data...');
-                const { data: profile, error } = await supabase
-                    .from('profiles')
-                    .select('avatar_url, name')
-                    .eq('id', user.id)
-                    .maybeSingle();
-
-                if (profile && !error) {
-                    if (profile.avatar_url) {
-                        setAvatarPreview(profile.avatar_url);
-                    }
-                    if (profile.name) {
-                        setDisplayName(profile.name);
-                    }
-                    console.log('[SettingsPanel] Profile fetched:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
-                }
-            } catch (err) {
-                console.warn('[SettingsPanel] Failed to fetch profile:', err);
-            }
-        };
-
-        fetchProfileIfMissing();
-    }, [user?.id, user?.avatarUrl, user?.avatar_url, user?.displayName, user?.name, supabase]);
+    }, [user?.avatar_url, user?.avatarUrl, user?.displayName]);
 
     // Load fresh avatar/name from database when Settings opens
     useEffect(() => {
@@ -148,44 +114,18 @@ export default function SettingsPanel() {
             if (!supabase) return;
 
             try {
-                let session = null;
-
-                // Try getSession first
-                const { data, error } = await supabase.auth.getSession();
-                session = data?.session;
-
-                // Fallback to localStorage if getSession fails
-                if (error || !session) {
-                    try {
-                        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-                        const storageKey = `sb-${supabaseUrl.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                        const stored = localStorage.getItem(storageKey);
-                        if (stored) {
-                            const tokens = JSON.parse(stored);
-                            if (tokens?.access_token && tokens?.user) {
-                                session = {
-                                    access_token: tokens.access_token,
-                                    expires_at: tokens.expires_at,
-                                    user: tokens.user
-                                };
-                            }
-                        }
-                    } catch (e) {
-                        console.warn('Failed to read session from localStorage:', e);
-                    }
-                }
-
-                if (!session) return;
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error || !session) return;
 
                 // Parse user agent for device info
                 const ua = navigator.userAgent;
                 let browser = 'Unknown Browser';
                 let os = 'Unknown OS';
 
-                // Detect browser (including Brave)
-                if (ua.includes('Firefox')) browser = 'Firefox';
+                // Detect browser (order matters - check specific browsers first)
+                if (navigator.brave && navigator.brave.isBrave) browser = 'Brave';
+                else if (ua.includes('Firefox')) browser = 'Firefox';
                 else if (ua.includes('Edg')) browser = 'Edge';
-                else if (navigator.brave && typeof navigator.brave.isBrave === 'function') browser = 'Brave';
                 else if (ua.includes('OPR') || ua.includes('Opera')) browser = 'Opera';
                 else if (ua.includes('Chrome')) browser = 'Chrome';
                 else if (ua.includes('Safari')) browser = 'Safari';
@@ -437,30 +377,9 @@ export default function SettingsPanel() {
         setUploadingAvatar(true);
 
         try {
-            // Get auth token - try SDK first, then localStorage fallback
-            let accessToken = null;
+            // Get auth token
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-            if (!sessionError && session?.access_token) {
-                accessToken = session.access_token;
-            } else {
-                // Fallback to localStorage
-                try {
-                    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-                    const storageKey = `sb-${supabaseUrl.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                    const stored = localStorage.getItem(storageKey);
-                    if (stored) {
-                        const tokens = JSON.parse(stored);
-                        if (tokens?.access_token) {
-                            accessToken = tokens.access_token;
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Failed to read token from localStorage:', e);
-                }
-            }
-
-            if (!accessToken) {
+            if (sessionError || !session?.access_token) {
                 throw new Error('No active session');
             }
 
@@ -478,7 +397,7 @@ export default function SettingsPanel() {
             const response = await fetch('/api/upload-avatar', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`,
+                    'Authorization': `Bearer ${session.access_token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -1173,7 +1092,7 @@ export default function SettingsPanel() {
                                     : 'bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF]'
                                     }`}
                             >
-                                {mfaEnabled ? 'Manage' : mfaFactorId ? 'Continue Setup' : 'Enable'}
+                                {mfaEnabled ? 'Disable' : mfaFactorId ? 'Continue Setup' : 'Enable'}
                             </button>
                         </div>
 

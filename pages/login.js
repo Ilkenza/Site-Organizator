@@ -283,22 +283,28 @@ export default function Login() {
             // Step 2: Verify code - fire SDK call but use fetch interceptor result
             window.__debugSupabaseVerify = null; // Reset before verify
 
-            // Start SDK verify (don't await)
-            supabase.auth.mfa.verify({
+            // Start SDK verify - also store result for Brave browser fallback
+            let sdkVerifyResult = null;
+            const sdkVerifyPromise = supabase.auth.mfa.verify({
                 factorId: factorId,
                 challengeId: challengeData.id,
                 code: mfaCode
             }).then(result => {
                 console.log('SDK verify completed:', result);
+                if (result?.data?.session) {
+                    sdkVerifyResult = { session: result.data.session, user: result.data.session.user };
+                }
+                return result;
             }).catch(err => {
                 console.log('SDK verify error (ignored, using fetch interceptor):', err);
             });
 
-            // Poll for fetch interceptor result (much faster than waiting for SDK)
+            // Poll for fetch interceptor result OR SDK result (for Brave browser)
             let verifyData = null;
             for (let i = 0; i < 60; i++) { // 30 seconds max
                 await new Promise(r => setTimeout(r, 500));
 
+                // Check fetch interceptor first (fastest)
                 const debugResponse = window.__debugSupabaseVerify;
                 if (debugResponse && debugResponse.status === 200 && debugResponse.text) {
                     try {
@@ -311,6 +317,27 @@ export default function Login() {
                     } catch (e) {
                         console.error('Parse error:', e);
                     }
+                }
+
+                // Also check localStorage for Brave browser (SDK might store there)
+                const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                try {
+                    const stored = localStorage.getItem(storageKey);
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        if (parsed.access_token && parsed.user) {
+                            console.log('Got token from localStorage (Brave fallback)!');
+                            verifyData = { session: parsed, user: parsed.user };
+                            break;
+                        }
+                    }
+                } catch (e) { }
+
+                // Check SDK result (for Brave where fetch interceptor might not work)
+                if (sdkVerifyResult && sdkVerifyResult.session) {
+                    console.log('Got token from SDK result!');
+                    verifyData = sdkVerifyResult;
+                    break;
                 }
             }
 
