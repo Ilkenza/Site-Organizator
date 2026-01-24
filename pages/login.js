@@ -328,41 +328,13 @@ export default function Login() {
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
 
                 // Store tokens immediately - don't wait for profile
-                // First, fetch profile data from database
-                let profileData = null;
-                try {
-                    const { data: profile } = await supabase
-                        .from('profiles')
-                        .select('name, avatar_url')
-                        .eq('id', session.user.id)
-                        .single();
-                    profileData = profile;
-                    console.log('Fetched profile for login:', profileData);
-                } catch (profileError) {
-                    console.warn('Could not fetch profile during login:', profileError);
-                }
-
-                // Merge profile data into user object (use both formats for compatibility)
-                const userWithProfile = {
-                    ...session.user,
-                    // Direct properties for AuthContext
-                    avatarUrl: profileData?.avatar_url || session.user.user_metadata?.avatar_url || null,
-                    displayName: profileData?.name || session.user.user_metadata?.name || null,
-                    // Keep user_metadata for SDK compatibility
-                    user_metadata: {
-                        ...session.user.user_metadata,
-                        name: profileData?.name || session.user.user_metadata?.name,
-                        avatar_url: profileData?.avatar_url || session.user.user_metadata?.avatar_url
-                    }
-                };
-
                 localStorage.setItem(storageKey, JSON.stringify({
                     access_token: session.access_token,
                     refresh_token: session.refresh_token,
                     expires_at: session.expires_at,
                     expires_in: session.expires_in,
                     token_type: 'bearer',
-                    user: userWithProfile
+                    user: session.user
                 }));
 
                 console.log('Tokens stored, redirecting...');
