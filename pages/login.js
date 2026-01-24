@@ -447,8 +447,11 @@ export default function Login() {
 
             // If session present, redirect. Otherwise, try to store tokens returned in verify result (if present)
             if (sessionData) {
-                console.log('Session found after verify, confirming session before redirect...');
+                console.log('Session found after verify, setting redirect flag and confirming session...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
+
+                // Set redirect flag IMMEDIATELY to prevent timeout from clearing loading state
+                try { window.__redirecting = true; } catch (e) { }
 
                 // Ensure session is fully established before redirecting
                 try {
@@ -460,10 +463,6 @@ export default function Login() {
                 } catch (e) {
                     console.warn('Session confirmation failed, proceeding anyway:', e);
                 }
-
-                // Set redirect flag to prevent timeout from clearing loading state
-                await new Promise(r => setTimeout(r, 100));
-                try { window.__redirecting = true; } catch (e) { }
                 window.location.replace('/dashboard');
                 return;
             }
