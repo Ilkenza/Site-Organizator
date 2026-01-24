@@ -84,26 +84,16 @@ export default function Login() {
         return () => { window.fetch = _origFetch };
     }, []);
 
-    // Safety guard: if a network call hangs, clear loading after a timeout so button isn't stuck
+    // Safety guard: if a network call hangs, clear loading after a timeout
     useEffect(() => {
         if (!loading && !signing) return;
-        // Use longer timeout during MFA verify (mobile networks can be slow)
-        const timeoutMs = mfaVerifying ? 120000 : 50000; // 120s for MFA verify, 50s for sign in
         const t = setTimeout(() => {
-            // Don't clear loading if redirect is in progress or MFA verify still running
-            if (typeof window !== 'undefined' && window.__redirecting) {
-                console.log('Timeout reached but redirect in progress, keeping loading state');
-                return;
-            }
-            console.warn('Login flow timeout reached; clearing all loading states');
+            console.warn('Safety timeout: clearing loading states');
             setLoading(false);
-            setMfaVerifying(false);
             setSigning(false);
-            setError('Request timed out. Please try again.');
-            try { window.__debugSupabaseSignInTimeout = { time: Date.now(), email }; } catch (e) { }
-        }, timeoutMs);
+        }, 35000); // 35s safety net
         return () => clearTimeout(t);
-    }, [loading, signing, email, mfaVerifying]);
+    }, [loading, signing]);
 
 
     const { supabase } = useAuth();
@@ -124,277 +114,68 @@ export default function Login() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        console.log('Starting sign-in (handleSubmit) for', email ? email : 'no-email');
-        // Use a non-spinning signing state so the Sign In button is disabled but does not show a spinner
         setSigning(true);
-        // Don't show MFA UI yet - wait for server to confirm credentials first
         setMfaRequired(false);
         setMfaWaiting(false);
         setFactorId(null);
-        setError('');
 
         if (!supabase) {
-            console.error('Supabase client not configured - missing NEXT_PUBLIC variables');
-            setError('Login is temporarily unavailable. Please contact the site administrator.');
+            setError('Login is temporarily unavailable.');
             setSigning(false);
             return;
         }
 
+        // Hard timeout - if anything takes longer than 30s, reset
+        const hardTimeout = setTimeout(() => {
+            console.warn('HARD TIMEOUT: Sign in took too long');
+            setSigning(false);
+            setError('Login timed out. Please try again.');
+        }, 30000);
+
         try {
-            console.log('Login attempt for', email);
+            console.log('Sign in attempt for', email);
 
-            // Sign out locally only (don't clear tokens from other devices)
-            try {
-                await supabase.auth.signOut({ scope: 'local' }).catch(() => { });
-            } catch (e) {
-                console.warn('Error clearing local session:', e);
-            }
-
-            // Fallback timeout to avoid spinner stuck if something hangs
-            const timeoutId = setTimeout(() => {
-                console.warn('Login fallback timeout reached');
-                setSigning(false);
-                // Reset MFA state on timeout
-                setMfaRequired(false);
-                setMfaWaiting(false);
-                setFactorId(null);
-                setError('Login timed out, please try again');
-            }, 40000);
-
-            // Run signIn with a 20s timeout to avoid hangs
-            const signInPromise = supabase.auth.signInWithPassword({ email, password });
-            // If the sign-in resolves late (after our timeout), still capture tokens as a fallback
-            signInPromise.then(async (result) => {
-                try {
-                    const sessionFromSignIn = result?.data ?? result;
-
-                    // If the late response indicates the user has MFA factors, trigger the MFA flow instead of storing tokens
-                    if (sessionFromSignIn?.user?.factors?.length) {
-                        console.log('Late signIn shows user has MFA factors; triggering MFA flow');
-                        try { window.__mfaPending = true; } catch (e) { }
-                        // Save AAL1 token for MFA verify
-                        if (sessionFromSignIn?.session?.access_token) {
-                            setAal1Token(sessionFromSignIn.session.access_token);
-                        } else if (sessionFromSignIn?.access_token) {
-                            setAal1Token(sessionFromSignIn.access_token);
-                        }
-                        setFactorId(sessionFromSignIn.user.factors[0].id || null);
-                        setMfaRequired(true);
-                        setMfaWaiting(false);
-                        try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) { }
-                        setSigning(false);
-                        return;
-                    }
-
-                    if (sessionFromSignIn?.access_token || sessionFromSignIn?.refresh_token || sessionFromSignIn?.user) {
-                        // Require MFA: if the user object does not indicate MFA factors, reject login
-                        const hasFactors = !!(sessionFromSignIn?.user?.factors?.length);
-                        if (!hasFactors) {
-                            console.warn('Account does not have MFA factors — blocking login');
-                            setSigning(false);
-                            setMfaRequired(false);
-                            setMfaWaiting(false);
-                            setError('Multi-factor authentication is required for this account. Please enable MFA before signing in.');
-                            return;
-                        }
-
-                        console.log('Late signIn response received — storing tokens as fallback');
-                        const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                        const toStore = {
-                            access_token: sessionFromSignIn?.access_token,
-                            refresh_token: sessionFromSignIn?.refresh_token,
-                            expires_at: sessionFromSignIn?.expires_at,
-                            expires_in: sessionFromSignIn?.expires_in,
-                            token_type: sessionFromSignIn?.token_type,
-                            user: sessionFromSignIn?.user || sessionFromSignIn?.user,
-                        };
-                        try { localStorage.setItem(storageKey, JSON.stringify(toStore)); } catch (e) { console.error('Late store fallback failed', e); }
-                        try { window.__debugSupabaseSignInLate = { time: Date.now(), payload: sessionFromSignIn }; } catch (e) { }
-
-                        // If MFA is currently pending, do not auto-establish session yet
-                        if (typeof window !== 'undefined' && window.__mfaPending) {
-                            console.log('Skipping auto setSession because MFA is pending');
-                        } else {
-                            // Try to set the session in the Supabase client so the user becomes authenticated immediately
-                            try {
-                                const setResp = await supabase.auth.setSession({ access_token: sessionFromSignIn.access_token, refresh_token: sessionFromSignIn.refresh_token });
-                                console.log('Late setSession result', setResp);
-                                if (!setResp?.error) {
-                                    try { setSigning(false); } catch (e) { }
-                                    try { await supabase.auth.getSession(); } catch (e) { }
-                                    completeLogin({ showAlert: false });
-                                    window.location.replace('/dashboard');
-                                } else {
-                                    console.error('Late setSession error', setResp.error);
-                                }
-                            } catch (e) {
-                                console.error('Late setSession thrown', e);
-                            }
-                        }
-                    }
-                } catch (e) { console.error('Error processing late signIn response', e); }
-            }).catch((e) => console.error('Late signIn promise error', e));
-
-            let data, error;
-            try {
-                const result = await Promise.race([
-                    signInPromise,
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('signIn timeout')), 40000)),
-                ]);
-                // SDK returns { data, error } or similar shape
-                data = result?.data ?? result;
-                error = result?.error ?? null;
-                console.log('signInWithPassword result (wrapped):', { data, error });
-            } catch (err) {
-                console.error('signInWithPassword failed or timed out', err);
-                setError('Sign in failed or timed out. Please try again.');
-                setSigning(false);
-                // Reset MFA state if sign-in failed
-                setMfaRequired(false);
-                setMfaWaiting(false);
-                setFactorId(null);
-                return;
-            }
+            // Skip signOut - it causes issues on mobile
+            // Just try to sign in directly
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
             if (error) {
-                clearTimeout(timeoutId);
-                // Reset MFA state on sign-in error
-                setMfaRequired(false);
-                setMfaWaiting(false);
-                setFactorId(null);
+                clearTimeout(hardTimeout);
                 throw error;
             }
 
-            // If signIn returned a session or tokens, store them as a fallback and wait for session to appear
-            try {
-                const sessionFromSignIn = data?.session || data || null;
-                if (sessionFromSignIn?.access_token || sessionFromSignIn?.refresh_token || sessionFromSignIn?.user) {
-                    console.log('Storing tokens from signIn response as fallback');
-                    const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                    const toStore = {
-                        access_token: sessionFromSignIn?.access_token,
-                        refresh_token: sessionFromSignIn?.refresh_token,
-                        expires_at: sessionFromSignIn?.expires_at,
-                        expires_in: sessionFromSignIn?.expires_in,
-                        token_type: sessionFromSignIn?.token_type,
-                        user: sessionFromSignIn?.user || sessionFromSignIn?.user
-                    };
-                    localStorage.setItem(storageKey, JSON.stringify(toStore));
+            console.log('SignIn result:', { hasSession: !!data?.session, hasUser: !!data?.user });
 
-                    // Poll for session to be visible via SDK
-                    let sessionPresent = false;
-                    const pollStart = Date.now();
-                    const maxPoll = 3000;
-                    while (Date.now() - pollStart < maxPoll) {
-                        try {
-                            const { data: sess } = await supabase.auth.getSession();
-                            if (sess?.session) { sessionPresent = true; break; }
-                        } catch (e) {
-                            // continue
-                        }
-                        await new Promise(r => setTimeout(r, 300));
-                    }
-                    if (sessionPresent) {
-                        console.log('Session visible after sign-in, checking MFA before redirect');
-                        clearTimeout(timeoutId);
-                        setSigning(false);
-
-                        // Check for MFA factors before redirecting — if TOTP is verified, require MFA verification first
-                        try {
-                            const mfaCheckPromise = Promise.race([
-                                supabase.auth.mfa.listFactors(),
-                                new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: 'MFA check timeout' } }), MFA_CHECK_TIMEOUT))
-                            ]);
-                            const { data: factorsData, error: factorsError } = await mfaCheckPromise;
-                            const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
-                            if (totpFactor && !factorsError) {
-                                console.log('MFA required after sign-in; showing MFA prompt');
-                                // Save AAL1 token for MFA verify
-                                const currentSession = (await supabase.auth.getSession()).data?.session;
-                                if (currentSession?.access_token) {
-                                    setAal1Token(currentSession.access_token);
-                                }
-                                setFactorId(totpFactor.id);
-                                setMfaWaiting(false);
-                                postNotice('MFA required — please enter your verification code');
-                                try { window.__mfaPending = true; window.__suppressAlertsDuringMfa = true; } catch (e) { }
-                                setMfaRequired(true);
-                                setSigning(false);
-                                console.log('MFA required, showing MFA prompt');
-                                return;
-                            }
-                        } catch (e) {
-                            console.warn('MFA check failed during post-signin handling, proceeding with redirect:', e?.message || e);
-                        }
-
-                        // IMPORTANT: Do not allow login to proceed if no verified TOTP factor exists
-                        console.warn('Blocking login: account does not have verified TOTP MFA factor');
-                        setSigning(false);
-                        setError('Multi-factor authentication is required for this account. Please enable MFA before signing in.');
-                        return;
-                    }
-                }
-            } catch (e) {
-                console.warn('Error storing sign-in tokens fallback:', e?.message || e);
-            }
-
-            // Check if MFA is required by listing factors directly (with timeout)
-            const mfaCheckPromise = Promise.race([
-                supabase.auth.mfa.listFactors(),
-                new Promise((resolve) => setTimeout(() => resolve({ data: null, error: { message: 'MFA check timeout' } }), MFA_CHECK_TIMEOUT))
-            ]);
-
-            const { data: factorsData, error: factorsError } = await mfaCheckPromise;
-            console.log('MFA factors response:', { factorsData, factorsError });
-
-            // If we have verified TOTP factors, require MFA
+            // Check for MFA
+            const { data: factorsData } = await supabase.auth.mfa.listFactors();
             const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
-            if (totpFactor && !factorsError) {
-                clearTimeout(timeoutId);
-                // Save AAL1 token for MFA verify
-                const currentSession = (await supabase.auth.getSession()).data?.session;
-                if (currentSession?.access_token) {
-                    setAal1Token(currentSession.access_token);
+
+            if (totpFactor) {
+                clearTimeout(hardTimeout);
+                console.log('MFA required, showing MFA form');
+
+                // Save AAL1 token
+                const session = data?.session;
+                if (session?.access_token) {
+                    setAal1Token(session.access_token);
                 }
+
                 setFactorId(totpFactor.id);
-                setMfaWaiting(false);
-                console.log('MFA required; showing MFA form');
-                postNotice('MFA required — please enter your verification code');
-                try { window.__mfaPending = true; } catch (e) { }
                 setMfaRequired(true);
                 setSigning(false);
-                console.log('MFA required, showing MFA prompt');
                 return;
             }
 
-            // If we reached here and there is no verified TOTP factor, block login (MFA required policy)
-            if (!totpFactor && !factorsError) {
-                clearTimeout(timeoutId);
-                console.warn('Blocking login: account does not have verified TOTP MFA factor');
-                setSigning(false);
-                setMfaWaiting(false);
-                setError('Multi-factor authentication is required for this account. Please enable MFA before signing in.');
-                return;
-            }
-
-            // Log if MFA check failed or timed out
-            if (factorsError) {
-                console.warn('MFA check failed or timed out, proceeding without MFA:', factorsError.message);
-            }
-
-            clearTimeout(timeoutId);
-            // No MFA required or already at aal2, proceed to dashboard
-            console.log('Login complete, redirecting to /dashboard');
+            // No MFA - block login (MFA required policy)
+            clearTimeout(hardTimeout);
             setSigning(false);
-            window.location.replace('/dashboard');
+            setError('Multi-factor authentication is required. Please enable MFA.');
+
         } catch (err) {
+            clearTimeout(hardTimeout);
             console.error('Login error:', err);
-            setError(err.message || 'Login failed');
             setSigning(false);
-            // Reset MFA state on any login error
-            setMfaRequired(false);
-            setMfaWaiting(false);
-            setFactorId(null);
+            setError(err?.message || 'Login failed');
         }
     };
 
@@ -402,165 +183,110 @@ export default function Login() {
         e.preventDefault();
         setError('');
         setLoading(true);
-        setMfaVerifying(true);
 
         if (!supabase) {
-            console.error('Supabase client not configured during MFA verify');
             setError('MFA verification is temporarily unavailable.');
             setLoading(false);
-            setMfaVerifying(false);
             return;
         }
 
-        // Set a global timeout that will reset everything if nothing happens
-        const globalTimeout = setTimeout(() => {
-            console.error('GLOBAL TIMEOUT: MFA verify took too long');
+        // Hard timeout - reset everything after 30s
+        const hardTimeout = setTimeout(() => {
+            console.warn('HARD TIMEOUT: MFA verify took too long');
             setLoading(false);
-            setMfaVerifying(false);
             setSigning(false);
             setError('Request timed out. Please try again.');
-        }, 45000); // 45 seconds max
+        }, 30000);
 
         try {
-            console.log('1. Starting MFA verify, factorId:', factorId);
+            console.log('MFA verify starting, factorId:', factorId);
 
-            // Create MFA challenge - simpler approach without timeout wrapper
-            console.log('1.1 Creating challenge...');
+            // Step 1: Create challenge
             const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
                 factorId: factorId
             });
 
-            console.log('2. Challenge response:', { challengeData, challengeError });
-
             if (challengeError) {
-                clearTimeout(globalTimeout);
+                clearTimeout(hardTimeout);
                 throw challengeError;
             }
 
-            if (!challengeData?.id) {
-                clearTimeout(globalTimeout);
-                throw new Error('No challenge ID received');
-            }
+            console.log('Challenge created:', challengeData?.id);
 
-            console.log('3. Verifying code:', mfaCode, 'challengeId:', challengeData.id);
-
-            // Use Supabase SDK verify method instead of direct fetch (more reliable on mobile)
-            console.log('3.1 Using SDK verify method...');
+            // Step 2: Verify code
             const { data: verifyData, error: verifyError } = await supabase.auth.mfa.verify({
                 factorId: factorId,
                 challengeId: challengeData.id,
                 code: mfaCode
             });
 
-            console.log('4. Verify response:', { verifyData, verifyError });
-
             if (verifyError) {
-                clearTimeout(globalTimeout);
+                clearTimeout(hardTimeout);
                 throw verifyError;
             }
 
-            console.log('5. MFA successful — extracting tokens from verifyData...');
+            console.log('Verify successful:', { hasSession: !!verifyData?.session });
 
-            // Extract tokens from SDK response
-            const access_token = verifyData?.session?.access_token || verifyData?.access_token;
-            const refresh_token = verifyData?.session?.refresh_token || verifyData?.refresh_token;
-            const user = verifyData?.session?.user || verifyData?.user;
-
-            console.log('DEBUG: Extracted tokens:', {
-                hasAccess: !!access_token,
-                hasRefresh: !!refresh_token,
-                hasUser: !!user
-            });
-
-            if (access_token && refresh_token && user) {
-                console.log('Found tokens in verifyData, storing and redirecting...');
-                clearTimeout(globalTimeout);
-
-                try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
+            // Step 3: Store tokens and redirect
+            const session = verifyData?.session;
+            if (session?.access_token && session?.refresh_token && session?.user) {
+                clearTimeout(hardTimeout);
 
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
 
-                // Try to fetch profile but don't let it block redirect
-                let userWithProfile = user;
+                // Quick profile fetch (don't block on failure)
+                let user = session.user;
                 try {
-                    console.log('DEBUG: Quick profile fetch (5s timeout)...');
-                    const profilePromise = supabase
+                    const { data: profile } = await supabase
                         .from('profiles')
                         .select('avatar_url, name')
                         .eq('id', user.id)
                         .maybeSingle();
 
-                    const profileTimeout = new Promise((resolve) =>
-                        setTimeout(() => resolve({ data: null }), 5000) // Shorter 5s timeout
-                    );
-
-                    const { data: profile } = await Promise.race([profilePromise, profileTimeout]);
-
                     if (profile) {
-                        console.log('DEBUG: Profile fetched');
-                        userWithProfile = {
+                        user = {
                             ...user,
-                            avatarUrl: profile.avatar_url || null,
-                            avatar_url: profile.avatar_url || null,
-                            displayName: profile.name || null,
-                            name: profile.name || null
+                            avatarUrl: profile.avatar_url,
+                            avatar_url: profile.avatar_url,
+                            displayName: profile.name,
+                            name: profile.name
                         };
                     }
-                } catch (profileErr) {
-                    console.warn('DEBUG: Profile fetch failed, using basic user');
+                } catch (e) {
+                    console.warn('Profile fetch failed, using basic user');
                 }
 
-                const toStore = {
-                    access_token,
-                    refresh_token,
-                    expires_at: verifyData?.session?.expires_at || verifyData?.expires_at,
-                    expires_in: verifyData?.session?.expires_in || verifyData?.expires_in,
+                localStorage.setItem(storageKey, JSON.stringify({
+                    access_token: session.access_token,
+                    refresh_token: session.refresh_token,
+                    expires_at: session.expires_at,
+                    expires_in: session.expires_in,
                     token_type: 'bearer',
-                    user: userWithProfile
-                };
+                    user: user
+                }));
 
-                console.log('DEBUG: Storing to localStorage');
-                localStorage.setItem(storageKey, JSON.stringify(toStore));
-
-                // Set redirect flag and redirect
-                try { window.__redirecting = true; } catch (e) { }
-                console.log('Redirecting to dashboard...');
-
-                // Small delay to ensure localStorage write completes
-                setTimeout(() => {
-                    window.location.replace('/dashboard');
-                }, 100);
+                console.log('Tokens stored, redirecting...');
+                window.location.replace('/dashboard');
                 return;
             }
 
-            // No tokens found
-            clearTimeout(globalTimeout);
-            console.warn('No tokens found in verifyData');
-            throw new Error('Verification completed but no session received');
+            // No session received
+            clearTimeout(hardTimeout);
+            throw new Error('No session received after verification');
 
         } catch (err) {
-            clearTimeout(globalTimeout);
+            clearTimeout(hardTimeout);
             console.error('MFA Error:', err);
-            console.error('MFA Error details:', { message: err?.message, code: err?.code });
 
-            try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
-            setMfaWaiting(false);
-            setMfaRequired(false);
-            setMfaVerifying(false);
+            setLoading(false);
             setSigning(false);
 
-            // User-friendly error messages
-            let errorMsg = 'Invalid verification code';
-            if (err?.message?.includes('Invalid TOTP code') || err?.message?.includes('invalid')) {
-                errorMsg = 'Invalid code. Please try again.';
-            } else if (err?.message?.includes('timeout') || err?.message?.includes('timed out')) {
-                errorMsg = 'Request timed out. Please check your connection and try again.';
-            } else if (err?.message) {
-                errorMsg = err.message;
+            // Show friendly error message
+            if (err?.message?.includes('Invalid') || err?.message?.includes('invalid')) {
+                setError('Invalid code. Please try again.');
+            } else {
+                setError(err?.message || 'Verification failed');
             }
-
-            setError(errorMsg);
-            setLoading(false);
         }
     };
 
