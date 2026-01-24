@@ -496,39 +496,48 @@ export function AuthProvider({ children }) {
                     console.log('[AuthContext] Emergency recovery: setting user from localStorage');
                     userSetFromLocalStorageRef.current = true;
 
-                    // Fetch fresh profile data after emergency recovery
-                    const fetchProfileData = async () => {
-                        try {
-                            if (!supabase) {
+                    // Check if user already has profile data from localStorage
+                    const hasProfileData = tokens.user.avatarUrl !== undefined || tokens.user.displayName !== undefined;
+
+                    if (hasProfileData) {
+                        // User already has profile data, use it directly
+                        console.log('[AuthContext] Emergency recovery: user has profile data, using directly');
+                        setUser(tokens.user);
+                    } else {
+                        // Fetch fresh profile data synchronously
+                        (async () => {
+                            try {
+                                if (!supabase) {
+                                    setUser(tokens.user);
+                                    return;
+                                }
+
+                                console.log('[AuthContext] Emergency recovery: fetching profile data');
+                                const { data: profile, error } = await supabase
+                                    .from('profiles')
+                                    .select('avatar_url, name')
+                                    .eq('id', tokens.user.id)
+                                    .maybeSingle();
+
+                                if (!error && profile) {
+                                    console.log('[AuthContext] Emergency recovery: fetched profile data');
+                                    setUser({
+                                        ...tokens.user,
+                                        avatar_url: profile.avatar_url,
+                                        avatarUrl: profile.avatar_url,
+                                        displayName: profile.name,
+                                        name: profile.name
+                                    });
+                                } else {
+                                    console.log('[AuthContext] Emergency recovery: no profile found, using basic user');
+                                    setUser(tokens.user);
+                                }
+                            } catch (err) {
+                                console.warn('[AuthContext] Emergency recovery: profile fetch failed:', err);
                                 setUser(tokens.user);
-                                return;
                             }
-
-                            const { data: profile, error } = await supabase
-                                .from('profiles')
-                                .select('avatar_url, name')
-                                .eq('id', tokens.user.id)
-                                .single();
-
-                            if (!error && profile) {
-                                console.log('[AuthContext] Emergency recovery: fetched profile data');
-                                setUser({
-                                    ...tokens.user,
-                                    avatar_url: profile.avatar_url,
-                                    avatarUrl: profile.avatar_url,
-                                    displayName: profile.name
-                                });
-                            } else {
-                                console.log('[AuthContext] Emergency recovery: using user from localStorage (no profile)');
-                                setUser(tokens.user);
-                            }
-                        } catch (err) {
-                            console.warn('[AuthContext] Emergency recovery: profile fetch failed:', err);
-                            setUser(tokens.user);
-                        }
-                    };
-
-                    fetchProfileData();
+                        })();
+                    }
                 }
             }
         } catch (e) {
