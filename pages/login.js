@@ -498,17 +498,30 @@ export default function Login() {
 
                 // ALWAYS store tokens to localStorage FIRST (before any async operations)
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                
+                // Extract user from verifyResult - check all possible locations
+                const storedUser = verifyResult?.user || verifyResult?.data?.user;
+                console.log('DEBUG: User from verifyResult:', storedUser ? 'present' : 'missing', storedUser?.email);
+                
                 const toStore = {
                     access_token,
                     refresh_token,
                     expires_at: verifyResult?.expires_at,
                     expires_in: verifyResult?.expires_in,
                     token_type: verifyResult?.token_type || 'bearer',
-                    user: verifyResult?.user
+                    user: storedUser
                 };
+                console.log('DEBUG: Storing to localStorage with key:', storageKey);
+                console.log('DEBUG: Token payload has user:', !!toStore.user);
+                
                 try {
                     localStorage.setItem(storageKey, JSON.stringify(toStore));
                     console.log('Tokens stored to localStorage with key:', storageKey);
+                    
+                    // Verify storage
+                    const verify = localStorage.getItem(storageKey);
+                    const parsed = verify ? JSON.parse(verify) : null;
+                    console.log('DEBUG: Verification - stored user:', !!parsed?.user, parsed?.user?.email);
                 } catch (e) {
                     console.error('Failed to store tokens:', e);
                 }

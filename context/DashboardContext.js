@@ -149,14 +149,8 @@ export function DashboardProvider({ children }) {
                 console.log('Realtime subscription status:', status);
             });
 
-        // Also poll every 10 seconds as a fallback
-        const interval = setInterval(() => {
-            fetchData();
-        }, 10000);
-
         return () => {
             supabase.removeChannel(channel);
-            clearInterval(interval);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
