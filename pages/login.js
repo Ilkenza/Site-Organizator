@@ -457,9 +457,55 @@ export default function Login() {
                 throw new Error(msg || 'Invalid verification code');
             }
 
-            console.log('5. MFA successful (verify returned OK) — checking session...');
+            console.log('5. MFA successful (verify returned OK) — extracting tokens from verifyResult FIRST...');
 
-            // Try to get updated session from Supabase SDK; give it a short moment to appear
+            // PRIORITY: Extract tokens from verifyResult FIRST (contains correct AAL2 tokens)
+            // The verifyResult contains access_token directly (not nested in data based on logs)
+            const tokenCandidates = verifyResult || {};
+            const access_token = tokenCandidates?.access_token || tokenCandidates?.data?.access_token;
+            const refresh_token = tokenCandidates?.refresh_token || tokenCandidates?.data?.refresh_token;
+
+            if (access_token && refresh_token) {
+                console.log('Found AAL2 tokens in verifyResult, using them immediately');
+                const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                localStorage.setItem(storageKey, JSON.stringify({
+                    access_token,
+                    refresh_token,
+                    expires_at: tokenCandidates?.expires_at || tokenCandidates?.data?.expires_at,
+                    expires_in: tokenCandidates?.expires_in || tokenCandidates?.data?.expires_in,
+                    token_type: tokenCandidates?.token_type || tokenCandidates?.data?.token_type,
+                    user: tokenCandidates?.user || tokenCandidates?.data?.user
+                }));
+                console.log('AAL2 tokens stored, setting session with SDK...');
+                try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
+
+                // Set session with the SDK using the AAL2 tokens
+                try {
+                    const setResp = await supabase.auth.setSession({ access_token, refresh_token });
+                    console.log('setSession with AAL2 tokens result:', setResp);
+                    if (!setResp?.error) {
+                        await new Promise(r => setTimeout(r, 100));
+                        try { window.__redirecting = true; } catch (e) { }
+                        console.log('Redirecting to dashboard with AAL2 session...');
+                        window.location.replace('/dashboard');
+                        return;
+                    } else {
+                        console.warn('setSession returned error, but tokens are stored - redirecting anyway:', setResp.error);
+                    }
+                } catch (e) {
+                    console.warn('setSession threw error, but tokens are stored - redirecting anyway:', e);
+                }
+
+                // Tokens are stored, redirect even if setSession had issues
+                await new Promise(r => setTimeout(r, 100));
+                try { window.__redirecting = true; } catch (e) { }
+                console.log('Redirecting to dashboard (tokens stored)...');
+                window.location.replace('/dashboard');
+                return;
+            }
+
+            // FALLBACK: No tokens in verifyResult, try polling for session (may be stale AAL1)
+            console.log('No tokens in verifyResult, falling back to session polling...');
             let sessionData = null;
             const maxPollMs = 3000;
             const pollInterval = 300;
@@ -476,48 +522,12 @@ export default function Login() {
                 await new Promise(r => setTimeout(r, pollInterval));
             }
 
-            // If session present, redirect. Otherwise, try to store tokens returned in verify result (if present)
+            // If session present from polling, redirect
             if (sessionData) {
-                console.log('Session found after verify, redirecting immediately...');
+                console.log('Session found via polling (fallback), redirecting...');
                 try { window.__redirecting = true; } catch (e) { }
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
                 console.log('Redirecting to dashboard...');
-                window.location.replace('/dashboard');
-                return;
-            }
-
-            // Fallback: some Supabase setups return tokens directly in verify result - store them if available
-            const tokenCandidates = verifyResult || {};
-            const access_token = tokenCandidates?.data?.access_token || tokenCandidates?.access_token;
-            const refresh_token = tokenCandidates?.data?.refresh_token || tokenCandidates?.refresh_token;
-            if (access_token && refresh_token) {
-                console.log('Storing tokens from verify response as fallback');
-                const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                localStorage.setItem(storageKey, JSON.stringify({
-                    access_token,
-                    refresh_token,
-                    expires_at: tokenCandidates?.data?.expires_at || tokenCandidates?.expires_at,
-                    expires_in: tokenCandidates?.data?.expires_in || tokenCandidates?.expires_in,
-                    token_type: tokenCandidates?.data?.token_type || tokenCandidates?.token_type,
-                    user: tokenCandidates?.data?.user || tokenCandidates?.user
-                }));
-                console.log('Fallback tokens stored, setting session before redirect...');
-                try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
-
-                // Try to set session with the SDK so app state stabilizes before redirecting
-                try {
-                    const setResp2 = await supabase.auth.setSession({ access_token, refresh_token });
-                    console.log('Fallback verify setSession result', setResp2);
-                    if (!setResp2?.error) {
-                        await new Promise(r => setTimeout(r, 100));
-                        try { window.__redirecting = true; } catch (e) { }
-                        window.location.replace('/dashboard');
-                        return;
-                    }
-                } catch (e) { console.warn('Fallback setSession failed', e); }
-
-                await new Promise(r => setTimeout(r, 100));
-                try { window.__redirecting = true; } catch (e) { }
                 window.location.replace('/dashboard');
                 return;
             }
