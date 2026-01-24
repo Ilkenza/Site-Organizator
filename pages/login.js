@@ -447,22 +447,10 @@ export default function Login() {
 
             // If session present, redirect. Otherwise, try to store tokens returned in verify result (if present)
             if (sessionData) {
-                console.log('Session found after verify, setting redirect flag and confirming session...');
-                try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
-
-                // Set redirect flag IMMEDIATELY to prevent timeout from clearing loading state
+                console.log('Session found after verify, redirecting immediately...');
                 try { window.__redirecting = true; } catch (e) { }
-
-                // Ensure session is fully established before redirecting
-                try {
-                    await supabase.auth.setSession({
-                        access_token: sessionData.access_token,
-                        refresh_token: sessionData.refresh_token
-                    });
-                    console.log('Session confirmed, redirecting now...');
-                } catch (e) {
-                    console.warn('Session confirmation failed, proceeding anyway:', e);
-                }
+                try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
+                console.log('Redirecting to dashboard...');
                 window.location.replace('/dashboard');
                 return;
             }
