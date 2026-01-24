@@ -13,11 +13,31 @@ export default function Login() {
         try { alert(msg); } finally { try { setLoading(true); } catch (e) { } }
     };
 
-    // Ensure any alert shown while on this page results in the loading screen remaining visible
+    // Helper to complete login and redirect. If MFA is active, suppress the alert and keep the loading screen.
+    const completeLogin = ({ showAlert = true } = {}) => {
+        if (typeof window !== 'undefined') {
+            if (window.__suppressAlertsDuringMfa) showAlert = false;
+            window.__suppressAlertsDuringMfa = false;
+        }
+        if (showAlert) {
+            try { alert('Login successful — redirecting to dashboard'); } catch (e) { }
+        }
+        try { setLoading(true); } catch (e) { }
+        window.location.href = '/dashboard';
+    };
+
+    // Ensure any alert shown while on this page results in the loading screen remaining visible (unless suppressed during MFA)
     useEffect(() => {
         if (typeof window === 'undefined') return;
         const originalAlert = window.alert;
-        window.alert = (msg) => { originalAlert(msg); try { setLoading(true); } catch (e) { } };
+        window.alert = (msg) => {
+            if (window.__suppressAlertsDuringMfa) {
+                try { setLoading(true); } catch (e) { }
+                return;
+            }
+            originalAlert(msg);
+            try { setLoading(true); } catch (e) { }
+        };
         return () => { window.alert = originalAlert; };
     }, [setLoading]);
     const [_verifyDebug, setVerifyDebug] = useState(null);
@@ -146,7 +166,7 @@ export default function Login() {
                                 console.log('Late setSession result', setResp);
                                 if (!setResp?.error) {
                                     try { setLoading(false); } catch (e) { }
-                                    postAlertLoading('Login successful — redirecting to dashboard');
+                                    completeLogin();
                                     window.location.href = '/dashboard';
                                 } else {
                                     console.error('Late setSession error', setResp.error);
@@ -215,7 +235,7 @@ export default function Login() {
                         clearTimeout(timeoutId);
                         setLoading(false);
                         console.log('Redirecting to dashboard');
-                        alert('Login successful — redirecting to dashboard');
+                        completeLogin();
                         try { setLoading(true); } catch (e) { }
                         window.location.href = '/dashboard';
                         return;
