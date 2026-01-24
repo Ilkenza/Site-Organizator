@@ -448,7 +448,8 @@ export default function Login() {
                 setMfaCode('');
                 try { setSigning(false); } catch (e) { }
                 setLoading(false);
-                window.location.href = '/dashboard';
+                // Use replace so the user cannot navigate back to a failed login state
+                window.location.replace('/dashboard');
                 return;
             }
 
@@ -467,14 +468,27 @@ export default function Login() {
                     token_type: tokenCandidates?.data?.token_type || tokenCandidates?.token_type,
                     user: tokenCandidates?.data?.user || tokenCandidates?.user
                 }));
-                console.log('Fallback tokens stored, reloading...');
+
+                // Try to set session in supabase client so AuthProvider sees it immediately
+                try {
+                    const setResp = await supabase.auth.setSession({ access_token, refresh_token });
+                    console.log('setSession after verify result:', setResp);
+                    if (setResp?.error) {
+                        console.warn('setSession returned error after verify:', setResp.error);
+                    }
+                } catch (e) {
+                    console.error('Error calling setSession after verify:', e);
+                }
+
+                console.log('Fallback tokens stored, redirecting...');
                 try { window.__mfaPending = false; window.__suppressAlertsDuringMfa = false; } catch (e) { }
                 setMfaRequired(false);
                 setMfaWaiting(false);
                 setMfaCode('');
                 try { setSigning(false); } catch (e) { }
                 setLoading(false);
-                window.location.href = '/dashboard';
+                // Use replace so the back button doesn't return to an inconsistent state
+                window.location.replace('/dashboard');
                 return;
             }
 
