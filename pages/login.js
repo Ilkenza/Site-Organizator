@@ -207,7 +207,7 @@ export default function Login() {
             setLoading(false);
             setSigning(false);
             setError('Request timed out. Please try again.');
-        }, 30000);
+        }, 60000);
 
         try {
             console.log('MFA verify starting, factorId:', factorId);
@@ -217,7 +217,7 @@ export default function Login() {
             try {
                 const challengePromise = supabase.auth.mfa.challenge({ factorId });
                 const challengeTimeout = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Challenge timed out')), 15000)
+                    setTimeout(() => reject(new Error('Challenge timed out')), 45000)
                 );
                 const result = await Promise.race([challengePromise, challengeTimeout]);
                 challengeData = result.data;
@@ -245,7 +245,7 @@ export default function Login() {
                     code: mfaCode
                 });
                 const verifyTimeout = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Verify timed out')), 15000)
+                    setTimeout(() => reject(new Error('Verify timed out')), 45000)
                 );
                 const result = await Promise.race([verifyPromise, verifyTimeout]);
                 verifyData = result.data;
