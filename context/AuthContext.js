@@ -156,10 +156,18 @@ export function AuthProvider({ children }) {
         // Clear user state immediately to update UI
         setUser(null);
 
-        if (!supabase) {
-            window.location.href = '/login';
-            return;
+        // Clear any stored tokens from localStorage to prevent stale session issues
+        try {
+            const keys = Object.keys(localStorage);
+            keys.forEach(key => {
+                if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                    localStorage.removeItem(key);
+                }
+            });
+        } catch (e) {
+            console.warn('Error clearing auth tokens from localStorage:', e);
         }
+
 
         try {
             // Sign out from Supabase with scope: 'local' to avoid AAL2/MFA blocking issues
