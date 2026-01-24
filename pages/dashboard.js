@@ -349,7 +349,23 @@ export default function Dashboard() {
     };
   }, [user, loading, supabase, authChecked]);
 
-  if (loading || !authChecked) {
+  // Helper to check if localStorage has valid tokens (for render-time check)
+  const hasValidTokensForRender = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+      const storedTokens = localStorage.getItem(storageKey);
+      if (storedTokens) {
+        const tokens = JSON.parse(storedTokens);
+        return !!(tokens?.access_token && tokens?.user);
+      }
+    } catch (e) {}
+    return false;
+  };
+
+  // Show loading state while checking auth - but NOT if we have user or valid localStorage tokens
+  if ((loading || !authChecked) && !user && !hasValidTokensForRender()) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: '#6CBBFB' }}></div>
@@ -357,6 +373,16 @@ export default function Dashboard() {
     );
   }
 
+  // If localStorage has tokens but user isn't set yet, show loading (not empty page)
+  if (!user && hasValidTokensForRender()) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: '#6CBBFB' }}></div>
+      </div>
+    );
+  }
+
+  // No user and no valid tokens - don't render anything (redirect will happen)
   if (!user) {
     return null;
   }
