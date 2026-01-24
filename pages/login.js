@@ -270,6 +270,34 @@ export default function Login() {
                 verifyError = result.error;
             } catch (timeoutErr) {
                 console.error('Verify error:', timeoutErr?.message || timeoutErr);
+
+                // Check if fetch interceptor caught a successful response
+                const debugResponse = window.__debugSupabaseVerify;
+                if (debugResponse && debugResponse.status === 200 && debugResponse.text) {
+                    console.log('Using debug response fallback');
+                    try {
+                        const parsed = JSON.parse(debugResponse.text);
+                        if (parsed.access_token) {
+                            // Store tokens manually
+                            const storageKey = 'sb-skacyhzljreaitrbgbte-auth-token';
+                            localStorage.setItem(storageKey, JSON.stringify({
+                                access_token: parsed.access_token,
+                                refresh_token: parsed.refresh_token,
+                                expires_at: parsed.expires_at,
+                                expires_in: parsed.expires_in,
+                                token_type: 'bearer',
+                                user: parsed.user
+                            }));
+                            clearTimeout(hardTimeout);
+                            console.log('Tokens stored via fallback, redirecting...');
+                            window.location.replace('/dashboard');
+                            return;
+                        }
+                    } catch (parseErr) {
+                        console.error('Failed to parse debug response:', parseErr);
+                    }
+                }
+
                 clearTimeout(hardTimeout);
                 setLoading(false);
                 if (timeoutErr?.message?.includes('timed out')) {
