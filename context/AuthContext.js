@@ -280,16 +280,13 @@ export function AuthProvider({ children }) {
             console.warn('Error clearing auth tokens from localStorage:', e);
         }
 
-
-        try {
-            // Sign out from Supabase with scope: 'local' to avoid AAL2/MFA blocking issues
-            await supabase.auth.signOut({ scope: 'local' });
-        } catch (err) {
+        // Sign out from Supabase (fire and forget - don't wait)
+        supabase.auth.signOut({ scope: 'local' }).catch(err => {
             console.error('Sign out exception:', err);
-        }
+        });
 
-        // Always redirect to login page
-        window.location.href = '/login';
+        // Redirect immediately - don't wait for signOut to complete
+        window.location.replace('/login');
     };
 
     const refreshUser = async () => {
@@ -344,7 +341,40 @@ export function AuthProvider({ children }) {
                 const tokens = JSON.parse(storedTokens);
                 if (tokens?.user && tokens?.access_token) {
                     console.log('[AuthContext] Emergency recovery: setting user from localStorage');
-                    setUser(tokens.user);
+
+                    // Fetch fresh profile data after emergency recovery
+                    const fetchProfileData = async () => {
+                        try {
+                            if (!supabase) {
+                                setUser(tokens.user);
+                                return;
+                            }
+
+                            const { data: profile, error } = await supabase
+                                .from('profiles')
+                                .select('avatar_url, name')
+                                .eq('id', tokens.user.id)
+                                .single();
+
+                            if (!error && profile) {
+                                console.log('[AuthContext] Emergency recovery: fetched profile data');
+                                setUser({
+                                    ...tokens.user,
+                                    avatar_url: profile.avatar_url,
+                                    avatarUrl: profile.avatar_url,
+                                    displayName: profile.name
+                                });
+                            } else {
+                                console.log('[AuthContext] Emergency recovery: using user from localStorage (no profile)');
+                                setUser(tokens.user);
+                            }
+                        } catch (err) {
+                            console.warn('[AuthContext] Emergency recovery: profile fetch failed:', err);
+                            setUser(tokens.user);
+                        }
+                    };
+
+                    fetchProfileData();
                 }
             }
         } catch (e) {
