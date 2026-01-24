@@ -106,6 +106,38 @@ export function DashboardProvider({ children }) {
         }
     }, [sites, showToast]);
 
+    // Fetch all data
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const [sitesRes, categoriesRes, tagsRes] = await Promise.all([
+                fetchAPI('/sites'),
+                fetchAPI('/categories'),
+                fetchAPI('/tags')
+            ]);
+
+            // Handle both direct array and { data: [...] } response formats
+            const sitesData = Array.isArray(sitesRes) ? sitesRes : (sitesRes?.data || []);
+            const categoriesData = Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []);
+            const tagsData = Array.isArray(tagsRes) ? tagsRes : (tagsRes?.data || []);
+
+            setSites(sitesData);
+            setCategories(categoriesData);
+            setTags(tagsData);
+            setStats({
+                sites: sitesData.length,
+                categories: categoriesData.length,
+                tags: tagsData.length
+            });
+        } catch (err) {
+            setError(err.message);
+            console.error('Failed to fetch data:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     // Fetch data when user changes
     useEffect(() => {
         if (user) {
@@ -115,8 +147,7 @@ export function DashboardProvider({ children }) {
             setCategories([]);
             setTags([]);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user]);
+    }, [user, fetchData]);
 
     // Real-time subscription for automatic data refresh
     useEffect(() => {
@@ -152,40 +183,7 @@ export function DashboardProvider({ children }) {
         return () => {
             supabase.removeChannel(channel);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user]);
-
-    // Fetch all data
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const [sitesRes, categoriesRes, tagsRes] = await Promise.all([
-                fetchAPI('/sites'),
-                fetchAPI('/categories'),
-                fetchAPI('/tags')
-            ]);
-
-            // Handle both direct array and { data: [...] } response formats
-            const sitesData = Array.isArray(sitesRes) ? sitesRes : (sitesRes?.data || []);
-            const categoriesData = Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []);
-            const tagsData = Array.isArray(tagsRes) ? tagsRes : (tagsRes?.data || []);
-
-            setSites(sitesData);
-            setCategories(categoriesData);
-            setTags(tagsData);
-            setStats({
-                sites: sitesData.length,
-                categories: categoriesData.length,
-                tags: tagsData.length
-            });
-        } catch (err) {
-            setError(err.message);
-            console.error('Failed to fetch data:', err);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    }, [user, fetchData]);
 
     // Site operations
     const addSite = useCallback(async (siteData) => {
