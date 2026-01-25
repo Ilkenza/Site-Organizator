@@ -277,10 +277,19 @@ export default function Dashboard() {
           (async () => {
             try {
               console.log('[Dashboard] Attempting setSession (immediate) with localStorage tokens...');
-              await supabase.auth.setSession({
+
+              // Wrap setSession in a timeout to prevent indefinite blocking
+              const SET_SESSION_TIMEOUT = 3000;
+              const setSessionPromise = supabase.auth.setSession({
                 access_token: tokens.access_token,
                 refresh_token: tokens.refresh_token
               });
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('setSession timeout')), SET_SESSION_TIMEOUT)
+              );
+
+              await Promise.race([setSessionPromise, timeoutPromise]);
+              console.log('[Dashboard] Immediate setSession completed');
 
               try {
                 const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
@@ -307,8 +316,14 @@ export default function Dashboard() {
 
               if (isMounted) setAuthChecked(true);
             } catch (e) {
-              console.warn('[Dashboard] Immediate setSession failed:', e);
-              // If setSession fails, clear tokens and redirect to login for safety
+              console.warn('[Dashboard] Immediate setSession failed:', e?.message || e);
+              // If it's a timeout, don't clear tokens - just let AuthContext handle it
+              if (e?.message === 'setSession timeout') {
+                console.log('[Dashboard] setSession timed out, letting AuthContext handle session');
+                if (isMounted) setAuthChecked(true);
+                return;
+              }
+              // If setSession fails with an actual error, clear tokens and redirect to login for safety
               try {
                 localStorage.removeItem(storageKey);
               } catch (remErr) { console.warn('[Dashboard] Failed to clear tokens:', remErr); }

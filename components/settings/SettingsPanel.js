@@ -148,7 +148,7 @@ export default function SettingsPanel() {
         };
 
         loadSessionInfo();
-    }, [activeTab]);
+    }, [activeTab, supabase]);
 
     // Check MFA status on load
     useEffect(() => {
@@ -182,7 +182,7 @@ export default function SettingsPanel() {
         };
 
         checkMfaStatus();
-    }, [activeTab]);
+    }, [activeTab, supabase]);
 
     // Handle MFA enrollment
     const handleEnrollMfa = async () => {
