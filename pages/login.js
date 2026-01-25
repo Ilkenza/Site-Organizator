@@ -376,21 +376,24 @@ export default function Login() {
                         const tokens = JSON.parse(storedTokens);
                         if (tokens?.refresh_token) {
                             console.log('Setting AAL1 session before MFA challenge...');
-                            await supabase.auth.setSession({
+                            // Wrap setSession in a timeout to prevent hanging
+                            const setSessionPromise = supabase.auth.setSession({
                                 access_token: aal1Token,
                                 refresh_token: tokens.refresh_token
                             });
-                            console.log('AAL1 session set successfully');
-                            // Give SDK a moment to process the session
-                            await new Promise(r => setTimeout(r, 200));
-                            // Verify session is active
-                            const { data: sessionCheck } = await supabase.auth.getSession();
-                            console.log('Session verified after setSession:', !!sessionCheck?.session);
+                            const setSessionTimeout = new Promise((_, reject) =>
+                                setTimeout(() => reject(new Error('setSession timeout')), 5000)
+                            );
+                            try {
+                                await Promise.race([setSessionPromise, setSessionTimeout]);
+                                console.log('AAL1 session set successfully');
+                            } catch (timeoutErr) {
+                                console.warn('setSession timed out, continuing anyway:', timeoutErr.message);
+                            }
                         }
                     }
-                } catch (setSessionErr) {
-                    console.warn('Failed to set AAL1 session before challenge:', setSessionErr);
-                    // Continue anyway - SDK may already have the session
+                } catch (e) {
+                    console.warn('Error setting AAL1 session:', e);
                 }
             }
 
