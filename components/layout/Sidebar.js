@@ -40,10 +40,16 @@ export default function Sidebar({ isOpen = false, onClose }) {
         if (!selectedCategory && !selectedTag) return null;
         let filtered = sites;
         if (selectedCategory) {
-            filtered = filtered.filter(s => s.category_id === selectedCategory);
+            // Sites use categories_array (join table), not category_id
+            filtered = filtered.filter(s =>
+                s.categories_array?.some(cat => cat?.id === selectedCategory)
+            );
         }
         if (selectedTag) {
-            filtered = filtered.filter(s => s.site_tags?.some(st => st.tag_id === selectedTag));
+            // Sites use tags_array (array of tag objects), not site_tags
+            filtered = filtered.filter(s =>
+                s.tags_array?.some(tag => tag?.id === selectedTag)
+            );
         }
         return filtered.length;
     };

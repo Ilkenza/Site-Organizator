@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
+import { useAuth } from '../../context/AuthContext';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -16,6 +17,7 @@ const COLORS = [
 
 export default function CategoryModal({ isOpen, onClose, category = null }) {
     const { addCategory, updateCategory } = useDashboard();
+    const { user } = useAuth();
     const isEditing = !!category;
 
     const [formData, setFormData] = useState({
@@ -54,7 +56,8 @@ export default function CategoryModal({ isOpen, onClose, category = null }) {
 
             const payload = {
                 name: formData.name.trim(),
-                color: formData.color
+                color: formData.color,
+                user_id: user?.id
             };
 
             if (isEditing) {
