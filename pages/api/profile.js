@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
         try {
-            const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${userId}&select=id,name,avatar_url,email`;
+            const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${userId}&select=id,name,avatar_url`;
             const r = await fetch(url, {
                 headers: {
                     apikey: SUPABASE_ANON_KEY,
