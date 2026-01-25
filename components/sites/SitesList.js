@@ -9,7 +9,7 @@ const ITEMS_PER_PAGE = 30;
 
 export default function SitesList({ onEdit, onDelete }) {
     const router = useRouter();
-    const { filteredSites, loading, searchQuery, selectedCategory, selectedTag } = useDashboard();
+    const { filteredSites, loading, searchQuery, selectedCategory, selectedTag, categories } = useDashboard();
 
     // Get current page from URL or default to 1
     const currentPage = parseInt(router.query.page) || 1;
@@ -118,7 +118,7 @@ export default function SitesList({ onEdit, onDelete }) {
                 onPageChange={handlePageChange}
             />
 
-            {selectedCategory && <CategoryColorIndicator category={selectedCategory} />}
+            {selectedCategory && <CategoryColorIndicator category={categories.find(c => c.id === selectedCategory)} />}
         </div>
     );
 }
