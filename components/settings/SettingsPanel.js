@@ -113,8 +113,11 @@ export default function SettingsPanel() {
                 }
             } catch (err) {
                 console.error('[SettingsPanel] Error loading profile:', err);
-                loadProfileData();
-            }, [user?.id]);
+            }
+        };
+
+        loadProfileData();
+    }, [user?.id]);
 
     // Load session info
     useEffect(() => {
