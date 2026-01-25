@@ -145,16 +145,46 @@ export default function Login() {
                                             console.warn('Restored MFA flow: failed to set supabase session:', setErr);
                                         }
 
-                                        const factorsPromise = supabase.auth.mfa.listFactors();
-                                        const factorsTimeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 10000));
-                                        const factorsResult = await Promise.race([factorsPromise, factorsTimeout]);
-                                        const factorsData = factorsResult?.data;
-                                        const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
-                                        if (totpFactor) {
-                                            console.log('Restored MFA flow: found factorId from stored session', totpFactor.id);
-                                            setFactorId(totpFactor.id);
-                                        } else {
-                                            console.warn('Restored MFA flow: no TOTP factor found');
+                                        // Try several times to find a factor (some delays may apply server-side)
+                                        let found = false;
+                                        for (let attempt = 0; attempt < 4 && !found; attempt++) {
+                                            try {
+                                                const factorsPromise = supabase.auth.mfa.listFactors();
+                                                const factorsTimeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 5000));
+                                                const factorsResult = await Promise.race([factorsPromise, factorsTimeout]);
+                                                const factorsData = factorsResult?.data;
+
+                                                // Prefer verified TOTP, else any TOTP, else any factor
+                                                let totpFactor = null;
+                                                if (Array.isArray(factorsData?.totp) && factorsData.totp.length) {
+                                                    totpFactor = factorsData.totp.find(f => f.status === 'verified') || factorsData.totp[0];
+                                                }
+                                                if (totpFactor) {
+                                                    console.log('Restored MFA flow: found TOTP factor (attempt', attempt, ')', totpFactor.id, totpFactor.status);
+                                                    setFactorId(totpFactor.id);
+                                                    found = true;
+                                                    break;
+                                                }
+
+                                                // Try any factor across types
+                                                const allFactors = Object.keys(factorsData || {}).flatMap(k => factorsData[k] || []);
+                                                if (allFactors.length) {
+                                                    console.log('Restored MFA flow: using first available factor (attempt', attempt, ')', allFactors[0].id, allFactors[0].factor_type || allFactors[0].type);
+                                                    setFactorId(allFactors[0].id);
+                                                    found = true;
+                                                    break;
+                                                }
+
+                                            } catch (qErr) {
+                                                console.warn('Restored MFA flow: listFactors attempt failed:', qErr);
+                                            }
+                                            // wait a bit before retrying
+                                            await new Promise(r => setTimeout(r, 300));
+                                        }
+
+                                        if (!found) {
+                                            console.warn('Restored MFA flow: no factor found after retries');
+                                            setError('No MFA factor found for this account. Please enable 2FA.');
                                         }
                                     } catch (fErr) {
                                         console.warn('Restored MFA flow: failed to query factors:', fErr);
@@ -590,6 +620,9 @@ export default function Login() {
                                     </div>
                                     <p className="text-app-text-secondary text-sm">
                                         Enter the 6-digit code from your authenticator app
+                                        {!factorId && (
+                                            <div className="text-sm text-red-400 mt-2">Cannot find an MFA factor for your account. Please enable 2FA or try again later.</div>
+                                        )}
                                     </p>
                                 </div>
 
@@ -608,7 +641,7 @@ export default function Login() {
 
                                 <button
                                     type="submit"
-                                    disabled={loading || mfaWaiting || mfaCode.length !== 6}
+                                    disabled={loading || mfaWaiting || mfaCode.length !== 6 || !factorId}
                                     className="w-full py-3 px-4 bg-btn-primary hover:bg-btn-hover text-app-accent font-medium rounded-xl border border-[#2A5A8A] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:text-app-accentLight"
                                 >
                                     {loading ? (
