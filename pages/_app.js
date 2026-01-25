@@ -33,14 +33,12 @@ export default function App({ Component, pageProps }) {
         {/* PWA Manifest */}
         <link rel="manifest" href="/manifest.json" />
 
-        {/* Apple Touch Icons */}
-        <link rel="apple-touch-icon" href="/icons/icon-152x152.png" />
-        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png" />
+        {/* Apple Touch Icons - using SVG */}
+        <link rel="apple-touch-icon" href="/icons/logo.svg" />
 
         {/* Favicon */}
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-72x72.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-72x72.png" />
+        <link rel="icon" href="/icons/logo.svg" />
       </Head>
       <Component {...pageProps} />
     </AuthProvider>
