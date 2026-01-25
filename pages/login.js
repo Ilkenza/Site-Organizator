@@ -120,13 +120,24 @@ export default function Login() {
             if (stored) {
                 const parsed = JSON.parse(stored);
                 if (parsed?.access_token) {
-                    const payload = JSON.parse(atob(parsed.access_token.split('.')[1]));
+                    const payload = JSON.parse(atob(parsed.access_token.split('.')[1] || '""'));
                     const isExpired = payload.exp * 1000 < Date.now();
                     if (!isExpired) {
-                        // Valid session exists - redirect to dashboard
-                        console.log('Valid session found on login page load, redirecting to dashboard...', { aal: payload.aal });
-                        window.location.replace('/dashboard');
-                        return;
+                        if (payload.aal === 'aal2') {
+                            console.log('Valid AAL2 session found on login page load, redirecting to dashboard...', { aal: payload.aal });
+                            window.location.replace('/dashboard');
+                            return;
+                        } else {
+                            // Valid token but not AAL2 (e.g., AAL1) — restore MFA flow instead of redirecting
+                            console.log('Found valid non-AAL2 token on login page load; restoring MFA flow', { aal: payload.aal });
+                            try {
+                                setAal1Token(parsed.access_token);
+                                setMfaRequired(true);
+                            } catch (e) {
+                                console.warn('Failed to restore MFA flow from token:', e);
+                            }
+                            return;
+                        }
                     } else {
                         // Clear expired session
                         console.log('Clearing expired session on login page load');
