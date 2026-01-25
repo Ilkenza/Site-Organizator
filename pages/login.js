@@ -520,7 +520,7 @@ export default function Login() {
                         .maybeSingle();
 
                     const profileTimeout = new Promise((resolve) =>
-                        setTimeout(() => resolve({ data: null, timedOut: true }), 1500)
+                        setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
                     );
 
                     const profileResult = await Promise.race([profilePromise, profileTimeout]);
