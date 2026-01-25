@@ -272,21 +272,22 @@ export default async function handler(req, res) {
           const catsFromLinks = categoriesBySite.get(site.id) || [];
           const tagsFromLinks = tagsBySite.get(site.id) || [];
 
-          const rawCats = site.categories_array || site.categories || catsFromLinks;
+          // Prioritize relational data (catsFromLinks) over legacy text arrays (site.categories)
+          const rawCats = catsFromLinks.length > 0 ? catsFromLinks : (site.categories_array || site.categories || []);
           const normalizedCats = (Array.isArray(rawCats) ? rawCats : []).map(c => {
             if (typeof c === 'string') return nameToCategory.get(c) || { name: c };
             return c;
           });
 
-          const rawTags = site.tags_array || site.tags || tagsFromLinks;
+          const rawTags = tagsFromLinks.length > 0 ? tagsFromLinks : (site.tags_array || site.tags || []);
           const normalizedTags = (Array.isArray(rawTags) ? rawTags : []).map(t => {
             if (typeof t === 'string') return nameToTag.get(t) || { name: t };
             return t;
           });
 
           return Object.assign({}, site, {
-            categories_array: normalizedCats.length ? normalizedCats : catsFromLinks,
-            tags_array: normalizedTags.length ? normalizedTags : tagsFromLinks
+            categories_array: normalizedCats,
+            tags_array: normalizedTags
           });
         });
       } catch (err) {
