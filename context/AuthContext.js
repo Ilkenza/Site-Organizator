@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { fetchAPI } from '../lib/supabase';
 
 const AuthContext = createContext({});
 
@@ -9,6 +10,20 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 export const supabase = supabaseUrl && supabaseAnonKey
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
+
+// Helper to fetch profile via our API (more reliable than SDK which can timeout)
+async function fetchProfileViaAPI() {
+    try {
+        const result = await fetchAPI('/profile', { method: 'GET' });
+        if (result?.success && result?.data) {
+            return { profile: result.data, error: null };
+        }
+        return { profile: null, error: result?.error || 'No profile data' };
+    } catch (err) {
+        console.warn('[AuthContext] fetchProfileViaAPI error:', err.message);
+        return { profile: null, error: err.message };
+    }
+}
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
@@ -164,11 +179,7 @@ export function AuthProvider({ children }) {
                             console.log('[AuthContext] Session check before profile fetch:', !!sessionCheck?.session);
 
                             // Fetch user profile including avatar and name
-                            const { data: profile, error: profileError } = await supabase
-                                .from('profiles')
-                                .select('avatar_url, name')
-                                .eq('id', session.user.id)
-                                .maybeSingle();
+                            const { profile, error: profileError } = await fetchProfileViaAPI();
 
                             console.log('[AuthContext] Profile fetch result:', { profile, error: profileError?.message });
 
@@ -231,11 +242,7 @@ export function AuthProvider({ children }) {
 
                         // Fetch profile data to get avatar and displayName
                         try {
-                            const { data: profile } = await supabase
-                                .from('profiles')
-                                .select('avatar_url, name')
-                                .eq('id', data.session.user.id)
-                                .maybeSingle();
+                            const { profile } = await fetchProfileViaAPI();
 
                             if (profile) {
                                 console.log('[AuthContext] Late recovery: fetched profile data');
@@ -266,11 +273,7 @@ export function AuthProvider({ children }) {
 
                                     // Fetch profile data
                                     try {
-                                        const { data: profile } = await supabase
-                                            .from('profiles')
-                                            .select('avatar_url, name')
-                                            .eq('id', tokens.user.id)
-                                            .maybeSingle();
+                                        const { profile } = await fetchProfileViaAPI();
 
                                         if (profile) {
                                             // Before setting user, ensure token AAL is aal2
@@ -332,11 +335,7 @@ export function AuthProvider({ children }) {
                     if (session?.user) {
                         try {
                             // Fetch user profile including avatar and name
-                            const { data: profile, error: profileError } = await supabase
-                                .from('profiles')
-                                .select('*')
-                                .eq('id', session.user.id)
-                                .maybeSingle();
+                            const { profile, error: profileError } = await fetchProfileViaAPI();
 
                             if (!isMounted) return;
 
@@ -377,11 +376,7 @@ export function AuthProvider({ children }) {
 
                                         // Fetch profile data if user doesn't have it yet
                                         try {
-                                            const { data: profile } = await supabase
-                                                .from('profiles')
-                                                .select('avatar_url, name')
-                                                .eq('id', tokens.user.id)
-                                                .maybeSingle();
+                                            const { profile } = await fetchProfileViaAPI();
 
                                             if (profile) {
                                                 console.log('[AuthContext] Updating user with profile data');
@@ -421,11 +416,7 @@ export function AuthProvider({ children }) {
 
                                         // Fetch profile data to get avatar and displayName
                                         try {
-                                            const { data: profile } = await supabase
-                                                .from('profiles')
-                                                .select('avatar_url, name')
-                                                .eq('id', tokens.user.id)
-                                                .maybeSingle();
+                                            const { profile } = await fetchProfileViaAPI();
 
                                             console.log('[AuthContext] Fetched profile for restored user:', { hasAvatar: !!profile?.avatar_url, hasName: !!profile?.name });
                                             try {
@@ -542,11 +533,7 @@ export function AuthProvider({ children }) {
         try {
             console.log('Fetching latest profile for user:', user.id);
 
-            const { data: profile, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', user.id)
-                .maybeSingle();
+            const { profile, error } = await fetchProfileViaAPI();
 
             console.log('Profile fetch result:', { profile, error: error?.message });
 
@@ -622,34 +609,18 @@ export function AuthProvider({ children }) {
                         // Fetch fresh profile data asynchronously and update
                         (async () => {
                             try {
-                                if (!supabase) {
+                                console.log('[AuthContext] Emergency recovery: fetching profile data via API');
+
+                                // Use our API endpoint instead of Supabase SDK (which times out)
+                                const { profile, error } = await fetchProfileViaAPI();
+
+                                if (error) {
+                                    console.warn('[AuthContext] Emergency recovery: profile fetch failed:', error);
                                     return;
                                 }
 
-                                console.log('[AuthContext] Emergency recovery: fetching profile data');
-
-                                // Add timeout to profile fetch to prevent hanging
-                                const profilePromise = supabase
-                                    .from('profiles')
-                                    .select('avatar_url, name')
-                                    .eq('id', tokens.user.id)
-                                    .maybeSingle();
-
-                                const profileTimeout = new Promise((resolve) =>
-                                    setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
-                                );
-
-                                const result = await Promise.race([profilePromise, profileTimeout]);
-
-                                if (result?.timedOut) {
-                                    console.warn('[AuthContext] Emergency recovery: profile fetch timed out');
-                                    return;
-                                }
-
-                                const { data: profile, error } = result;
-
-                                if (!error && profile) {
-                                    console.log('[AuthContext] Emergency recovery: fetched profile data');
+                                if (profile) {
+                                    console.log('[AuthContext] Emergency recovery: fetched profile data via API');
                                     const updatedUser = {
                                         ...tokens.user,
                                         avatar_url: profile.avatar_url,
@@ -730,25 +701,7 @@ export function AuthProvider({ children }) {
             try {
                 console.log('[AuthContext] Fetching missing profile data for user:', user.id);
 
-                // Add timeout to prevent hanging
-                const profilePromise = supabase
-                    .from('profiles')
-                    .select('avatar_url, name')
-                    .eq('id', user.id)
-                    .maybeSingle();
-
-                const profileTimeout = new Promise((resolve) =>
-                    setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
-                );
-
-                const result = await Promise.race([profilePromise, profileTimeout]);
-
-                if (result?.timedOut) {
-                    console.warn('[AuthContext] Missing profile fetch timed out');
-                    return;
-                }
-
-                const { data: profile } = result;
+                const { profile } = await fetchProfileViaAPI();
 
                 if (profile && (profile.avatar_url || profile.name)) {
                     console.log('[AuthContext] Got missing profile:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });

@@ -512,23 +512,24 @@ export default function Login() {
                 try {
                     console.log('Fetching profile before redirect...');
 
-                    // Add short timeout - dashboard will fetch profile anyway if this fails
-                    const profilePromise = supabase
-                        .from('profiles')
-                        .select('avatar_url, name')
-                        .eq('id', session.user.id)
-                        .maybeSingle();
+                    // Use our API endpoint instead of Supabase SDK to avoid timeout issues
+                    const profilePromise = fetch('/api/profile', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${session.access_token}`
+                        }
+                    }).then(res => res.json());
 
                     const profileTimeout = new Promise((resolve) =>
-                        setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
+                        setTimeout(() => resolve({ timedOut: true }), 3000)
                     );
 
                     const profileResult = await Promise.race([profilePromise, profileTimeout]);
 
                     if (profileResult?.timedOut) {
                         console.warn('Profile fetch timed out, continuing without profile data');
-                    } else if (profileResult?.data) {
-                        const profile = profileResult.data;
+                    } else if (profileResult?.success && profileResult?.profile) {
+                        const profile = profileResult.profile;
                         console.log('Profile fetched:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
                         userWithProfile = {
                             ...session.user,
