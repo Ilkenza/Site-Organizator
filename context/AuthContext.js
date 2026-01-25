@@ -146,18 +146,31 @@ export function AuthProvider({ children }) {
                     // Must check for truthy values, not just !== undefined, because null means data wasn't fetched
                     const hasProfileData = !!session.user.avatarUrl || !!session.user.displayName;
 
+                    console.log('[AuthContext] Profile data check:', {
+                        hasProfileData,
+                        avatarUrl: session.user.avatarUrl,
+                        displayName: session.user.displayName,
+                        userId: session.user.id
+                    });
+
                     if (hasProfileData) {
                         console.log('[AuthContext] User already has profile data from localStorage, skipping fetch');
                         setUser(session.user);
                     } else {
                         console.log('[AuthContext] Fetching profile data for user:', session.user.id);
                         try {
+                            // Check session first
+                            const { data: sessionCheck } = await supabase.auth.getSession();
+                            console.log('[AuthContext] Session check before profile fetch:', !!sessionCheck?.session);
+
                             // Fetch user profile including avatar and name
                             const { data: profile, error: profileError } = await supabase
                                 .from('profiles')
                                 .select('avatar_url, name')
                                 .eq('id', session.user.id)
                                 .maybeSingle();
+
+                            console.log('[AuthContext] Profile fetch result:', { profile, error: profileError?.message });
 
                             if (!isMounted) return;
 
@@ -166,13 +179,14 @@ export function AuthProvider({ children }) {
                             }
 
                             if (profile) {
-                                console.log('[AuthContext] Profile fetched successfully');
+                                console.log('[AuthContext] Profile fetched successfully, setting user with avatar/name');
                                 setUser({
                                     ...session.user,
                                     avatarUrl: profile.avatar_url || null,
                                     displayName: profile.name || null,
                                 });
                             } else {
+                                console.log('[AuthContext] No profile found, setting user without avatar/name');
                                 setUser(session.user);
                             }
                         } catch (err) {
