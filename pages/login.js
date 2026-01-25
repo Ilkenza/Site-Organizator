@@ -137,6 +137,15 @@ export default function Login() {
                                 // Try to detect MFA factor id so Verify form works immediately
                                 (async () => {
                                     try {
+                                        // First, check if we have the factorId saved in localStorage from the original login
+                                        const savedFactorId = localStorage.getItem('mfa_pending_factor');
+                                        if (savedFactorId) {
+                                            console.log('Restored MFA flow: found saved factorId in localStorage:', savedFactorId);
+                                            setFactorId(savedFactorId);
+                                            return; // No need to query listFactors
+                                        }
+
+                                        // Fallback: try to query listFactors (may fail with AAL1 token)
                                         // Ensure supabase client uses the stored AAL1 token so listFactors can be queried
                                         try {
                                             await supabase.auth.setSession({ access_token: parsed.access_token, refresh_token: parsed.refresh_token || '' });
@@ -245,6 +254,8 @@ export default function Login() {
         setMfaRequired(false);
         setMfaWaiting(false);
         setFactorId(null);
+        // Clear any pending MFA factor from localStorage when starting fresh login
+        try { localStorage.removeItem('mfa_pending_factor'); } catch (e) { }
 
         if (!supabase) {
             setError('Login is temporarily unavailable.');
@@ -306,6 +317,11 @@ export default function Login() {
                 }
 
                 setFactorId(totpFactor.id);
+                // Persist factorId so page refresh can restore MFA flow
+                try {
+                    localStorage.setItem('mfa_pending_factor', totpFactor.id);
+                    console.log('Saved MFA factor to localStorage:', totpFactor.id);
+                } catch (e) { console.warn('Failed to save MFA factor to localStorage:', e); }
                 setMfaRequired(true);
                 setSigning(false);
                 return;
@@ -486,6 +502,7 @@ export default function Login() {
 
                 // Clear MFA UI state so the form is not stuck
                 try { window.__mfaPending = false; } catch (e) { }
+                try { localStorage.removeItem('mfa_pending_factor'); } catch (e) { }
                 setMfaRequired(false);
                 setFactorId(null);
                 setAal1Token(null);
@@ -656,10 +673,12 @@ export default function Login() {
                                     type="button"
                                     onClick={() => {
                                         try { window.__mfaPending = false; } catch (e) { }
+                                        try { localStorage.removeItem('mfa_pending_factor'); } catch (e) { }
                                         setMfaRequired(false);
                                         setMfaCode('');
                                         setError('');
                                         setMfaWaiting(false);
+                                        setFactorId(null);
                                         setAal1Token(null);
                                     }}
                                     className="w-full py-2 text-app-text-secondary hover:text-app-text-primary text-sm transition-colors"
