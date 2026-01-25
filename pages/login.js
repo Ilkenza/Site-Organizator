@@ -381,6 +381,11 @@ export default function Login() {
                                 refresh_token: tokens.refresh_token
                             });
                             console.log('AAL1 session set successfully');
+                            // Give SDK a moment to process the session
+                            await new Promise(r => setTimeout(r, 200));
+                            // Verify session is active
+                            const { data: sessionCheck } = await supabase.auth.getSession();
+                            console.log('Session verified after setSession:', !!sessionCheck?.session);
                         }
                     }
                 } catch (setSessionErr) {
@@ -389,86 +394,58 @@ export default function Login() {
                 }
             }
 
-            // Step 1: Create challenge with timeout
-            console.log('Creating challenge for factor:', factorId);
-            let challengeData, challengeError;
+            // Use challengeAndVerify which combines both steps in one call
+            console.log('Starting challengeAndVerify for factor:', factorId);
+            let verifyData = null;
+            let verifyError = null;
+
             try {
-                const challengePromise = supabase.auth.mfa.challenge({ factorId });
-                console.log('Challenge promise created');
-                const challengeTimeout = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Challenge timed out')), 45000)
+                const verifyPromise = supabase.auth.mfa.challengeAndVerify({
+                    factorId: factorId,
+                    code: mfaCode
+                });
+                console.log('challengeAndVerify promise created');
+
+                const verifyTimeout = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('MFA verification timed out')), 45000)
                 );
-                const result = await Promise.race([challengePromise, challengeTimeout]);
-                challengeData = result.data;
-                challengeError = result.error;
+
+                const result = await Promise.race([verifyPromise, verifyTimeout]);
+                console.log('challengeAndVerify result:', { hasData: !!result?.data, error: result?.error?.message });
+
+                if (result.error) {
+                    verifyError = result.error;
+                } else {
+                    verifyData = result.data;
+                }
             } catch (timeoutErr) {
-                console.error('Challenge error:', timeoutErr?.message || timeoutErr);
+                console.error('MFA verification error:', timeoutErr?.message || timeoutErr);
                 clearTimeout(hardTimeout);
                 setLoading(false);
                 if (timeoutErr?.message?.includes('timed out')) {
                     setError('Connection timed out. Please try again.');
+                } else if (timeoutErr?.message?.includes('Invalid') || timeoutErr?.message?.includes('invalid')) {
+                    setError('Invalid code. Please try again.');
                 } else {
-                    setError(timeoutErr?.message || 'Challenge failed. Please try again.');
+                    setError(timeoutErr?.message || 'Verification failed. Please try again.');
                 }
                 return;
             }
 
-            if (challengeError) {
+            if (verifyError) {
                 clearTimeout(hardTimeout);
-                throw challengeError;
-            }
-
-            console.log('Challenge created:', challengeData?.id);
-
-            // Step 2: Verify code - fire SDK call but use fetch interceptor result
-            window.__debugSupabaseVerify = null; // Reset before verify
-
-            // Start SDK verify (don't await)
-            supabase.auth.mfa.verify({
-                factorId: factorId,
-                challengeId: challengeData.id,
-                code: mfaCode
-            }).then(result => {
-                console.log('SDK verify completed:', result);
-            }).catch(err => {
-                console.log('SDK verify error (ignored, using fetch interceptor):', err);
-            });
-
-            // Poll for fetch interceptor result (much faster than waiting for SDK)
-            let verifyData = null;
-            for (let i = 0; i < 60; i++) { // 30 seconds max
-                await new Promise(r => setTimeout(r, 500));
-
-                const debugResponse = window.__debugSupabaseVerify;
-                if (debugResponse && debugResponse.status === 200 && debugResponse.text) {
-                    try {
-                        const parsed = JSON.parse(debugResponse.text);
-                        if (parsed.access_token) {
-                            console.log('Got token from fetch interceptor!');
-                            verifyData = { session: parsed, user: parsed.user };                            // Clear the safety timeout now that we have a token so it doesn't cancel our redirect
-                            try {
-                                if (safetyTimerRef && safetyTimerRef.current) {
-                                    clearTimeout(safetyTimerRef.current);
-                                    safetyTimerRef.current = null;
-                                    console.log('[Login] Cleared safety timeout after receiving token');
-                                }
-                            } catch (clearErr) {
-                                console.warn('[Login] Failed to clear safety timeout:', clearErr);
-                            } break;
-                        }
-                    } catch (e) {
-                        console.error('Parse error:', e);
-                    }
+                if (verifyError.message?.includes('Invalid') || verifyError.message?.includes('invalid')) {
+                    setError('Invalid code. Please try again.');
+                } else {
+                    setError(verifyError.message || 'Verification failed');
                 }
+                setLoading(false);
+                return;
             }
 
-            if (!verifyData) {
-                throw new Error('Verification failed - no response received');
-            }
+            console.log('MFA verification successful:', { hasSession: !!verifyData?.session });
 
-            console.log('Verify successful:', { hasSession: !!verifyData?.session });
-
-            // Step 3: Store tokens and redirect
+            // Get session from the verify result
             const session = verifyData?.session;
             console.log('Session check:', {
                 hasAccessToken: !!session?.access_token,
