@@ -452,7 +452,27 @@ export default function Login() {
                     if (result?.error) {
                         verifyError = result.error;
                     } else {
-                        verifyData = result?.data;
+                        // SDK may return session in different formats
+                        // Format 1: result.data.session (standard)
+                        // Format 2: result.data directly contains tokens (observed behavior)
+                        if (result?.data?.session) {
+                            verifyData = result.data;
+                        } else if (result?.data?.access_token && result?.data?.refresh_token && result?.data?.user) {
+                            // Session data is directly in result.data
+                            verifyData = { session: result.data };
+                        } else {
+                            // Try to recover from intercepted response
+                            const debugData = window.__debugSupabaseVerify;
+                            if (debugData?.status === 200 && debugData?.text) {
+                                try {
+                                    const parsed = JSON.parse(debugData.text);
+                                    if (parsed?.access_token && parsed?.refresh_token && parsed?.user) {
+                                        console.log('Recovered session from intercepted fetch response!');
+                                        verifyData = { session: parsed };
+                                    }
+                                } catch (e) { /* ignore */ }
+                            }
+                        }
                     }
                 }
             } catch (sdkErr) {
