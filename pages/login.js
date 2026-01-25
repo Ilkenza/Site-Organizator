@@ -353,7 +353,7 @@ export default function Login() {
         }, 60000);
 
         try {
-            console.log('MFA verify starting, factorId:', factorId, 'supabase:', !!supabase);
+            console.log('MFA verify starting, factorId:', factorId, 'supabase:', !!supabase, 'aal1Token:', !!aal1Token);
 
             // Validate inputs
             if (!supabase) {
@@ -364,6 +364,29 @@ export default function Login() {
             }
             if (!mfaCode || mfaCode.length !== 6) {
                 throw new Error('Invalid MFA code');
+            }
+
+            // Ensure the Supabase client has the AAL1 session set before making MFA calls
+            // This is crucial - without this, the challenge call may hang or fail
+            if (aal1Token) {
+                try {
+                    const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+                    const storedTokens = localStorage.getItem(storageKey);
+                    if (storedTokens) {
+                        const tokens = JSON.parse(storedTokens);
+                        if (tokens?.refresh_token) {
+                            console.log('Setting AAL1 session before MFA challenge...');
+                            await supabase.auth.setSession({
+                                access_token: aal1Token,
+                                refresh_token: tokens.refresh_token
+                            });
+                            console.log('AAL1 session set successfully');
+                        }
+                    }
+                } catch (setSessionErr) {
+                    console.warn('Failed to set AAL1 session before challenge:', setSessionErr);
+                    // Continue anyway - SDK may already have the session
+                }
             }
 
             // Step 1: Create challenge with timeout
