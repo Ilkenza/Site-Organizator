@@ -1084,15 +1084,26 @@ export default function SettingsPanel() {
                                     </p>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => setMfaModalOpen(true)}
-                                className={`px-4 py-2 rounded-lg transition-colors font-medium text-sm ${mfaEnabled
-                                    ? 'bg-app-bg-secondary border border-app-border text-app-text-primary hover:bg-app-bg-light'
-                                    : 'bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF]'
-                                    }`}
-                            >
-                                {mfaEnabled ? 'Manage' : mfaFactorId ? 'Continue Setup' : 'Enable'}
-                            </button>
+                            <div className="flex gap-2">
+                                {mfaEnabled && (
+                                    <button
+                                        onClick={handleUnenrollMfa}
+                                        disabled={mfaLoading}
+                                        className="px-4 py-2 rounded-lg transition-colors font-medium text-sm bg-red-500/20 border border-red-500/50 text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                                    >
+                                        {mfaLoading ? 'Disabling...' : 'Disable'}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setMfaModalOpen(true)}
+                                    className={`px-4 py-2 rounded-lg transition-colors font-medium text-sm ${mfaEnabled
+                                        ? 'bg-app-bg-secondary border border-app-border text-app-text-primary hover:bg-app-bg-light'
+                                        : 'bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF]'
+                                        }`}
+                                >
+                                    {mfaEnabled ? 'Manage' : mfaFactorId ? 'Continue Setup' : 'Enable'}
+                                </button>
+                            </div>
                         </div>
 
                         {/* Sign Out All Devices */}
