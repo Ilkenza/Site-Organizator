@@ -347,6 +347,11 @@ export default function Login() {
 
             // Step 3: Store tokens and redirect
             const session = verifyData?.session;
+            console.log('Session check:', {
+                hasAccessToken: !!session?.access_token,
+                hasRefreshToken: !!session?.refresh_token,
+                hasUser: !!session?.user
+            });
             if (session?.access_token && session?.refresh_token && session?.user) {
                 clearTimeout(hardTimeout);
 
@@ -384,8 +389,15 @@ export default function Login() {
                     user: userWithProfile
                 }));
 
-                console.log('Tokens stored, redirecting...');
-                window.location.replace('/dashboard');
+                console.log('Tokens stored, redirecting to /dashboard...');
+                console.log('About to call window.location.replace');
+                try {
+                    window.location.replace('/dashboard');
+                } catch (navErr) {
+                    console.error('Navigation error:', navErr);
+                    window.location.href = '/dashboard';
+                }
+                console.log('window.location.replace called');
                 return;
             }
 
