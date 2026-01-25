@@ -56,6 +56,7 @@ export default function Login() {
     const [mfaCode, setMfaCode] = useState('');
     const [factorId, setFactorId] = useState(null);
     const [aal1Token, setAal1Token] = useState(null); // Store AAL1 token from sign-in for MFA verify
+    const [isFreshLogin, setIsFreshLogin] = useState(false); // true if user just signed in (vs page refresh restore)
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -310,11 +311,12 @@ export default function Login() {
             if (totpFactor) {
                 console.log('MFA required, showing MFA form');
 
-                // Save AAL1 token
+                // Save AAL1 token and mark as fresh login
                 const session = data?.session;
                 if (session?.access_token) {
                     setAal1Token(session.access_token);
                 }
+                setIsFreshLogin(true); // Mark that SDK already has session from signInWithPassword
 
                 setFactorId(totpFactor.id);
                 // Persist factorId so page refresh can restore MFA flow
@@ -366,16 +368,16 @@ export default function Login() {
                 throw new Error('Invalid MFA code');
             }
 
-            // Ensure the Supabase client has the AAL1 session set before making MFA calls
-            // This is crucial - without this, the challenge call may hang or fail
-            if (aal1Token) {
+            // Only call setSession if we're restoring from a page refresh (not a fresh login)
+            // After signInWithPassword, the SDK already has the session internally
+            if (aal1Token && !isFreshLogin) {
                 try {
                     const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
                     const storedTokens = localStorage.getItem(storageKey);
                     if (storedTokens) {
                         const tokens = JSON.parse(storedTokens);
                         if (tokens?.refresh_token) {
-                            console.log('Setting AAL1 session before MFA challenge...');
+                            console.log('Restoring AAL1 session from page refresh...');
                             // Wrap setSession in a timeout to prevent hanging
                             const setSessionPromise = supabase.auth.setSession({
                                 access_token: aal1Token,
@@ -386,15 +388,17 @@ export default function Login() {
                             );
                             try {
                                 await Promise.race([setSessionPromise, setSessionTimeout]);
-                                console.log('AAL1 session set successfully');
+                                console.log('AAL1 session restored successfully');
                             } catch (timeoutErr) {
                                 console.warn('setSession timed out, continuing anyway:', timeoutErr.message);
                             }
                         }
                     }
                 } catch (e) {
-                    console.warn('Error setting AAL1 session:', e);
+                    console.warn('Error restoring AAL1 session:', e);
                 }
+            } else if (isFreshLogin) {
+                console.log('Fresh login - SDK already has session, skipping setSession');
             }
 
             // Use challengeAndVerify which combines both steps in one call
@@ -683,6 +687,7 @@ export default function Login() {
                                         setMfaWaiting(false);
                                         setFactorId(null);
                                         setAal1Token(null);
+                                        setIsFreshLogin(false);
                                     }}
                                     className="w-full py-2 text-app-text-secondary hover:text-app-text-primary text-sm transition-colors"
                                 >
