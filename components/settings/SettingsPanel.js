@@ -156,7 +156,19 @@ export default function SettingsPanel() {
             if (!supabase) return;
 
             try {
-                const { data, error } = await supabase.auth.mfa.listFactors();
+                // Add timeout to prevent SDK hang
+                const factorsPromise = supabase.auth.mfa.listFactors();
+                const factorsTimeout = new Promise((resolve) => 
+                    setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
+                );
+                const result = await Promise.race([factorsPromise, factorsTimeout]);
+                
+                if (result?.timedOut) {
+                    console.warn('listFactors timed out in SettingsPanel');
+                    return;
+                }
+                
+                const { data, error } = result;
                 if (error) {
                     console.warn('Error checking MFA status:', error.message);
                     return;

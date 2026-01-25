@@ -22,16 +22,25 @@ export default function Header({ onAddClick, onMenuClick }) {
                             // Immediately set basic user
                             setLocalUser(tokens.user);
 
-                            // Fetch profile data to get avatar and displayName
+                            // Fetch profile data to get avatar and displayName (with timeout)
                             if (supabase) {
                                 try {
-                                    const { data: profile } = await supabase
+                                    const profilePromise = supabase
                                         .from('profiles')
                                         .select('avatar_url, name')
                                         .eq('id', tokens.user.id)
                                         .maybeSingle();
-
-                                    if (profile) {
+                                    
+                                    const profileTimeout = new Promise((resolve) =>
+                                        setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
+                                    );
+                                    
+                                    const result = await Promise.race([profilePromise, profileTimeout]);
+                                    
+                                    if (result?.timedOut) {
+                                        console.warn('[Header] Profile fetch timed out');
+                                    } else if (result?.data) {
+                                        const profile = result.data;
                                         console.log('[Header] Fetched profile for localStorage user');
                                         setLocalUser({
                                             ...tokens.user,

@@ -512,7 +512,7 @@ export default function Login() {
                 try {
                     console.log('Fetching profile before redirect...');
 
-                    // Add timeout to profile fetch to prevent hanging
+                    // Add short timeout - dashboard will fetch profile anyway if this fails
                     const profilePromise = supabase
                         .from('profiles')
                         .select('avatar_url, name')
@@ -520,7 +520,7 @@ export default function Login() {
                         .maybeSingle();
 
                     const profileTimeout = new Promise((resolve) =>
-                        setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
+                        setTimeout(() => resolve({ data: null, timedOut: true }), 1500)
                     );
 
                     const profileResult = await Promise.race([profilePromise, profileTimeout]);
@@ -550,25 +550,9 @@ export default function Login() {
                     user: userWithProfile
                 }));
 
-                // Try to set session in the Supabase client so SDK processes it immediately
-                // Use timeout to prevent hanging (SDK has been problematic)
-                try {
-                    const setSessionPromise = supabase.auth.setSession({
-                        access_token: session.access_token,
-                        refresh_token: session.refresh_token
-                    });
-                    const setSessionTimeout = new Promise((resolve) =>
-                        setTimeout(() => resolve({ timedOut: true }), 3000)
-                    );
-                    const setResult = await Promise.race([setSessionPromise, setSessionTimeout]);
-                    if (setResult?.timedOut) {
-                        console.warn('setSession timed out on login page, continuing anyway');
-                    } else {
-                        console.log('setSession succeeded on login page');
-                    }
-                } catch (setErr) {
-                    console.warn('setSession failed on login page:', setErr);
-                }
+                // Skip setSession - it hangs on this SDK version. Tokens are in localStorage,
+                // and dashboard/AuthContext will handle session restoration.
+                console.log('Skipping setSession (SDK hangs), tokens stored in localStorage');
 
                 // Clear MFA UI state so the form is not stuck
                 try { window.__mfaPending = false; } catch (e) { }
