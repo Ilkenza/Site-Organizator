@@ -133,9 +133,36 @@ export default async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     try {
-      const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
-      console.log('Deleting site:', id, 'URL:', url);
+      console.log('Deleting site:', id);
       console.log('Using key type:', SUPABASE_SERVICE_KEY ? 'SERVICE_KEY' : 'ANON_KEY');
+
+      // First, delete related site_categories
+      try {
+        const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
+        await fetch(delCatUrl, {
+          method: 'DELETE',
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+        });
+        console.log('Deleted site_categories for site:', id);
+      } catch (err) {
+        console.warn('Failed to delete site_categories:', err);
+      }
+
+      // Then, delete related site_tags
+      try {
+        const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
+        await fetch(delTagUrl, {
+          method: 'DELETE',
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+        });
+        console.log('Deleted site_tags for site:', id);
+      } catch (err) {
+        console.warn('Failed to delete site_tags:', err);
+      }
+
+      // Now delete the site itself
+      const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
+      console.log('Deleting site from database, URL:', url);
       const r = await fetch(url, {
         method: 'DELETE',
         headers: {

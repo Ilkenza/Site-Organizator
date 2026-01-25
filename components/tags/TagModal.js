@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
+import { useAuth } from '../../context/AuthContext';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 
 export default function TagModal({ isOpen, onClose, tag = null }) {
     const { addTag, updateTag } = useDashboard();
+    const { user } = useAuth();
     const isEditing = !!tag;
 
     const [name, setName] = useState('');
@@ -29,7 +31,7 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
                 throw new Error('Tag name is required');
             }
 
-            const payload = { name: name.trim() };
+            const payload = { name: name.trim(), user_id: user?.id };
 
             if (isEditing) {
                 await updateTag(tag.id, payload);
