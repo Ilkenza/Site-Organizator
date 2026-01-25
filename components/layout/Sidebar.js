@@ -35,7 +35,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
     // Count favorite sites
     const favoriteCount = sites.filter(s => s.is_favorite).length;
 
-    // Calculate filtered site count for display
+    // Calculate filtered site count for display (all sites)
     const getFilteredSiteCount = () => {
         if (!selectedCategory && !selectedTag) return null;
         let filtered = sites;
@@ -54,6 +54,24 @@ export default function Sidebar({ isOpen = false, onClose }) {
         return filtered.length;
     };
     const filteredSiteCount = getFilteredSiteCount();
+
+    // Calculate filtered favorite site count for display
+    const getFilteredFavoriteCount = () => {
+        if (!selectedCategory && !selectedTag) return null;
+        let filtered = sites.filter(s => s.is_favorite);
+        if (selectedCategory) {
+            filtered = filtered.filter(s =>
+                s.categories_array?.some(cat => cat?.id === selectedCategory)
+            );
+        }
+        if (selectedTag) {
+            filtered = filtered.filter(s =>
+                s.tags_array?.some(tag => tag?.id === selectedTag)
+            );
+        }
+        return filtered.length;
+    };
+    const filteredFavoriteCount = getFilteredFavoriteCount();
 
     return (
         <>
@@ -105,7 +123,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                             { id: 'sites', label: 'Sites', icon: 'sites', count: stats.sites, filteredCount: filteredSiteCount },
                             { id: 'categories', label: 'Categories', icon: 'categories', count: stats.categories },
                             { id: 'tags', label: 'Tags', icon: 'tags', count: stats.tags },
-                            { id: 'favorites', label: 'Favorites', icon: 'favorites', count: favoriteCount },
+                            { id: 'favorites', label: 'Favorites', icon: 'favorites', count: favoriteCount, filteredCount: filteredFavoriteCount },
                             { id: 'settings', label: 'Settings', icon: 'settings', count: null }
                         ].map(tab => {
                             const iconMap = {
@@ -157,7 +175,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     </span>
                                     {tab.count !== null && (
                                         <span className="flex items-center gap-1">
-                                            {tab.filteredCount !== null && tab.filteredCount !== undefined && tab.id === 'sites' && (selectedCategory || selectedTag) ? (
+                                            {tab.filteredCount !== null && tab.filteredCount !== undefined && (tab.id === 'sites' || tab.id === 'favorites') && (selectedCategory || selectedTag) ? (
                                                 <>
                                                     <span className={`text-xs px-1.5 py-0.5 rounded-full bg-app-accent text-app-bg-primary`}>
                                                         {tab.filteredCount}

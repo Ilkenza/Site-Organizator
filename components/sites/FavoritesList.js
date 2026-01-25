@@ -1,7 +1,13 @@
+import { useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import SiteCard from './SiteCard';
+import Pagination from '../ui/Pagination';
+
+const ITEMS_PER_PAGE = 30;
 
 export default function FavoritesList({ onEdit, onDelete }) {
+    const router = useRouter();
     const {
         sites,
         loading,
@@ -11,6 +17,9 @@ export default function FavoritesList({ onEdit, onDelete }) {
         selectedCategory,
         selectedTag
     } = useDashboard();
+
+    // Get current page from URL or default to 1
+    const currentPage = parseInt(router.query.page) || 1;
 
     // Filter only favorite sites
     const favoriteSites = sites.filter(site => site.is_favorite);
@@ -64,6 +73,35 @@ export default function FavoritesList({ onEdit, onDelete }) {
         return aVal < bVal ? 1 : -1;
     });
 
+    // Calculate pagination
+    const totalItems = filteredSites.length;
+    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedSites = filteredSites.slice(startIndex, endIndex);
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        if (currentPage > 1 && (searchQuery || selectedCategory || selectedTag)) {
+            router.push({
+                pathname: router.pathname,
+                query: { ...router.query, page: 1 }
+            }, undefined, { shallow: true });
+        }
+    }, [searchQuery, selectedCategory, selectedTag]);
+
+    // Handle page change
+    const handlePageChange = (newPage) => {
+        if (newPage >= 1 && newPage <= totalPages) {
+            router.push({
+                pathname: router.pathname,
+                query: { ...router.query, page: newPage }
+            }, undefined, { shallow: true });
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+
     if (loading) {
         return (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-6">
@@ -110,15 +148,31 @@ export default function FavoritesList({ onEdit, onDelete }) {
     }
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-6">
-            {filteredSites.map((site, index) => (
-                <SiteCard
-                    key={site.id || `site-${index}`}
-                    site={site}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                />
-            ))}
+        <div>
+            {/* Results count */}
+            {totalItems > 0 && (
+                <div className="px-3 sm:px-6 pt-3 sm:pt-4 text-sm text-gray-400">
+                    Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} favorite sites
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-6">
+                {paginatedSites.map((site, index) => (
+                    <SiteCard
+                        key={site.id || `site-${index}`}
+                        site={site}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                    />
+                ))}
+            </div>
+
+            {/* Pagination */}
+            <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+            />
         </div>
     );
 }
