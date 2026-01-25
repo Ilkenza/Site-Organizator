@@ -185,6 +185,12 @@ export function AuthProvider({ children }) {
                 }
             } catch (err) {
                 if (!isMounted) return;
+                // AbortError is a transient error from SDK's internal abort signals - don't clear user
+                if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+                    console.warn('[AuthContext] Session check aborted (transient error, keeping user):', err?.message || err);
+                    // Don't clear user on AbortError - it's usually a race condition
+                    return;
+                }
                 console.error('Unexpected error during session check:', err);
                 setUser(null);
             } finally {
