@@ -230,9 +230,32 @@ export default function Dashboard() {
   useEffect(() => {
     if (needsMfa) {
       console.warn('[Dashboard] AuthContext reports needsMfa=true — redirecting to /login');
-      window.location.href = '/login';
+      window.location.replace('/login');
     }
   }, [needsMfa]);
+
+  // Immediate synchronous AAL check for direct /dashboard navigations.
+  // If a valid token exists in localStorage and its AAL claim is not 'aal2', redirect immediately.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+      const stored = localStorage.getItem(storageKey);
+      if (!stored) return;
+      const tokens = JSON.parse(stored);
+      if (!tokens?.access_token) return;
+
+      const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
+      const isExpired = payload.exp * 1000 < Date.now();
+      if (!isExpired && payload.aal && payload.aal !== 'aal2') {
+        console.warn('[Dashboard] Immediate localStorage AAL check: token AAL != aal2 — redirecting to /login');
+        window.location.replace('/login');
+      }
+    } catch (e) {
+      console.warn('[Dashboard] Immediate AAL check failed:', e);
+    }
+  }, []);
 
   // IMMEDIATE check on mount - check localStorage synchronously
   useEffect(() => {
@@ -445,7 +468,7 @@ export default function Dashboard() {
           if (isMounted && !authChecked) {
             checkAuth();
           }
-        }, 0);
+        }, 200);
       }
     };
 
