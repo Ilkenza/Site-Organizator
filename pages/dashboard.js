@@ -445,7 +445,7 @@ export default function Dashboard() {
           if (isMounted && !authChecked) {
             checkAuth();
           }
-        }, 200);
+        }, 0);
       }
     };
 
