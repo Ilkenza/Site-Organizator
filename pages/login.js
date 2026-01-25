@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Head from 'next/head';
 
@@ -85,14 +85,21 @@ export default function Login() {
     }, []);
 
     // Safety guard: if a network call hangs, clear loading after a timeout
+    const safetyTimerRef = useRef(null);
     useEffect(() => {
         if (!loading && !signing) return;
-        const t = setTimeout(() => {
+        safetyTimerRef.current = setTimeout(() => {
             console.warn('Safety timeout: clearing loading states');
             setLoading(false);
             setSigning(false);
+            safetyTimerRef.current = null;
         }, 35000); // 35s safety net
-        return () => clearTimeout(t);
+        return () => {
+            if (safetyTimerRef.current) {
+                clearTimeout(safetyTimerRef.current);
+                safetyTimerRef.current = null;
+            }
+        };
     }, [loading, signing]);
 
 
@@ -330,8 +337,16 @@ export default function Login() {
                         const parsed = JSON.parse(debugResponse.text);
                         if (parsed.access_token) {
                             console.log('Got token from fetch interceptor!');
-                            verifyData = { session: parsed, user: parsed.user };
-                            break;
+                            verifyData = { session: parsed, user: parsed.user };                            // Clear the safety timeout now that we have a token so it doesn't cancel our redirect
+                            try {
+                                if (safetyTimerRef && safetyTimerRef.current) {
+                                    clearTimeout(safetyTimerRef.current);
+                                    safetyTimerRef.current = null;
+                                    console.log('[Login] Cleared safety timeout after receiving token');
+                                }
+                            } catch (clearErr) {
+                                console.warn('[Login] Failed to clear safety timeout:', clearErr);
+                            } break;
                         }
                     } catch (e) {
                         console.error('Parse error:', e);
