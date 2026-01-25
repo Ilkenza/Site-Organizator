@@ -177,7 +177,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     </span>
                                     {tab.count !== null && (
                                         <span className="flex items-center gap-1">
-                                            {tab.filteredCount !== null && tab.filteredCount !== undefined && (tab.id === 'sites' || tab.id === 'favorites') && (selectedCategory || selectedTag) ? (
+                                            {tab.filteredCount !== null && tab.filteredCount !== undefined && (tab.id === 'sites' || tab.id === 'favorites') && (selectedCategory || selectedTag) && activeTab === tab.id ? (
                                                 <>
                                                     <span className={`text-xs px-1.5 py-0.5 rounded-full bg-app-accent text-app-bg-primary`}>
                                                         {tab.filteredCount}
