@@ -30,13 +30,13 @@ export default function Header({ onAddClick, onMenuClick }) {
                                         .select('avatar_url, name')
                                         .eq('id', tokens.user.id)
                                         .maybeSingle();
-                                    
+
                                     const profileTimeout = new Promise((resolve) =>
                                         setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
                                     );
-                                    
+
                                     const result = await Promise.race([profilePromise, profileTimeout]);
-                                    
+
                                     if (result?.timedOut) {
                                         console.warn('[Header] Profile fetch timed out');
                                     } else if (result?.data) {

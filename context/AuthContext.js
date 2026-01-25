@@ -612,25 +612,25 @@ export function AuthProvider({ children }) {
                                 }
 
                                 console.log('[AuthContext] Emergency recovery: fetching profile data');
-                                
+
                                 // Add timeout to profile fetch to prevent hanging
                                 const profilePromise = supabase
                                     .from('profiles')
                                     .select('avatar_url, name')
                                     .eq('id', tokens.user.id)
                                     .maybeSingle();
-                                
+
                                 const profileTimeout = new Promise((resolve) =>
                                     setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
                                 );
-                                
+
                                 const result = await Promise.race([profilePromise, profileTimeout]);
-                                
+
                                 if (result?.timedOut) {
                                     console.warn('[AuthContext] Emergency recovery: profile fetch timed out');
                                     return;
                                 }
-                                
+
                                 const { data: profile, error } = result;
 
                                 if (!error && profile) {
@@ -714,25 +714,25 @@ export function AuthProvider({ children }) {
         const fetchMissingProfile = async () => {
             try {
                 console.log('[AuthContext] Fetching missing profile data for user:', user.id);
-                
+
                 // Add timeout to prevent hanging
                 const profilePromise = supabase
                     .from('profiles')
                     .select('avatar_url, name')
                     .eq('id', user.id)
                     .maybeSingle();
-                
+
                 const profileTimeout = new Promise((resolve) =>
                     setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
                 );
-                
+
                 const result = await Promise.race([profilePromise, profileTimeout]);
-                
+
                 if (result?.timedOut) {
                     console.warn('[AuthContext] Missing profile fetch timed out');
                     return;
                 }
-                
+
                 const { data: profile } = result;
 
                 if (profile && (profile.avatar_url || profile.name)) {
