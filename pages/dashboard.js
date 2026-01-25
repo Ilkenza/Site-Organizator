@@ -240,7 +240,51 @@ export default function Dashboard() {
         if (tokens?.access_token && tokens?.user) {
           console.log('[Dashboard] Immediate token check: FOUND valid tokens');
           setHasTokens(true);
-          setAuthChecked(true); // Tokens exist, so we're "checked"
+
+          // Try to set session immediately and verify MFA/AAL. If MFA is required but AAL<2, redirect to login.
+          (async () => {
+            try {
+              console.log('[Dashboard] Attempting setSession (immediate) with localStorage tokens...');
+              await supabase.auth.setSession({
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token
+              });
+
+              try {
+                const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+                console.log('[Dashboard] AAL status after immediate setSession:', aalData);
+
+                if (aalData?.currentLevel !== 'aal2') {
+                  try {
+                    const { data: factors } = await supabase.auth.mfa.listFactors();
+                    const hasFactors = Array.isArray(factors) && factors.length > 0;
+                    console.log('[Dashboard] MFA factors found:', hasFactors);
+                    if (hasFactors) {
+                      console.warn('[Dashboard] Account requires MFA but current level is not AAL2 — redirecting to /login');
+                      if (isMounted) setAuthChecked(true);
+                      window.location.href = '/login';
+                      return;
+                    }
+                  } catch (fErr) {
+                    console.warn('[Dashboard] Error checking MFA factors:', fErr);
+                  }
+                }
+              } catch (aalErr) {
+                console.warn('[Dashboard] Error checking AAL after immediate setSession:', aalErr);
+              }
+
+              if (isMounted) setAuthChecked(true);
+            } catch (e) {
+              console.warn('[Dashboard] Immediate setSession failed:', e);
+              // If setSession fails, clear tokens and redirect to login for safety
+              try {
+                localStorage.removeItem(storageKey);
+              } catch (remErr) { console.warn('[Dashboard] Failed to clear tokens:', remErr); }
+              if (isMounted) setAuthChecked(true);
+              window.location.href = '/login';
+            }
+          })();
+
           return;
         }
       }
