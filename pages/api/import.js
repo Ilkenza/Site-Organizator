@@ -16,9 +16,16 @@ export default async function handler(req, res) {
   console.log('🚀 IMPORT API STARTED');
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return res.status(500).json({ success: false, error: 'Supabase config missing' });
-  const KEY = SUPABASE_SERVICE_KEY;
+  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Extract user's JWT token from Authorization header (sent by fetchAPI)
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(500).json({ success: false, error: 'Supabase config missing' });
+  if (!userToken) return res.status(401).json({ success: false, error: 'Authentication required for import' });
+
+  const KEY = userToken;
 
   const payload = req.body || {};
   const rows = Array.isArray(payload.rows) ? payload.rows : [];
@@ -54,14 +61,14 @@ export default async function handler(req, res) {
   // Preload existing categories and tags to reduce roundtrips
   async function preloadCategoriesAndTags() {
     try {
-      const catRes = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&user_id=eq.${userId}`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+      const catRes = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
       if (catRes.ok) {
         const cats = await catRes.json();
         (cats || []).forEach(c => catNameToObj.set((c.name || '').toLowerCase(), c));
       }
     } catch (e) { /* ignore */ }
     try {
-      const tagRes = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=id,name&user_id=eq.${userId}`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+      const tagRes = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=id,name&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
       if (tagRes.ok) {
         const tags = await tagRes.json();
         (tags || []).forEach(t => tagNameToObj.set((t.name || '').toLowerCase(), t));
@@ -84,7 +91,7 @@ export default async function handler(req, res) {
     try {
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories`;
       console.log(`    🔄 Creating category: ${name}`);
-      const r = await fetch(url, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ name: name, color: '#6CBBFB', user_id: userId }) });
+      const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ name: name, color: '#6CBBFB', user_id: userId }) });
       const txt = await r.text();
       if (r.ok) {
         const j = JSON.parse(txt);
@@ -97,7 +104,7 @@ export default async function handler(req, res) {
         console.log(`    ❌ Category POST failed: ${r.status} - ${txt}`);
       }
       // if not ok, try to lookup (maybe created concurrently)
-      const lookup = await fetchJson(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+      const lookup = await fetchJson(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
       if (lookup.ok && Array.isArray(lookup.json) && lookup.json.length > 0) {
         console.log(`    ✅ Category found after failed POST: ${lookup.json[0].name}`);
         catNameToObj.set(key, lookup.json[0]);
@@ -123,7 +130,7 @@ export default async function handler(req, res) {
     try {
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags`;
       console.log(`    🔄 Creating tag: ${name}`);
-      const r = await fetch(url, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ name: name, color: '#D98BAC', user_id: userId }) });
+      const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ name: name, color: '#D98BAC', user_id: userId }) });
       const txt = await r.text();
       if (r.ok) {
         const j = JSON.parse(txt);
@@ -135,7 +142,7 @@ export default async function handler(req, res) {
       } else {
         console.log(`    ❌ Tag POST failed: ${r.status} - ${txt}`);
       }
-      const lookup = await fetchJson(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+      const lookup = await fetchJson(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
       if (lookup.ok && Array.isArray(lookup.json) && lookup.json.length > 0) {
         console.log(`    ✅ Tag found after failed POST: ${lookup.json[0].name}`);
         tagNameToObj.set(key, lookup.json[0]);
@@ -157,7 +164,7 @@ export default async function handler(req, res) {
     // We'll perform multiple GETs with OR; but simpler: fetch all where url=in.("a","b")
     const inList = uniq.map(u => `"${u}"`).join(',');
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?select=*&url=in.(${inList})`;
-    const r = await fetch(url, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+    const r = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
     if (!r.ok) return {};
     const j = await r.json();
     const out = {};
@@ -169,7 +176,7 @@ export default async function handler(req, res) {
   async function insertSitesBatch(rowsToInsert) {
     if (!rowsToInsert || rowsToInsert.length === 0) return [];
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites`;
-    const r = await fetch(url, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(rowsToInsert) });
+    const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(rowsToInsert) });
     const text = await r.text();
     if (!r.ok) throw new Error(`Insert failed: ${text}`);
     const j = JSON.parse(text);
@@ -185,7 +192,7 @@ export default async function handler(req, res) {
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
     console.log(`  🔄 Attaching ${rows.length} site_categories...`);
     // rows: { site_id, category_id }
-    const r = await fetch(url, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
+    const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
     if (r.ok) {
       console.log(`  ✅ Successfully attached ${rows.length} site_categories`);
     } else {
@@ -200,7 +207,7 @@ export default async function handler(req, res) {
     }
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
     console.log(`  🔄 Attaching ${rows.length} site_tags...`);
-    const r = await fetch(url, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
+    const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
     if (r.ok) {
       console.log(`  ✅ Successfully attached ${rows.length} site_tags`);
     } else {

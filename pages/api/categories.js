@@ -3,35 +3,68 @@ export default async function handler(req, res) {
 
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-  if (!SUPABASE_URL || (!SUPABASE_ANON_KEY && !SUPABASE_SERVICE_KEY)) return res.status(500).json({ success: false, error: 'SUPABASE_URL and at least one Supabase key (anon or service) must be set in environment' });
 
-  const KEY = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
+  // Extract user's JWT token from Authorization header (sent by fetchAPI)
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  console.log('[Categories API] Auth check:', {
+    hasUserToken: !!userToken,
+    tokenPreview: userToken ? userToken.substring(0, 20) + '...' : 'none',
+    hasAnonKey: !!SUPABASE_ANON_KEY
+  });
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
+  }
+
+  // Use user's token for authenticated requests (respects RLS), fallback to anon key for public reads
+  const AUTH_TOKEN = userToken || SUPABASE_ANON_KEY;
 
   if (req.method === 'POST') {
+    // POST requires user authentication - can't create categories without valid user token
+    if (!userToken) {
+      console.log('[Categories API] POST rejected - no user token');
+      return res.status(401).json({ success: false, error: 'Authentication required to create categories' });
+    }
+
     try {
       const body = req.body || {};
+
+      // Only include allowed fields (user_id may not exist in table)
+      const allowedFields = ['name', 'color', 'display_order', 'user_id'];
+      const filteredBody = {};
+      for (const key of allowedFields) {
+        if (body[key] !== undefined) {
+          filteredBody[key] = body[key];
+        }
+      }
+
+      console.log('[Categories API] Creating category with user token:', filteredBody);
+
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories`;
       const r = await fetch(url, {
         method: 'POST',
         headers: {
-          apikey: KEY,
-          Authorization: `Bearer ${KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${userToken}`,
           Accept: 'application/json',
           'Content-Type': 'application/json',
           Prefer: 'return=representation'
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(filteredBody)
       });
 
       const text = await r.text();
+      console.log('[Categories API] POST response:', r.status, text.substring(0, 200));
+
       if (!r.ok) {
         // Handle duplicate name attempt: return existing category if present
         try {
           const bodyName = (body && body.name) ? body.name : null;
           if (bodyName && /duplicate|unique|violat/i.test(text)) {
             const lookupUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=*&name=eq.${encodeURIComponent(bodyName)}`;
-            const lookupRes = await fetch(lookupUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+            const lookupRes = await fetch(lookupUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, Accept: 'application/json' } });
             if (lookupRes.ok) {
               const rows = await lookupRes.json();
               if (rows && rows.length > 0) return res.status(200).json({ success: true, data: rows[0] });
@@ -51,12 +84,13 @@ export default async function handler(req, res) {
     }
   }
 
+  // GET - use user token if available for RLS, otherwise anon key
   try {
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=*`;
     const r = await fetch(url, {
       headers: {
-        apikey: KEY,
-        Authorization: `Bearer ${KEY}`,
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${AUTH_TOKEN}`,
         Accept: 'application/json'
       }
     });
