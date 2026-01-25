@@ -594,6 +594,37 @@ export function AuthProvider({ children }) {
         }
     }, [user]);
 
+    // Fetch profile data if user exists but doesn't have avatar/displayName
+    useEffect(() => {
+        if (!user || !user.id) return;
+        // If user already has profile data, skip
+        if (user.avatarUrl || user.displayName) return;
+
+        const fetchMissingProfile = async () => {
+            try {
+                console.log('[AuthContext] Fetching missing profile data for user:', user.id);
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('avatar_url, name')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                if (profile && (profile.avatar_url || profile.name)) {
+                    console.log('[AuthContext] Got missing profile:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
+                    setUser(prev => ({
+                        ...prev,
+                        avatarUrl: profile.avatar_url || prev?.avatarUrl || null,
+                        displayName: profile.name || prev?.displayName || null
+                    }));
+                }
+            } catch (err) {
+                console.warn('[AuthContext] Failed to fetch missing profile:', err);
+            }
+        };
+
+        fetchMissingProfile();
+    }, [user?.id, user?.avatarUrl, user?.displayName]);
+
     const value = {
         user,
         loading,
