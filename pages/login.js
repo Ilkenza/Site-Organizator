@@ -137,6 +137,14 @@ export default function Login() {
                                 // Try to detect MFA factor id so Verify form works immediately
                                 (async () => {
                                     try {
+                                        // Ensure supabase client uses the stored AAL1 token so listFactors can be queried
+                                        try {
+                                            await supabase.auth.setSession({ access_token: parsed.access_token, refresh_token: parsed.refresh_token || '' });
+                                            console.log('Restored MFA flow: supabase session set with AAL1 token');
+                                        } catch (setErr) {
+                                            console.warn('Restored MFA flow: failed to set supabase session:', setErr);
+                                        }
+
                                         const factorsPromise = supabase.auth.mfa.listFactors();
                                         const factorsTimeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 10000));
                                         const factorsResult = await Promise.race([factorsPromise, factorsTimeout]);
