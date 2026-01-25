@@ -2,16 +2,19 @@ export default async function handler(req, res) {
   // Allow GET and POST on this collection
   // GET — list sites; POST — create a site
   // Other methods are handled by the dynamic [id] route
-  // (we still validate the environment below)
 
 
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+  // Extract user's JWT token from Authorization header (sent by fetchAPI)
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
 
-  // Prefer service key for server-side requests (bypasses RLS if needed)
-  const KEY = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
+  // Use user's token for authenticated requests (respects RLS), fallback to anon key for reads
+  const KEY = userToken || SUPABASE_ANON_KEY;
 
   if (req.method === 'POST') {
     try {
@@ -25,7 +28,7 @@ export default async function handler(req, res) {
       const r = await fetch(url, {
         method: 'POST',
         headers: {
-          apikey: KEY,
+          apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${KEY}`,
           Accept: 'application/json',
           'Content-Type': 'application/json',
@@ -42,7 +45,7 @@ export default async function handler(req, res) {
           if (bodyUrl && /duplicate|unique|violat|already exists|duplicate key/i.test(text)) {
             const lookupUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?select=*&url=eq.${encodeURIComponent(bodyUrl)}`;
             try {
-              const lookupRes = await fetch(lookupUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+              const lookupRes = await fetch(lookupUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
               if (lookupRes.ok) {
                 const rows = await lookupRes.json();
                 if (rows && rows.length > 0) return res.status(409).json({ success: false, error: 'Site already exists', data: rows[0] });
@@ -63,7 +66,7 @@ export default async function handler(req, res) {
         try {
           const stUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
           const payload = body.tag_ids.map(tag_id => ({ site_id: newSite.id, tag_id }));
-          const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
+          const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
           if (!stRes.ok) {
             const errText = await stRes.text();
             // non-fatal: log and continue
@@ -81,7 +84,7 @@ export default async function handler(req, res) {
         try {
           const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
           const toInsert = categoryIds.map(category_id => ({ site_id: newSite.id, category_id }));
-          const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
+          const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
           if (!scRes.ok) {
             const errText = await scRes.text(); console.warn('site_categories insert failed', errText);
           }
@@ -91,7 +94,7 @@ export default async function handler(req, res) {
         try {
           const encoded = categoryNames.map(n => encodeURIComponent(n.replace(/\)/g, '\\)'))).join(',');
           const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&name=in.(${encoded})`;
-          const catRes = await fetch(catUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
           if (catRes.ok) {
             const cats = await catRes.json();
             const nameToId = new Map(cats.map(c => [c.name, c.id]));
@@ -102,7 +105,7 @@ export default async function handler(req, res) {
             });
             if (toInsert.length > 0) {
               const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-              const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
+              const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
               if (!scRes.ok) {
                 const errText = await scRes.text(); console.warn('site_categories insert failed', errText);
               }
@@ -114,7 +117,7 @@ export default async function handler(req, res) {
       // Refetch the complete site with categories and tags
       try {
         const refetchUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${newSite.id}&select=*,categories_array:site_categories(category:categories(*)),tags_array:site_tags(tag:tags(*))`;
-        const refetchRes = await fetch(refetchUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+        const refetchRes = await fetch(refetchUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
         if (refetchRes.ok) {
           const refetchData = await refetchRes.json();
           const completeSite = Array.isArray(refetchData) ? refetchData[0] : refetchData;
@@ -163,7 +166,7 @@ export default async function handler(req, res) {
 
     const r = await fetch(url, {
       headers: {
-        apikey: KEY,
+        apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${KEY}`,
         Accept: 'application/json'
       }
@@ -191,7 +194,7 @@ export default async function handler(req, res) {
         const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?select=*,category:categories(*)&site_id=in.(${encodedInList})`;
         siteCategories = [];
         try {
-          const scRes = await fetch(scUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          const scRes = await fetch(scUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
           const scText = await scRes.text();
           scDebug = { ok: scRes.ok, status: scRes.status, statusText: scRes.statusText, body: scText, url: scUrl };
           if (scRes.ok) {
@@ -213,7 +216,7 @@ export default async function handler(req, res) {
         const stUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?select=*,tag:tags(*)&site_id=in.(${encodedInList})`;
         siteTags = [];
         try {
-          const stRes = await fetch(stUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          const stRes = await fetch(stUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
           const stText = await stRes.text();
           stDebug = { ok: stRes.ok, status: stRes.status, statusText: stRes.statusText, body: stText, url: stUrl };
           if (stRes.ok) {
@@ -246,7 +249,7 @@ export default async function handler(req, res) {
         if (categoryNames.size > 0) {
           const enc = Array.from(categoryNames).map(n => encodeURIComponent(n.replace(/\)/g, '\\)'))).join(',');
           const catLookupUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name,color&name=in.(${enc})`;
-          const catLookupRes = await fetch(catLookupUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          const catLookupRes = await fetch(catLookupUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
           if (catLookupRes.ok) {
             const catsFound = await catLookupRes.json();
             catsFound.forEach(c => nameToCategory.set(c.name, c));
@@ -257,7 +260,7 @@ export default async function handler(req, res) {
         if (tagNames.size > 0) {
           const enc = Array.from(tagNames).map(n => encodeURIComponent(n.replace(/\)/g, '\\)'))).join(',');
           const tagLookupUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=id,name,color&name=in.(${enc})`;
-          const tagLookupRes = await fetch(tagLookupUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          const tagLookupRes = await fetch(tagLookupUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
           if (tagLookupRes.ok) {
             const tagsFound = await tagLookupRes.json();
             tagsFound.forEach(t => nameToTag.set(t.name, t));

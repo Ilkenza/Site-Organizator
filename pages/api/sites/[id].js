@@ -2,19 +2,30 @@ export default async function handler(req, res) {
   const { id } = req.query;
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-  // Use service key if available (bypasses RLS), otherwise anon key
-  const SUPABASE_KEY = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
 
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    console.error('Missing env vars:', { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_KEY: !!SUPABASE_KEY });
-    return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_KEY must be set in environment' });
+  // Extract user's JWT token from Authorization header (sent by fetchAPI)
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  console.log('[Sites/ID API] Auth check:', {
+    id,
+    method: req.method,
+    hasUserToken: !!userToken,
+    tokenPreview: userToken ? userToken.substring(0, 20) + '...' : 'none'
+  });
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.error('Missing env vars:', { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY });
+    return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
   }
+
+  // Use user's token for authenticated requests (respects RLS), fallback to anon key for reads
+  const AUTH_TOKEN = userToken || SUPABASE_ANON_KEY;
 
   if (req.method === 'GET') {
     try {
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
-      const r = await fetch(url, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Accept: 'application/json' } });
+      const r = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${AUTH_TOKEN}`, Accept: 'application/json' } });
       if (!r.ok) return res.status(502).json({ success: false, error: 'Upstream REST error', details: await r.text() });
       const rows = await r.json();
       return res.status(200).json({ success: true, data: rows[0] || null });
@@ -46,8 +57,8 @@ export default async function handler(req, res) {
       const r = await fetch(url, {
         method: 'PATCH',
         headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${userToken}`,
           Accept: 'application/json',
           'Content-Type': 'application/json',
           Prefer: 'return=representation'
@@ -69,7 +80,7 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_categories
           const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
-          await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+          await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
 
           // Insert new categories
           if (category_ids.length > 0) {
@@ -77,7 +88,7 @@ export default async function handler(req, res) {
             const insCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
             await fetch(insCatUrl, {
               method: 'POST',
-              headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(catPayload)
             });
           }
@@ -89,7 +100,7 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_tags
           const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
-          await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } });
+          await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
 
           // Insert new tags
           if (tag_ids.length > 0) {
@@ -97,7 +108,7 @@ export default async function handler(req, res) {
             const insTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
             await fetch(insTagUrl, {
               method: 'POST',
-              headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(tagPayload)
             });
           }
@@ -106,7 +117,7 @@ export default async function handler(req, res) {
 
       // Refetch the site with all related data
       const refetchUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}&select=*,categories_array:site_categories(category:categories(*)),tags_array:site_tags(tag:tags(*))`;
-      const refetchRes = await fetch(refetchUrl, { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Accept: 'application/json' } });
+      const refetchRes = await fetch(refetchUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, Accept: 'application/json' } });
       if (refetchRes.ok) {
         const refetchData = await refetchRes.json();
         const completeSite = Array.isArray(refetchData) ? refetchData[0] : refetchData;
@@ -134,14 +145,14 @@ export default async function handler(req, res) {
   if (req.method === 'DELETE') {
     try {
       console.log('Deleting site:', id);
-      console.log('Using key type:', SUPABASE_SERVICE_KEY ? 'SERVICE_KEY' : 'ANON_KEY');
+      console.log('Using auth:', userToken ? 'USER_TOKEN' : 'ANON_KEY');
 
       // First, delete related site_categories
       try {
         const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
         await fetch(delCatUrl, {
           method: 'DELETE',
-          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` }
         });
         console.log('Deleted site_categories for site:', id);
       } catch (err) {
@@ -153,7 +164,7 @@ export default async function handler(req, res) {
         const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
         await fetch(delTagUrl, {
           method: 'DELETE',
-          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` }
         });
         console.log('Deleted site_tags for site:', id);
       } catch (err) {
@@ -166,8 +177,8 @@ export default async function handler(req, res) {
       const r = await fetch(url, {
         method: 'DELETE',
         headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${userToken}`,
           Accept: 'application/json'
         }
       });

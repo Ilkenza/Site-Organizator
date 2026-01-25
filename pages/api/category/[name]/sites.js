@@ -2,15 +2,21 @@ export default async function handler(req, res) {
   const { name } = req.query;
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-  if (!SUPABASE_URL || (!SUPABASE_ANON_KEY && !SUPABASE_SERVICE_KEY)) return res.status(500).json({ success: false, error: 'SUPABASE_URL and at least one Supabase key (anon or service) must be set in environment' });
-  const KEY = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
+
+  // Extract user's JWT token from Authorization header (sent by fetchAPI)
+  const authHeader = req.headers.authorization;
+  const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
+
+  // Use user's token for RLS, fallback to anon key for public reads
+  const KEY = userToken || SUPABASE_ANON_KEY;
 
   try {
     // Find category id by name (use quoted value to avoid REST filter parsing issues)
     const quotedName = '"' + name + '"';
     const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id&name=eq.${encodeURIComponent(quotedName)}`;
-    const catRes = await fetch(catUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+    const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
     if (!catRes.ok) return res.status(502).json({ success: false, error: 'Upstream REST error', details: await catRes.text(), requestedName: name, catUrl });
     let cats = await catRes.json();
 
@@ -19,7 +25,7 @@ export default async function handler(req, res) {
       const tried = [{ type: 'quoted', url: catUrl, rows: Array.isArray(cats) ? cats.length : (cats ? (cats.length || null) : 0) }];
       try {
         const unqUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id&name=eq.${encodeURIComponent(name)}`;
-        const unqRes = await fetch(unqUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+        const unqRes = await fetch(unqUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
         let unqRows = null;
         try { unqRows = unqRes.ok ? await unqRes.json() : null; } catch (e) { unqRows = null; }
         tried.push({ type: 'unquoted', url: unqUrl, ok: unqRes.ok, rows: unqRows ? unqRows.length : null });
@@ -30,7 +36,7 @@ export default async function handler(req, res) {
         try {
           // ilike may be more forgiving for case or hidden chars
           const ilikeUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id&name=ilike.${encodeURIComponent(name)}`;
-          const ilikeRes = await fetch(ilikeUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          const ilikeRes = await fetch(ilikeUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
           let ilikeRows = null;
           try { ilikeRows = ilikeRes.ok ? await ilikeRes.json() : null; } catch (e) { ilikeRows = null; }
           tried.push({ type: 'ilike', url: ilikeUrl, ok: ilikeRes.ok, rows: ilikeRows ? ilikeRows.length : null });
@@ -45,7 +51,7 @@ export default async function handler(req, res) {
 
     // Get site_ids from site_categories
     const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?select=site_id&category_id=eq.${categoryId}`;
-    const scRes = await fetch(scUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+    const scRes = await fetch(scUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
     if (!scRes.ok) return res.status(502).json({ success: false, error: 'Upstream REST error', details: await scRes.text() });
     const scRows = await scRes.json();
     const siteIds = scRows.map(r => r.site_id);
@@ -57,7 +63,7 @@ export default async function handler(req, res) {
       return /^[0-9]+$/.test(s) ? s : `"${s}"`;
     }).join(',');
     const sitesUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=in.(${inList})&select=*`;
-    const sitesRes = await fetch(sitesUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+    const sitesRes = await fetch(sitesUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
     if (!sitesRes.ok) return res.status(502).json({ success: false, error: 'Upstream REST error', details: await sitesRes.text() });
     const sites = await sitesRes.json();
 
@@ -75,7 +81,7 @@ export default async function handler(req, res) {
       let siteCategories = [];
       let scDebug = {};
       try {
-        const scRes2 = await fetch(scUrl2, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+        const scRes2 = await fetch(scUrl2, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
         const scText = await scRes2.text();
         scDebug = { ok: scRes2.ok, status: scRes2.status, statusText: scRes2.statusText, body: scText, url: scUrl2 };
         if (scRes2.ok) {
@@ -87,7 +93,7 @@ export default async function handler(req, res) {
       let siteTags = [];
       let stDebug = {};
       try {
-        const stRes2 = await fetch(stUrl, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+        const stRes2 = await fetch(stUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
         const stText = await stRes2.text();
         stDebug = { ok: stRes2.ok, status: stRes2.status, statusText: stRes2.statusText, body: stText, url: stUrl };
         if (stRes2.ok) {
