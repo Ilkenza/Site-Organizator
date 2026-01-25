@@ -22,35 +22,31 @@ export default function Header({ onAddClick, onMenuClick }) {
                             // Immediately set basic user
                             setLocalUser(tokens.user);
 
-                            // Fetch profile data to get avatar and displayName (with timeout)
-                            if (supabase) {
-                                try {
-                                    const profilePromise = supabase
-                                        .from('profiles')
-                                        .select('avatar_url, name')
-                                        .eq('id', tokens.user.id)
-                                        .maybeSingle();
-
-                                    const profileTimeout = new Promise((resolve) =>
-                                        setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
-                                    );
-
-                                    const result = await Promise.race([profilePromise, profileTimeout]);
-
-                                    if (result?.timedOut) {
-                                        console.warn('[Header] Profile fetch timed out');
-                                    } else if (result?.data) {
-                                        const profile = result.data;
-                                        console.log('[Header] Fetched profile for localStorage user');
-                                        setLocalUser({
-                                            ...tokens.user,
-                                            avatarUrl: profile.avatar_url || null,
-                                            displayName: profile.name || null
-                                        });
+                            // Fetch profile data via our API (more reliable than SDK)
+                            try {
+                                const response = await fetch('/api/profile', {
+                                    method: 'GET',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${tokens.access_token}`
                                     }
-                                } catch (err) {
-                                    console.warn('[Header] Failed to fetch profile:', err);
+                                });
+
+                                const result = await response.json();
+
+                                if (result?.success && result?.data) {
+                                    const profile = result.data;
+                                    console.log('[Header] Fetched profile via API');
+                                    setLocalUser({
+                                        ...tokens.user,
+                                        avatarUrl: profile.avatar_url || null,
+                                        displayName: profile.name || null
+                                    });
+                                } else {
+                                    console.warn('[Header] Profile API returned no data:', result?.error);
                                 }
+                            } catch (err) {
+                                console.warn('[Header] Failed to fetch profile via API:', err);
                             }
                         }
                     }
@@ -62,7 +58,7 @@ export default function Header({ onAddClick, onMenuClick }) {
         } else if (authUser) {
             setLocalUser(null); // Clear fallback when real user is available
         }
-    }, [authUser, supabase]);
+    }, [authUser]);
 
     // Use authUser if available, otherwise fallback to localUser
     const user = authUser || localUser;

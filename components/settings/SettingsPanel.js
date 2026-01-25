@@ -78,51 +78,43 @@ export default function SettingsPanel() {
     // Load fresh avatar/name from database when Settings opens
     useEffect(() => {
         const loadProfileData = async () => {
-            if (!user?.id || !supabase) {
-                console.log('[SettingsPanel] Cannot load profile - missing user or supabase:', { userId: user?.id, hasSupabase: !!supabase });
+            if (!user?.id) {
+                console.log('[SettingsPanel] Cannot load profile - missing user:', { userId: user?.id });
                 return;
             }
 
             try {
-                // Check if supabase has an active session
-                const { data: sessionData } = await supabase.auth.getSession();
-                console.log('[SettingsPanel] Current session:', {
-                    hasSession: !!sessionData?.session,
-                    userId: sessionData?.session?.user?.id
+                console.log('[SettingsPanel] Fetching profile via API for user:', user.id);
+
+                // Use our API endpoint instead of Supabase SDK (which can timeout)
+                const response = await fetch('/api/profile', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('sb-' + (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1]?.split('.')[0] + '-auth-token') ? JSON.parse(localStorage.getItem('sb-' + (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1]?.split('.')[0] + '-auth-token'))?.access_token : ''}`
+                    }
                 });
 
-                console.log('[SettingsPanel] Fetching profile for user:', user.id);
-                const { data: profile, error } = await supabase
-                    .from('profiles')
-                    .select('avatar_url, name')
-                    .eq('id', user.id)
-                    .maybeSingle();
+                const result = await response.json();
+                console.log('[SettingsPanel] Profile fetch result:', result);
 
-                console.log('[SettingsPanel] Profile fetch result:', { profile, error: error?.message });
-
-                if (error) {
-                    console.warn('Error loading profile:', error.message);
+                if (!result.success || !result.data) {
+                    console.warn('[SettingsPanel] Profile fetch failed:', result.error);
                     return;
                 }
 
-                if (profile) {
-                    console.log('[SettingsPanel] Setting avatar and name from profile');
-                    if (profile.avatar_url) {
-                        setAvatar(profile.avatar_url);
-                    }
-                    if (profile.name) {
-                        setDisplayName(profile.name);
-                    }
-                } else {
-                    console.log('[SettingsPanel] No profile found for user');
+                const profile = result.data;
+                console.log('[SettingsPanel] Setting avatar and name from profile');
+                if (profile.avatar_url) {
+                    setAvatar(profile.avatar_url);
+                }
+                if (profile.name) {
+                    setDisplayName(profile.name);
                 }
             } catch (err) {
-                console.error('Error loading profile:', err);
-            }
-        };
-
-        loadProfileData();
-    }, [user?.id]);
+                console.error('[SettingsPanel] Error loading profile:', err);
+                loadProfileData();
+            }, [user?.id]);
 
     // Load session info
     useEffect(() => {
@@ -369,18 +361,28 @@ export default function SettingsPanel() {
 
         setSavingName(true);
         try {
-            if (!supabase) {
-                throw new Error('Supabase not initialized');
+            // Get access token from localStorage
+            const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+            const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1]?.split('.')[0]}-auth-token`;
+            const storedTokens = localStorage.getItem(storageKey);
+            const accessToken = storedTokens ? JSON.parse(storedTokens)?.access_token : null;
+
+            if (!accessToken) {
+                throw new Error('Not authenticated');
             }
 
-            // Update user name in profiles table
-            const { data, error: updateError } = await supabase
-                .from('profiles')
-                .update({ name: displayName.trim() })
-                .eq('id', user.id)
-                .select();
+            // Update user name via our API
+            const response = await fetch('/api/profile', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({ name: displayName.trim() })
+            });
 
-            if (updateError) throw updateError;
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || 'Failed to update name');
 
             setNameMessage({ type: 'success', text: 'Name updated successfully!' });
             setEditingName(false);
