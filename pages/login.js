@@ -528,8 +528,8 @@ export default function Login() {
 
                     if (profileResult?.timedOut) {
                         console.warn('Profile fetch timed out, continuing without profile data');
-                    } else if (profileResult?.success && profileResult?.profile) {
-                        const profile = profileResult.profile;
+                    } else if (profileResult?.success && profileResult?.data) {
+                        const profile = profileResult.data;
                         console.log('Profile fetched:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
                         userWithProfile = {
                             ...session.user,
