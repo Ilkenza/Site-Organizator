@@ -148,12 +148,7 @@ export default function Login() {
                                         // Fallback: try to query listFactors (may fail with AAL1 token)
                                         // Ensure supabase client uses the stored AAL1 token so listFactors can be queried
                                         try {
-                                            // Wrap setSession in a timeout to prevent hanging
-                                            const setSessionPromise = supabase.auth.setSession({ access_token: parsed.access_token, refresh_token: parsed.refresh_token || '' });
-                                            const setSessionTimeout = new Promise((_, reject) =>
-                                                setTimeout(() => reject(new Error('setSession timeout')), 5000)
-                                            );
-                                            await Promise.race([setSessionPromise, setSessionTimeout]);
+                                            await supabase.auth.setSession({ access_token: parsed.access_token, refresh_token: parsed.refresh_token || '' });
                                             console.log('Restored MFA flow: supabase session set with AAL1 token');
                                         } catch (setErr) {
                                             console.warn('Restored MFA flow: failed to set supabase session:', setErr);
@@ -373,7 +368,6 @@ export default function Login() {
 
             // Ensure the Supabase client has the AAL1 session set before making MFA calls
             // This is crucial - without this, the challenge call may hang or fail
-            // We add a timeout to prevent indefinite hangs
             if (aal1Token) {
                 try {
                     const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
@@ -382,23 +376,16 @@ export default function Login() {
                         const tokens = JSON.parse(storedTokens);
                         if (tokens?.refresh_token) {
                             console.log('Setting AAL1 session before MFA challenge...');
-
-                            // Wrap setSession in a timeout to prevent hanging
-                            const setSessionPromise = supabase.auth.setSession({
+                            await supabase.auth.setSession({
                                 access_token: aal1Token,
                                 refresh_token: tokens.refresh_token
                             });
-                            const setSessionTimeout = new Promise((_, reject) =>
-                                setTimeout(() => reject(new Error('setSession timeout')), 5000)
-                            );
-
-                            try {
-                                await Promise.race([setSessionPromise, setSessionTimeout]);
-                                console.log('AAL1 session set successfully');
-                            } catch (timeoutErr) {
-                                console.warn('setSession timed out or failed:', timeoutErr?.message);
-                                // Continue anyway - SDK may already have the session from signInWithPassword
-                            }
+                            console.log('AAL1 session set successfully');
+                            // Give SDK a moment to process the session
+                            await new Promise(r => setTimeout(r, 200));
+                            // Verify session is active
+                            const { data: sessionCheck } = await supabase.auth.getSession();
+                            console.log('Session verified after setSession:', !!sessionCheck?.session);
                         }
                     }
                 } catch (setSessionErr) {
@@ -503,19 +490,14 @@ export default function Login() {
                 }));
 
                 // Try to set session in the Supabase client so SDK processes it immediately
-                // Wrap setSession in a timeout to prevent hanging
                 try {
-                    const setSessionPromise = supabase.auth.setSession({
+                    await supabase.auth.setSession({
                         access_token: session.access_token,
                         refresh_token: session.refresh_token
                     });
-                    const setSessionTimeout = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('setSession timeout')), 5000)
-                    );
-                    await Promise.race([setSessionPromise, setSessionTimeout]);
                     console.log('setSession succeeded on login page');
                 } catch (setErr) {
-                    console.warn('setSession timed out or failed on login page:', setErr?.message || setErr);
+                    console.warn('setSession failed on login page:', setErr);
                 }
 
                 // Clear MFA UI state so the form is not stuck
