@@ -413,30 +413,73 @@ export default function Login() {
                 });
                 console.log('challengeAndVerify promise created');
 
-                const verifyTimeout = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('MFA verification timed out')), 45000)
+                // Shorter timeout - if SDK hangs, we'll try to recover from intercepted fetch response
+                const verifyTimeout = new Promise((resolve) =>
+                    setTimeout(() => resolve({ timedOut: true }), 8000)
                 );
 
                 const result = await Promise.race([verifyPromise, verifyTimeout]);
-                console.log('challengeAndVerify result:', { hasData: !!result?.data, error: result?.error?.message });
 
-                if (result.error) {
-                    verifyError = result.error;
+                // Check if SDK returned or timed out
+                if (result?.timedOut) {
+                    console.warn('challengeAndVerify SDK hung, checking for intercepted response...');
+
+                    // Try to recover from the fetch interceptor's captured response
+                    const debugData = window.__debugSupabaseVerify;
+                    if (debugData?.status === 200 && debugData?.text) {
+                        try {
+                            const parsed = JSON.parse(debugData.text);
+                            if (parsed?.access_token && parsed?.refresh_token && parsed?.user) {
+                                console.log('Recovered session from intercepted fetch response!');
+                                verifyData = { session: parsed };
+                            } else {
+                                throw new Error('Incomplete session in intercepted response');
+                            }
+                        } catch (parseErr) {
+                            console.error('Failed to parse intercepted response:', parseErr);
+                            verifyError = { message: 'Verification response invalid' };
+                        }
+                    } else if (debugData?.status && debugData.status !== 200) {
+                        // Non-200 status - likely invalid code
+                        console.error('Intercepted non-200 response:', debugData.status);
+                        verifyError = { message: 'Invalid code. Please try again.' };
+                    } else {
+                        console.error('No intercepted response available');
+                        verifyError = { message: 'Verification timed out. Please try again.' };
+                    }
                 } else {
-                    verifyData = result.data;
+                    console.log('challengeAndVerify result:', { hasData: !!result?.data, error: result?.error?.message });
+                    if (result?.error) {
+                        verifyError = result.error;
+                    } else {
+                        verifyData = result?.data;
+                    }
                 }
-            } catch (timeoutErr) {
-                console.error('MFA verification error:', timeoutErr?.message || timeoutErr);
-                clearTimeout(hardTimeout);
-                setLoading(false);
-                if (timeoutErr?.message?.includes('timed out')) {
-                    setError('Connection timed out. Please try again.');
-                } else if (timeoutErr?.message?.includes('Invalid') || timeoutErr?.message?.includes('invalid')) {
-                    setError('Invalid code. Please try again.');
-                } else {
-                    setError(timeoutErr?.message || 'Verification failed. Please try again.');
+            } catch (sdkErr) {
+                console.error('MFA SDK error:', sdkErr?.message || sdkErr);
+
+                // Even on SDK error, try to recover from intercepted response
+                const debugData = window.__debugSupabaseVerify;
+                if (debugData?.status === 200 && debugData?.text) {
+                    try {
+                        const parsed = JSON.parse(debugData.text);
+                        if (parsed?.access_token && parsed?.refresh_token && parsed?.user) {
+                            console.log('Recovered session from intercepted fetch despite SDK error!');
+                            verifyData = { session: parsed };
+                        }
+                    } catch (e) { /* ignore parse error */ }
                 }
-                return;
+
+                if (!verifyData) {
+                    clearTimeout(hardTimeout);
+                    setLoading(false);
+                    if (sdkErr?.message?.includes('Invalid') || sdkErr?.message?.includes('invalid')) {
+                        setError('Invalid code. Please try again.');
+                    } else {
+                        setError(sdkErr?.message || 'Verification failed. Please try again.');
+                    }
+                    return;
+                }
             }
 
             if (verifyError) {
