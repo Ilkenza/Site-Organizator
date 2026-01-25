@@ -105,6 +105,31 @@ export default function Login() {
             NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
             NEXT_PUBLIC_SUPABASE_ANON_KEY: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
         });
+
+        // Check if user already has a valid session on page load
+        try {
+            const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+            const stored = localStorage.getItem(storageKey);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed?.access_token) {
+                    const payload = JSON.parse(atob(parsed.access_token.split('.')[1]));
+                    const isExpired = payload.exp * 1000 < Date.now();
+                    if (!isExpired) {
+                        // Valid session exists - redirect to dashboard
+                        console.log('Valid session found on login page load, redirecting to dashboard...', { aal: payload.aal });
+                        window.location.replace('/dashboard');
+                        return;
+                    } else {
+                        // Clear expired session
+                        console.log('Clearing expired session on login page load');
+                        localStorage.removeItem(storageKey);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('Session check on login page load failed:', e);
+        }
     }, [supabase]);
 
     // Timeout constants (increased for mobile/slow networks)
