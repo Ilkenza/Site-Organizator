@@ -314,6 +314,31 @@ export default function Dashboard() {
                       access_token: tokens.access_token,
                       refresh_token: tokens.refresh_token
                     });
+
+                    // After setting session, ensure MFA requirement is met. If the account has enrolled factors
+                    // and the current authenticator assurance level is not 'aal2', redirect to /login
+                    try {
+                      const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+                      console.log('[Dashboard] AAL status after setSession:', aalData);
+
+                      if (aalData?.currentLevel !== 'aal2') {
+                        try {
+                          const { data: factors } = await supabase.auth.mfa.listFactors();
+                          const hasFactors = Array.isArray(factors) && factors.length > 0;
+                          console.log('[Dashboard] MFA factors found:', hasFactors);
+                          if (hasFactors) {
+                            console.warn('[Dashboard] Account requires MFA but current level is not AAL2 — redirecting to /login');
+                            if (isMounted) setAuthChecked(true);
+                            window.location.href = '/login';
+                            return;
+                          }
+                        } catch (fErr) {
+                          console.warn('[Dashboard] Error checking MFA factors:', fErr);
+                        }
+                      }
+                    } catch (aalErr) {
+                      console.warn('[Dashboard] Error checking AAL after setSession:', aalErr);
+                    }
                   }
                 } catch (setSessionErr) {
                   console.warn('[Dashboard] setSession fallback failed:', setSessionErr);
