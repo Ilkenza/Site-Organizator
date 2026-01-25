@@ -35,6 +35,20 @@ export default function Sidebar({ isOpen = false, onClose }) {
     // Count favorite sites
     const favoriteCount = sites.filter(s => s.is_favorite).length;
 
+    // Calculate filtered site count for display
+    const getFilteredSiteCount = () => {
+        if (!selectedCategory && !selectedTag) return null;
+        let filtered = sites;
+        if (selectedCategory) {
+            filtered = filtered.filter(s => s.category_id === selectedCategory);
+        }
+        if (selectedTag) {
+            filtered = filtered.filter(s => s.site_tags?.some(st => st.tag_id === selectedTag));
+        }
+        return filtered.length;
+    };
+    const filteredSiteCount = getFilteredSiteCount();
+
     return (
         <>
             {/* Mobile Overlay Backdrop */}
@@ -82,7 +96,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                 <div className="p-1.5 sm:p-2 border-b border-app-border">
                     <nav className="space-y-0.5 sm:space-y-1">
                         {[
-                            { id: 'sites', label: 'Sites', icon: 'sites', count: stats.sites },
+                            { id: 'sites', label: 'Sites', icon: 'sites', count: stats.sites, filteredCount: filteredSiteCount },
                             { id: 'categories', label: 'Categories', icon: 'categories', count: stats.categories },
                             { id: 'tags', label: 'Tags', icon: 'tags', count: stats.tags },
                             { id: 'favorites', label: 'Favorites', icon: 'favorites', count: favoriteCount },
@@ -136,9 +150,23 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         {tab.label}
                                     </span>
                                     {tab.count !== null && (
-                                        <span className={`text-xs px-1.5 py-0.5 rounded-full 
-                    ${activeTab === tab.id ? 'bg-app-accent text-app-bg-primary' : 'bg-app-bg-light text-app-text-secondary'}`}>
-                                            {tab.count}
+                                        <span className="flex items-center gap-1">
+                                            {tab.filteredCount !== null && tab.filteredCount !== undefined && tab.id === 'sites' && (selectedCategory || selectedTag) ? (
+                                                <>
+                                                    <span className={`text-xs px-1.5 py-0.5 rounded-full bg-app-accent text-app-bg-primary`}>
+                                                        {tab.filteredCount}
+                                                    </span>
+                                                    <span className="text-xs text-app-text-muted">/</span>
+                                                    <span className={`text-xs text-app-text-muted`}>
+                                                        {tab.count}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <span className={`text-xs px-1.5 py-0.5 rounded-full 
+                                                    ${activeTab === tab.id ? 'bg-app-accent text-app-bg-primary' : 'bg-app-bg-light text-app-text-secondary'}`}>
+                                                    {tab.count}
+                                                </span>
+                                            )}
                                         </span>
                                     )}
                                 </button>
@@ -229,8 +257,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
                         {/* Note about pinned sites - Only show for sites/favorites */}
                         {(activeTab === 'sites' || activeTab === 'favorites') && (
                             <p className="text-[10px] sm:text-xs text-gray-500 mt-2 sm:mt-3">
-                                <svg className="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                <svg className="w-4 h-4 inline-block mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
                                 </svg>
                                 Pinned sites always appear first
                             </p>
@@ -302,6 +330,16 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     />
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
+                                    <button
+                                        onClick={() => setSelectedTag(null)}
+                                        className={`px-2 py-1 rounded-full text-xs transition-colors
+                      ${!selectedTag
+                                                ? 'bg-app-accent text-app-bg-primary'
+                                                : 'bg-app-bg-light text-app-text-secondary hover:bg-app-accent hover:text-app-bg-primary'
+                                            }`}
+                                    >
+                                        All Tags
+                                    </button>
                                     {tags
                                         .filter(tag => tag.name.toLowerCase().includes(tagsSearchQuery.toLowerCase()))
                                         .sort((a, b) => a.name.localeCompare(b.name))
