@@ -133,6 +133,26 @@ export default function Login() {
                             try {
                                 setAal1Token(parsed.access_token);
                                 setMfaRequired(true);
+
+                                // Try to detect MFA factor id so Verify form works immediately
+                                (async () => {
+                                    try {
+                                        const factorsPromise = supabase.auth.mfa.listFactors();
+                                        const factorsTimeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 10000));
+                                        const factorsResult = await Promise.race([factorsPromise, factorsTimeout]);
+                                        const factorsData = factorsResult?.data;
+                                        const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
+                                        if (totpFactor) {
+                                            console.log('Restored MFA flow: found factorId from stored session', totpFactor.id);
+                                            setFactorId(totpFactor.id);
+                                        } else {
+                                            console.warn('Restored MFA flow: no TOTP factor found');
+                                        }
+                                    } catch (fErr) {
+                                        console.warn('Restored MFA flow: failed to query factors:', fErr);
+                                    }
+                                })();
+
                             } catch (e) {
                                 console.warn('Failed to restore MFA flow from token:', e);
                             }
