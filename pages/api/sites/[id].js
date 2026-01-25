@@ -80,19 +80,32 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_categories
           const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
-          await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
+          const delCatRes = await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
+          if (!delCatRes.ok) {
+            const errText = await delCatRes.text();
+            console.error('Failed to delete site_categories:', delCatRes.status, errText);
+          } else {
+            console.log('Deleted existing site_categories for site:', id);
+          }
 
           // Insert new categories
           if (category_ids.length > 0) {
             const catPayload = category_ids.map(category_id => ({ site_id: id, category_id }));
+            console.log('Inserting categories:', catPayload);
             const insCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-            await fetch(insCatUrl, {
+            const insCatRes = await fetch(insCatUrl, {
               method: 'POST',
               headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(catPayload)
             });
+            if (!insCatRes.ok) {
+              const errText = await insCatRes.text();
+              console.error('Failed to insert site_categories:', insCatRes.status, errText);
+            } else {
+              console.log('Inserted', category_ids.length, 'categories for site:', id);
+            }
           }
-        } catch (err) { console.warn('Failed to update categories:', err); }
+        } catch (err) { console.error('Exception updating categories:', err); }
       }
 
       // Update tags if provided
@@ -100,19 +113,32 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_tags
           const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
-          await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
+          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
+          if (!delTagRes.ok) {
+            const errText = await delTagRes.text();
+            console.error('Failed to delete site_tags:', delTagRes.status, errText);
+          } else {
+            console.log('Deleted existing site_tags for site:', id);
+          }
 
           // Insert new tags
           if (tag_ids.length > 0) {
             const tagPayload = tag_ids.map(tag_id => ({ site_id: id, tag_id }));
+            console.log('Inserting tags:', tagPayload);
             const insTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
-            await fetch(insTagUrl, {
+            const insTagRes = await fetch(insTagUrl, {
               method: 'POST',
               headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(tagPayload)
             });
+            if (!insTagRes.ok) {
+              const errText = await insTagRes.text();
+              console.error('Failed to insert site_tags:', insTagRes.status, errText);
+            } else {
+              console.log('Inserted', tag_ids.length, 'tags for site:', id);
+            }
           }
-        } catch (err) { console.warn('Failed to update tags:', err); }
+        } catch (err) { console.error('Exception updating tags:', err); }
       }
 
       // Refetch the site with all related data
