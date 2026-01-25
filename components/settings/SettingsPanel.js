@@ -78,14 +78,27 @@ export default function SettingsPanel() {
     // Load fresh avatar/name from database when Settings opens
     useEffect(() => {
         const loadProfileData = async () => {
-            if (!user?.id || !supabase) return;
+            if (!user?.id || !supabase) {
+                console.log('[SettingsPanel] Cannot load profile - missing user or supabase:', { userId: user?.id, hasSupabase: !!supabase });
+                return;
+            }
 
             try {
+                // Check if supabase has an active session
+                const { data: sessionData } = await supabase.auth.getSession();
+                console.log('[SettingsPanel] Current session:', {
+                    hasSession: !!sessionData?.session,
+                    userId: sessionData?.session?.user?.id
+                });
+
+                console.log('[SettingsPanel] Fetching profile for user:', user.id);
                 const { data: profile, error } = await supabase
                     .from('profiles')
                     .select('avatar_url, name')
                     .eq('id', user.id)
                     .maybeSingle();
+
+                console.log('[SettingsPanel] Profile fetch result:', { profile, error: error?.message });
 
                 if (error) {
                     console.warn('Error loading profile:', error.message);
@@ -93,12 +106,15 @@ export default function SettingsPanel() {
                 }
 
                 if (profile) {
+                    console.log('[SettingsPanel] Setting avatar and name from profile');
                     if (profile.avatar_url) {
                         setAvatar(profile.avatar_url);
                     }
                     if (profile.name) {
                         setDisplayName(profile.name);
                     }
+                } else {
+                    console.log('[SettingsPanel] No profile found for user');
                 }
             } catch (err) {
                 console.error('Error loading profile:', err);
