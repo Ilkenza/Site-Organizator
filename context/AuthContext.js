@@ -142,8 +142,9 @@ export function AuthProvider({ children }) {
                         console.warn('[AuthContext] Failed to parse session token AAL:', e);
                     }
 
-                    // Check if user already has profile data (from localStorage)
-                    const hasProfileData = session.user.avatarUrl !== undefined || session.user.displayName !== undefined;
+                    // Check if user already has REAL profile data (from localStorage)
+                    // Must check for truthy values, not just !== undefined, because null means data wasn't fetched
+                    const hasProfileData = !!session.user.avatarUrl || !!session.user.displayName;
 
                     if (hasProfileData) {
                         console.log('[AuthContext] User already has profile data from localStorage, skipping fetch');
@@ -570,8 +571,8 @@ export function AuthProvider({ children }) {
                     console.log('[AuthContext] Emergency recovery: setting user from localStorage');
                     userSetFromLocalStorageRef.current = true;
 
-                    // Check if user already has profile data from localStorage
-                    const hasProfileData = tokens.user.avatarUrl !== undefined || tokens.user.displayName !== undefined;
+                    // Check if user already has REAL profile data from localStorage
+                    const hasProfileData = !!tokens.user.avatarUrl || !!tokens.user.displayName;
 
                     if (hasProfileData) {
                         // User already has profile data, use it directly
