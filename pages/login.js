@@ -511,13 +511,24 @@ export default function Login() {
                 let userWithProfile = session.user;
                 try {
                     console.log('Fetching profile before redirect...');
-                    const { data: profile } = await supabase
+
+                    // Add timeout to profile fetch to prevent hanging
+                    const profilePromise = supabase
                         .from('profiles')
                         .select('avatar_url, name')
                         .eq('id', session.user.id)
                         .maybeSingle();
 
-                    if (profile) {
+                    const profileTimeout = new Promise((resolve) =>
+                        setTimeout(() => resolve({ data: null, timedOut: true }), 3000)
+                    );
+
+                    const profileResult = await Promise.race([profilePromise, profileTimeout]);
+
+                    if (profileResult?.timedOut) {
+                        console.warn('Profile fetch timed out, continuing without profile data');
+                    } else if (profileResult?.data) {
+                        const profile = profileResult.data;
                         console.log('Profile fetched:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
                         userWithProfile = {
                             ...session.user,
@@ -540,12 +551,21 @@ export default function Login() {
                 }));
 
                 // Try to set session in the Supabase client so SDK processes it immediately
+                // Use timeout to prevent hanging (SDK has been problematic)
                 try {
-                    await supabase.auth.setSession({
+                    const setSessionPromise = supabase.auth.setSession({
                         access_token: session.access_token,
                         refresh_token: session.refresh_token
                     });
-                    console.log('setSession succeeded on login page');
+                    const setSessionTimeout = new Promise((resolve) =>
+                        setTimeout(() => resolve({ timedOut: true }), 3000)
+                    );
+                    const setResult = await Promise.race([setSessionPromise, setSessionTimeout]);
+                    if (setResult?.timedOut) {
+                        console.warn('setSession timed out on login page, continuing anyway');
+                    } else {
+                        console.log('setSession succeeded on login page');
+                    }
                 } catch (setErr) {
                     console.warn('setSession failed on login page:', setErr);
                 }
