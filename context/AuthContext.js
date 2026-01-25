@@ -13,6 +13,7 @@ export const supabase = supabaseUrl && supabaseAnonKey
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [needsMfa, setNeedsMfa] = useState(false);
     // Track when user was set from localStorage to prevent onAuthStateChange from overwriting
     const userSetFromLocalStorageRef = useRef(false);
 
@@ -127,6 +128,20 @@ export function AuthProvider({ children }) {
                     }
                 }
                 if (session?.user) {
+                    // Before setting user, ensure the session is at AAL2 if account requires MFA
+                    try {
+                        const payload = JSON.parse(atob(session.access_token.split('.')[1] || '""'));
+                        if (payload?.aal && payload.aal !== 'aal2') {
+                            console.warn('[AuthContext] Session AAL is not aal2 (', payload.aal, ') — not setting user and marking MFA required');
+                            setNeedsMfa(true);
+                            setUser(null);
+                            // Do not proceed to fetch profile
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('[AuthContext] Failed to parse session token AAL:', e);
+                    }
+
                     // Check if user already has profile data (from localStorage)
                     const hasProfileData = session.user.avatarUrl !== undefined || session.user.displayName !== undefined;
 
@@ -237,14 +252,41 @@ export function AuthProvider({ children }) {
                                             .maybeSingle();
 
                                         if (profile) {
-                                            console.log('[AuthContext] Late recovery localStorage: fetched profile');
-                                            setUser({
-                                                ...tokens.user,
-                                                avatarUrl: profile.avatar_url || null,
-                                                displayName: profile.name || null
-                                            });
+                                            // Before setting user, ensure token AAL is aal2
+                                            try {
+                                                const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
+                                                if (payload?.aal && payload.aal !== 'aal2') {
+                                                    console.warn('[AuthContext] Late recovery localStorage: token AAL not aal2 (', payload.aal, ') — marking MFA required and not setting user');
+                                                    setNeedsMfa(true);
+                                                } else {
+                                                    console.log('[AuthContext] Late recovery: fetched profile');
+                                                    setUser({
+                                                        ...tokens.user,
+                                                        avatarUrl: profile.avatar_url || null,
+                                                        displayName: profile.name || null
+                                                    });
+                                                }
+                                            } catch (e) {
+                                                console.warn('[AuthContext] Failed to parse token during late recovery:', e);
+                                                setUser({
+                                                    ...tokens.user,
+                                                    avatarUrl: profile.avatar_url || null,
+                                                    displayName: profile.name || null
+                                                });
+                                            }
                                         } else {
-                                            setUser(tokens.user);
+                                            try {
+                                                const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
+                                                if (payload?.aal && payload.aal !== 'aal2') {
+                                                    console.warn('[AuthContext] Late recovery localStorage: token AAL not aal2 — marking MFA required and not setting user');
+                                                    setNeedsMfa(true);
+                                                } else {
+                                                    setUser(tokens.user);
+                                                }
+                                            } catch (e) {
+                                                console.warn('[AuthContext] Failed to parse token during late recovery fallback:', e);
+                                                setUser(tokens.user);
+                                            }
                                         }
                                     } catch (err) {
                                         console.warn('[AuthContext] Late recovery localStorage: failed to fetch profile:', err);
@@ -365,14 +407,40 @@ export function AuthProvider({ children }) {
                                                 .maybeSingle();
 
                                             console.log('[AuthContext] Fetched profile for restored user:', { hasAvatar: !!profile?.avatar_url, hasName: !!profile?.name });
-                                            setUser({
-                                                ...tokens.user,
-                                                avatarUrl: profile?.avatar_url || null,
-                                                displayName: profile?.name || null
-                                            });
+                                            try {
+                                                const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
+                                                if (payload?.aal && payload.aal !== 'aal2') {
+                                                    console.warn('[AuthContext] Restored token AAL not aal2 — marking MFA required and not setting user');
+                                                    setNeedsMfa(true);
+                                                } else {
+                                                    setUser({
+                                                        ...tokens.user,
+                                                        avatarUrl: profile?.avatar_url || null,
+                                                        displayName: profile?.name || null
+                                                    });
+                                                }
+                                            } catch (e) {
+                                                console.warn('[AuthContext] Failed to parse token during restored profile handling:', e);
+                                                setUser({
+                                                    ...tokens.user,
+                                                    avatarUrl: profile?.avatar_url || null,
+                                                    displayName: profile?.name || null
+                                                });
+                                            }
                                         } catch (err) {
                                             console.warn('[AuthContext] Failed to fetch profile for restored user:', err);
-                                            setUser(tokens.user);
+                                            try {
+                                                const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
+                                                if (payload?.aal && payload.aal !== 'aal2') {
+                                                    console.warn('[AuthContext] Restored token AAL not aal2 — marking MFA required and not setting user');
+                                                    setNeedsMfa(true);
+                                                } else {
+                                                    setUser(tokens.user);
+                                                }
+                                            } catch (e) {
+                                                console.warn('[AuthContext] Failed to parse token during restored fallback:', e);
+                                                setUser(tokens.user);
+                                            }
                                         }
                                         return;
                                     }
@@ -502,11 +570,33 @@ export function AuthProvider({ children }) {
                     if (hasProfileData) {
                         // User already has profile data, use it directly
                         console.log('[AuthContext] Emergency recovery: user has profile data, using directly');
-                        setUser(tokens.user);
+                        try {
+                            const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
+                            if (payload?.aal && payload.aal !== 'aal2') {
+                                console.warn('[AuthContext] Emergency recovery: token AAL is not aal2 (', payload.aal, ') — not setting user to prevent bypass');
+                                // Do not set user to prevent bypassing MFA; keep tokens in localStorage and let Dashboard enforce MFA
+                            } else {
+                                setUser(tokens.user);
+                            }
+                        } catch (parseErr) {
+                            console.warn('[AuthContext] Emergency recovery: failed to parse token, setting user as fallback', parseErr);
+                            setUser(tokens.user);
+                        }
                     } else {
                         // Set user immediately (without profile) to avoid null state
                         console.log('[AuthContext] Emergency recovery: setting user immediately, then fetching profile');
-                        setUser(tokens.user);
+                        try {
+                            const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
+                            if (payload?.aal && payload.aal !== 'aal2') {
+                                console.warn('[AuthContext] Emergency recovery: token AAL not aal2 — marking MFA required and not setting user');
+                                setNeedsMfa(true);
+                            } else {
+                                setUser(tokens.user);
+                            }
+                        } catch (e) {
+                            console.warn('[AuthContext] Emergency recovery: failed to parse token, setting user as fallback', e);
+                            setUser(tokens.user);
+                        }
 
                         // Fetch fresh profile data asynchronously and update
                         (async () => {
@@ -628,6 +718,8 @@ export function AuthProvider({ children }) {
     const value = {
         user,
         loading,
+        needsMfa,
+        setNeedsMfa,
         signIn,
         signUp,
         signOut,
