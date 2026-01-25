@@ -223,9 +223,16 @@ function DashboardContent() {
 }
 
 export default function Dashboard() {
-  const { user, loading, supabase } = useAuth();
+  const { user, loading, supabase, needsMfa } = useAuth();
   const [authChecked, setAuthChecked] = useState(false);
   const [hasTokens, setHasTokens] = useState(false);
+
+  useEffect(() => {
+    if (needsMfa) {
+      console.warn('[Dashboard] AuthContext reports needsMfa=true — redirecting to /login');
+      window.location.href = '/login';
+    }
+  }, [needsMfa]);
 
   // IMMEDIATE check on mount - check localStorage synchronously
   useEffect(() => {
