@@ -231,6 +231,8 @@ export default function Dashboard() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    let isMounted = true;
+
     try {
       const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
       const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
@@ -292,7 +294,11 @@ export default function Dashboard() {
     } catch (e) {
       console.warn('[Dashboard] Error in immediate token check:', e);
     }
-  }, []);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
