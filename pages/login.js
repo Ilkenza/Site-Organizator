@@ -443,15 +443,43 @@ export default function Login() {
                     user: userWithProfile
                 }));
 
+                // Try to set session in the Supabase client so SDK processes it immediately
+                try {
+                    await supabase.auth.setSession({
+                        access_token: session.access_token,
+                        refresh_token: session.refresh_token
+                    });
+                    console.log('setSession succeeded on login page');
+                } catch (setErr) {
+                    console.warn('setSession failed on login page:', setErr);
+                }
+
+                // Clear MFA UI state so the form is not stuck
+                try { window.__mfaPending = false; } catch (e) { }
+                setMfaRequired(false);
+                setFactorId(null);
+                setAal1Token(null);
+                setMfaCode('');
+
+                // Ensure loading states are cleared in case navigation is blocked
+                setLoading(false);
+                setSigning(false);
+
                 console.log('Tokens stored, redirecting to /dashboard...');
                 console.log('About to call window.location.replace');
                 try {
                     window.location.replace('/dashboard');
                 } catch (navErr) {
                     console.error('Navigation error:', navErr);
-                    window.location.href = '/dashboard';
+                    try { window.location.href = '/dashboard'; } catch (e) { console.error('href fallback failed', e); }
                 }
-                console.log('window.location.replace called');
+
+                // As a final safety, force a location change after a short delay
+                setTimeout(() => {
+                    try { if (window.location.pathname !== '/dashboard') window.location.assign('/dashboard'); } catch (e) { /* ignore */ }
+                }, 300);
+
+                console.log('Navigation attempted; finalizing');
                 return;
             }
 
