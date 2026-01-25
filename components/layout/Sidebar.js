@@ -60,14 +60,16 @@ export default function Sidebar({ isOpen = false, onClose }) {
         if (!selectedCategory && !selectedTag) return null;
         let filtered = sites.filter(s => s.is_favorite);
         if (selectedCategory) {
-            filtered = filtered.filter(s =>
-                s.categories_array?.some(cat => cat?.id === selectedCategory)
-            );
+            filtered = filtered.filter(s => {
+                const siteCategories = s.categories_array || s.categories || s.site_categories?.map(sc => sc.category) || [];
+                return siteCategories.some(cat => cat?.id === selectedCategory);
+            });
         }
         if (selectedTag) {
-            filtered = filtered.filter(s =>
-                s.tags_array?.some(tag => tag?.id === selectedTag)
-            );
+            filtered = filtered.filter(s => {
+                const siteTags = s.tags_array || s.tags || s.site_tags?.map(st => st.tag) || [];
+                return siteTags.some(tag => tag?.id === selectedTag);
+            });
         }
         return filtered.length;
     };
