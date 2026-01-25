@@ -482,12 +482,33 @@ export default function Dashboard() {
     };
   }, [user, loading, supabase, authChecked]);
 
-  // Show loading ONLY if:
-  // 1. We're still checking auth AND
-  // 2. We don't have user AND
-  // 3. We don't have tokens in localStorage (hasTokens state)
-  if (!authChecked && !user && !hasTokens) {
-    console.log('[Dashboard] Showing loading: authChecked=', authChecked, ', user=', !!user, ', hasTokens=', hasTokens);
+  // Determine if we should block rendering because the token is AAL<2 (synchronous check)
+  let immediateAalBlock = false;
+  if (typeof window !== 'undefined' && !user) {
+    try {
+      const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const tokens = JSON.parse(stored);
+        if (tokens?.access_token) {
+          const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
+          const isExpired = payload.exp * 1000 < Date.now();
+          if (!isExpired && payload.aal && payload.aal !== 'aal2') {
+            immediateAalBlock = true;
+          }
+        }
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
+  }
+
+  // Show loading when:
+  // - we are still checking auth and user is not set (previous behavior)
+  // - or token is present but AAL < 2 (prevent dashboard flash during immediate navigation)
+  if ((immediateAalBlock && !user) || (!authChecked && !user && !hasTokens)) {
+    console.log('[Dashboard] Showing loading: immediateAalBlock=', immediateAalBlock, ', authChecked=', authChecked, ', user=', !!user, ', hasTokens=', hasTokens);
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: '#6CBBFB' }}></div>
