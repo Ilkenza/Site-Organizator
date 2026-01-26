@@ -267,7 +267,7 @@ export function DashboardProvider({ children }) {
             showToast(`✗ Failed to add site: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast]);
+    }, [user, showToast]);
 
     const updateSite = useCallback(async (id, siteData) => {
         try {
