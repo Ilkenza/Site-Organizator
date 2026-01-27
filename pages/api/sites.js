@@ -51,10 +51,9 @@ export default async function handler(req, res) {
                 if (rows && rows.length > 0) return res.status(409).json({ success: false, error: 'Site already exists', data: rows[0] });
               }
             } catch (lookupErr) {
-              console.warn('site duplicate lookup failed', lookupErr);
             }
           }
-        } catch (e) { console.warn('duplicate-site handling failed', e); }
+        } catch (e) { }
         return res.status(502).json({ success: false, error: 'Upstream REST error', details: text });
       }
 
@@ -68,11 +67,9 @@ export default async function handler(req, res) {
           const payload = body.tag_ids.map(tag_id => ({ site_id: newSite.id, tag_id }));
           const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
           if (!stRes.ok) {
-            const errText = await stRes.text();
-            // non-fatal: log and continue
-            console.warn('site_tags insert failed', errText);
+            await stRes.text();
           }
-        } catch (err) { console.warn('site_tags insert failed', err); }
+        } catch (err) { }
       }
 
       // Attach categories - support both category_ids (array of IDs) and categories (array of names)
@@ -86,9 +83,9 @@ export default async function handler(req, res) {
           const toInsert = categoryIds.map(category_id => ({ site_id: newSite.id, category_id }));
           const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
           if (!scRes.ok) {
-            const errText = await scRes.text(); console.warn('site_categories insert failed', errText);
+            await scRes.text();
           }
-        } catch (err) { console.warn('site_categories insert failed', err); }
+        } catch (err) { }
       } else if (categoryNames.length > 0) {
         // Resolve names to IDs first
         try {
@@ -107,11 +104,11 @@ export default async function handler(req, res) {
               const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
               const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
               if (!scRes.ok) {
-                const errText = await scRes.text(); console.warn('site_categories insert failed', errText);
+                await scRes.text();
               }
             }
           }
-        } catch (err) { console.warn('site_categories attach failed', err); }
+        } catch (err) { }
       }
 
       // Refetch the complete site with categories and tags
@@ -130,14 +127,11 @@ export default async function handler(req, res) {
             completeSite.tags_array = completeSite.tags_array.map(st => st.tag).filter(Boolean);
           }
 
-          console.log('Complete site after creation:', completeSite);
           return res.status(201).json({ success: true, data: completeSite });
         } else {
-          console.warn('Failed to refetch complete site, returning basic data');
           return res.status(201).json({ success: true, data: newSite });
         }
       } catch (err) {
-        console.warn('Refetch complete site failed:', err);
         return res.status(201).json({ success: true, data: newSite });
       }
     } catch (err) {
@@ -222,9 +216,8 @@ export default async function handler(req, res) {
           if (stRes.ok) {
             try { siteTags = JSON.parse(stText); } catch (e) { siteTags = []; stDebug.parseError = String(e); }
           } else {
-            console.warn('site_tags fetch failed', stDebug);
           }
-        } catch (err) { console.warn('site_tags fetch error', err); stDebug = { error: String(err) }; }
+        } catch (err) { stDebug = { error: String(err) }; }
 
         // Build map site_id => tags[] (tag objects)
         const tagsBySite = new Map();
@@ -291,7 +284,6 @@ export default async function handler(req, res) {
           });
         });
       } catch (err) {
-        console.warn('site relations attach failed', err);
       }
     }
 
@@ -303,7 +295,6 @@ export default async function handler(req, res) {
     try { if (scDebug && typeof scDebug.body === 'string') scBodyCount = JSON.parse(scDebug.body).length; } catch (e) { scBodyCount = null; }
     try { if (stDebug && typeof stDebug.body === 'string') stBodyCount = JSON.parse(stDebug.body).length; } catch (e) { stBodyCount = null; }
     const countsMatch = (scBodyCount === null || scBodyCount === siteCategoriesCount) && (stBodyCount === null || stBodyCount === siteTagsCount);
-    if (!countsMatch) console.warn('site counts mismatch', { siteCategoriesCount, scBodyCount, siteTagsCount, stBodyCount });
     return res.status(200).json({
       success: true,
       data,

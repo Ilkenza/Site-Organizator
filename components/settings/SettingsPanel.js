@@ -79,12 +79,10 @@ export default function SettingsPanel() {
     useEffect(() => {
         const loadProfileData = async () => {
             if (!user?.id) {
-                console.log('[SettingsPanel] Cannot load profile - missing user:', { userId: user?.id });
                 return;
             }
 
             try {
-                console.log('[SettingsPanel] Fetching profile via API for user:', user.id);
 
                 // Use our API endpoint instead of Supabase SDK (which can timeout)
                 const response = await fetch('/api/profile', {
@@ -96,15 +94,12 @@ export default function SettingsPanel() {
                 });
 
                 const result = await response.json();
-                console.log('[SettingsPanel] Profile fetch result:', result);
 
                 if (!result.success || !result.data) {
-                    console.warn('[SettingsPanel] Profile fetch failed:', result.error);
                     return;
                 }
 
                 const profile = result.data;
-                console.log('[SettingsPanel] Setting avatar and name from profile');
                 if (profile.avatar_url) {
                     setAvatar(profile.avatar_url);
                 }
@@ -175,13 +170,11 @@ export default function SettingsPanel() {
                 const result = await Promise.race([factorsPromise, factorsTimeout]);
 
                 if (result?.timedOut) {
-                    console.warn('listFactors timed out in SettingsPanel');
                     return;
                 }
 
                 const { data, error } = result;
                 if (error) {
-                    console.warn('Error checking MFA status:', error.message);
                     return;
                 }
 
@@ -223,7 +216,6 @@ export default function SettingsPanel() {
                     // Wait a moment for the unenroll to complete
                     await new Promise(resolve => setTimeout(resolve, 500));
                 } catch (unenrollErr) {
-                    console.warn('Failed to unenroll existing factor:', unenrollErr);
                 }
             }
 
@@ -750,19 +742,9 @@ export default function SettingsPanel() {
             return;
         }
 
-        console.log('File selected for import:', {
-            name: file.name,
-            size: file.size,
-            type: file.type
-        });
-
         try {
             const { parseImportFile } = await import('../../lib/exportImport.js');
             const data = await parseImportFile(file);
-            console.log('File parsed successfully:', {
-                sitesCount: data?.sites?.length || 0,
-                sites: data?.sites
-            });
 
             if (data?.sites?.length) {
                 setImportPreview(data);
@@ -784,12 +766,6 @@ export default function SettingsPanel() {
             setImportMessage({ type: 'error', text: 'Please select a valid file first' });
             return;
         }
-
-        console.log('Starting import:', {
-            sitesCount: importPreview.sites.length,
-            userId: user?.id,
-            sites: importPreview.sites
-        });
 
         setImportLoading(true);
         try {

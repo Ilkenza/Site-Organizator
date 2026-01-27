@@ -30,18 +30,12 @@ export default async function handler(req, res) {
             }
 
             try {
-                console.log('[FAVORITES] site_id:', site_id, 'type:', typeof site_id);
-
                 // Get ALL sites first to see what we have
                 const { data: allSites, error: allError } = await supabase
                     .from('sites')
                     .select('id');
 
-                console.log('[FAVORITES] Total sites in DB:', allSites?.length || 0);
-                console.log('[FAVORITES] Sample IDs:', allSites?.slice(0, 3).map(s => ({ id: s.id, type: typeof s.id })));
-
                 if (allError) {
-                    console.error('Error fetching all sites:', allError);
                 }
 
                 // Get current favorite status with exact ID
@@ -50,10 +44,7 @@ export default async function handler(req, res) {
                     .select('id, is_favorite')
                     .eq('id', site_id);
 
-                console.log('[FAVORITES] Query result for', site_id, ':', siteData?.length || 0, 'matches');
-
                 if (fetchError) {
-                    console.error('[FAVORITES] Fetch error:', fetchError);
                     throw fetchError;
                 }
 
@@ -74,20 +65,17 @@ export default async function handler(req, res) {
                     .select('is_favorite');
 
                 if (updateError) {
-                    console.error('Update error:', updateError);
                     throw updateError;
                 }
 
                 return res.status(200).json({ favorite: !site.is_favorite });
             } catch (err) {
-                console.error('Favorites toggle error:', err);
                 throw err;
             }
         }
 
         return res.status(405).json({ error: 'Method not allowed' });
     } catch (err) {
-        console.error('Favorites API error:', err);
         return res.status(500).json({ error: err.message });
     }
 }

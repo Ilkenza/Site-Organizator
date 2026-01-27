@@ -20,7 +20,6 @@ async function fetchProfileViaAPI() {
         }
         return { profile: null, error: result?.error || 'No profile data' };
     } catch (err) {
-        console.warn('[AuthContext] fetchProfileViaAPI error:', err.message);
         return { profile: null, error: err.message };
     }
 }
@@ -55,7 +54,7 @@ export function AuthProvider({ children }) {
                     if (!isMounted) return;
 
                     if (error) {
-                        console.warn('Session check error (attempt ' + (retryCount + 1) + '):', error.message);
+
                     }
 
                     if (data?.session) {
@@ -65,7 +64,6 @@ export function AuthProvider({ children }) {
 
                     retryCount++;
                     if (retryCount < maxRetries) {
-                        console.log(`Session not found, retry ${retryCount}/${maxRetries}...`);
                         await new Promise(r => setTimeout(r, retryDelay));
                     }
                 }
@@ -76,15 +74,11 @@ export function AuthProvider({ children }) {
                         // IMPORTANT: Use EXACT same key format as login.js
                         const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
                         const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-                        console.log('[AuthContext] Checking localStorage with key:', storageKey);
 
                         const storedTokens = localStorage.getItem(storageKey);
-                        console.log('[AuthContext] Tokens found in localStorage:', !!storedTokens);
 
                         if (storedTokens) {
-                            console.log('[AuthContext] Found tokens in localStorage, attempting to restore session...');
                             const tokens = JSON.parse(storedTokens);
-                            console.log('[AuthContext] Parsed tokens - has access_token:', !!tokens?.access_token, ', has refresh_token:', !!tokens?.refresh_token, ', has user:', !!tokens?.user);
 
                             if (tokens?.access_token && tokens?.refresh_token) {
                                 // Wrap setSession in a timeout to prevent indefinite blocking (mobile fix)
@@ -106,26 +100,21 @@ export function AuthProvider({ children }) {
                                         timeoutPromise
                                     ]);
 
-                                    console.log('[AuthContext] setSession result - error:', setSessionError?.message, ', has session:', !!setSessionData?.session);
 
                                     if (setSessionError) {
-                                        console.warn('[AuthContext] Failed to restore session from localStorage:', setSessionError.message);
                                         // Only clear tokens if it's an auth error, not a network error
                                         if (setSessionError.message?.includes('invalid') || setSessionError.message?.includes('expired')) {
                                             localStorage.removeItem(storageKey);
                                         }
                                     } else if (setSessionData?.session) {
-                                        console.log('[AuthContext] Session restored from localStorage successfully');
                                         session = setSessionData.session;
                                         setSessionSucceeded = true;
                                     }
                                 } catch (timeoutErr) {
-                                    console.warn('[AuthContext] setSession timed out:', timeoutErr.message);
                                 }
 
                                 // CRITICAL: If setSession didn't return a session but tokens exist with user, use them directly
                                 if (!session && tokens.user) {
-                                    console.log('[AuthContext] Using user from stored tokens as fallback (setSessionSucceeded:', setSessionSucceeded, ')');
                                     userSetFromLocalStorageRef.current = true;
                                     session = {
                                         access_token: tokens.access_token,
@@ -139,7 +128,6 @@ export function AuthProvider({ children }) {
                             }
                         }
                     } catch (e) {
-                        console.warn('[AuthContext] Error checking localStorage for tokens:', e);
                     }
                 }
                 if (session?.user) {
@@ -147,57 +135,41 @@ export function AuthProvider({ children }) {
                     try {
                         const payload = JSON.parse(atob(session.access_token.split('.')[1] || '""'));
                         if (payload?.aal && payload.aal !== 'aal2') {
-                            console.warn('[AuthContext] Session AAL is not aal2 (', payload.aal, ') — not setting user and marking MFA required');
                             setNeedsMfa(true);
                             setUser(null);
                             // Do not proceed to fetch profile
                             return;
                         }
                     } catch (e) {
-                        console.warn('[AuthContext] Failed to parse session token AAL:', e);
                     }
 
                     // Check if user already has REAL profile data (from localStorage)
                     // Must check for truthy values, not just !== undefined, because null means data wasn't fetched
                     const hasProfileData = !!session.user.avatarUrl || !!session.user.displayName;
 
-                    console.log('[AuthContext] Profile data check:', {
-                        hasProfileData,
-                        avatarUrl: session.user.avatarUrl,
-                        displayName: session.user.displayName,
-                        userId: session.user.id
-                    });
-
                     if (hasProfileData) {
-                        console.log('[AuthContext] User already has profile data from localStorage, skipping fetch');
                         setUser(session.user);
                     } else {
-                        console.log('[AuthContext] Fetching profile data for user:', session.user.id);
                         try {
                             // Check session first
                             const { data: sessionCheck } = await supabase.auth.getSession();
-                            console.log('[AuthContext] Session check before profile fetch:', !!sessionCheck?.session);
 
                             // Fetch user profile including avatar and name
                             const { profile, error: profileError } = await fetchProfileViaAPI();
 
-                            console.log('[AuthContext] Profile fetch result:', { profile, error: profileError?.message });
 
                             if (!isMounted) return;
 
                             if (profileError && profileError.code !== 'PGRST116') {
-                                console.warn('[AuthContext] Profile fetch error:', profileError.message);
                             }
 
                             if (profile) {
-                                console.log('[AuthContext] Profile fetched successfully, setting user with avatar/name');
                                 setUser({
                                     ...session.user,
                                     avatarUrl: profile.avatar_url || null,
                                     displayName: profile.name || null,
                                 });
                             } else {
-                                console.log('[AuthContext] No profile found, setting user without avatar/name');
                                 setUser(session.user);
                             }
                         } catch (err) {
@@ -213,7 +185,6 @@ export function AuthProvider({ children }) {
                 if (!isMounted) return;
                 // AbortError is a transient error from SDK's internal abort signals - don't clear user
                 if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
-                    console.warn('[AuthContext] Session check aborted (transient error, keeping user):', err?.message || err);
                     // Don't clear user on AbortError - it's usually a race condition
                     return;
                 }
@@ -232,20 +203,17 @@ export function AuthProvider({ children }) {
         // Safety timeout - reduced to 3s to match dashboard timeout
         const safetyTimeout = setTimeout(() => {
             if (isMounted && loading) {
-                console.warn('[AuthContext] Auth initialization timed out after 3s, forcing loading to false');
                 setLoading(false);
 
                 // Try getSession one more time
                 supabase.auth.getSession().then(async ({ data }) => {
                     if (isMounted && data?.session?.user) {
-                        console.log('[AuthContext] Late session recovery successful via getSession');
 
                         // Fetch profile data to get avatar and displayName
                         try {
                             const { profile } = await fetchProfileViaAPI();
 
                             if (profile) {
-                                console.log('[AuthContext] Late recovery: fetched profile data');
                                 setUser({
                                     ...data.session.user,
                                     avatarUrl: profile.avatar_url || null,
@@ -255,7 +223,6 @@ export function AuthProvider({ children }) {
                                 setUser(data.session.user);
                             }
                         } catch (err) {
-                            console.warn('[AuthContext] Late recovery: failed to fetch profile:', err);
                             setUser(data.session.user);
                         }
                     } else if (isMounted && typeof window !== 'undefined') {
@@ -268,7 +235,6 @@ export function AuthProvider({ children }) {
                             if (storedTokens) {
                                 const tokens = JSON.parse(storedTokens);
                                 if (tokens?.user) {
-                                    console.log('[AuthContext] Late session recovery using tokens from localStorage');
                                     userSetFromLocalStorageRef.current = true;
 
                                     // Fetch profile data
@@ -280,10 +246,8 @@ export function AuthProvider({ children }) {
                                             try {
                                                 const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
                                                 if (payload?.aal && payload.aal !== 'aal2') {
-                                                    console.warn('[AuthContext] Late recovery localStorage: token AAL not aal2 (', payload.aal, ') — marking MFA required and not setting user');
                                                     setNeedsMfa(true);
                                                 } else {
-                                                    console.log('[AuthContext] Late recovery: fetched profile');
                                                     setUser({
                                                         ...tokens.user,
                                                         avatarUrl: profile.avatar_url || null,
@@ -291,7 +255,6 @@ export function AuthProvider({ children }) {
                                                     });
                                                 }
                                             } catch (e) {
-                                                console.warn('[AuthContext] Failed to parse token during late recovery:', e);
                                                 setUser({
                                                     ...tokens.user,
                                                     avatarUrl: profile.avatar_url || null,
@@ -302,24 +265,20 @@ export function AuthProvider({ children }) {
                                             try {
                                                 const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
                                                 if (payload?.aal && payload.aal !== 'aal2') {
-                                                    console.warn('[AuthContext] Late recovery localStorage: token AAL not aal2 — marking MFA required and not setting user');
                                                     setNeedsMfa(true);
                                                 } else {
                                                     setUser(tokens.user);
                                                 }
                                             } catch (e) {
-                                                console.warn('[AuthContext] Failed to parse token during late recovery fallback:', e);
                                                 setUser(tokens.user);
                                             }
                                         }
                                     } catch (err) {
-                                        console.warn('[AuthContext] Late recovery localStorage: failed to fetch profile:', err);
                                         setUser(tokens.user);
                                     }
                                 }
                             }
                         } catch (e) {
-                            console.warn('[AuthContext] Late localStorage fallback failed:', e);
                         }
                     }
                 }).catch(() => { });
@@ -340,7 +299,6 @@ export function AuthProvider({ children }) {
                             if (!isMounted) return;
 
                             if (profileError && profileError.code !== 'PGRST116') {
-                                console.warn('Profile fetch error:', profileError.message);
                             }
 
                             setUser({
@@ -359,11 +317,9 @@ export function AuthProvider({ children }) {
                         // 2. User was NOT recovered from localStorage
                         // This prevents onAuthStateChange from overwriting the user we just set from MFA verification
                         if (_event === 'SIGNED_OUT') {
-                            console.log('[AuthContext] SIGNED_OUT event, clearing user');
                             userSetFromLocalStorageRef.current = false;
                             setUser(null);
                         } else if (userSetFromLocalStorageRef.current) {
-                            console.log('[AuthContext] Ignoring null session - user was set from localStorage, event:', _event);
                             // Check if localStorage still has valid tokens - only then keep ignoring
                             try {
                                 const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -372,14 +328,12 @@ export function AuthProvider({ children }) {
                                 if (storedTokens) {
                                     const tokens = JSON.parse(storedTokens);
                                     if (tokens?.access_token && tokens?.user) {
-                                        console.log('[AuthContext] localStorage still has valid tokens, keeping user');
 
                                         // Fetch profile data if user doesn't have it yet
                                         try {
                                             const { profile } = await fetchProfileViaAPI();
 
                                             if (profile) {
-                                                console.log('[AuthContext] Updating user with profile data');
                                                 setUser({
                                                     ...tokens.user,
                                                     avatarUrl: profile.avatar_url || null,
@@ -387,7 +341,6 @@ export function AuthProvider({ children }) {
                                                 });
                                             }
                                         } catch (err) {
-                                            console.warn('[AuthContext] Failed to fetch profile:', err);
                                         }
 
                                         // Don't clear the flag while tokens exist
@@ -395,11 +348,9 @@ export function AuthProvider({ children }) {
                                     }
                                 }
                                 // Tokens gone - clear the flag and user
-                                console.log('[AuthContext] localStorage tokens gone, clearing user');
                                 userSetFromLocalStorageRef.current = false;
                                 setUser(null);
                             } catch (e) {
-                                console.warn('[AuthContext] Error checking tokens in onAuthStateChange:', e);
                             }
                         } else {
                             // ALSO check localStorage before clearing - tokens might exist even if flag is false
@@ -410,7 +361,6 @@ export function AuthProvider({ children }) {
                                 if (storedTokens) {
                                     const tokens = JSON.parse(storedTokens);
                                     if (tokens?.access_token && tokens?.user) {
-                                        console.log('[AuthContext] localStorage has valid tokens - NOT clearing user, event:', _event);
                                         // Set the flag and restore user from tokens
                                         userSetFromLocalStorageRef.current = true;
 
@@ -418,11 +368,9 @@ export function AuthProvider({ children }) {
                                         try {
                                             const { profile } = await fetchProfileViaAPI();
 
-                                            console.log('[AuthContext] Fetched profile for restored user:', { hasAvatar: !!profile?.avatar_url, hasName: !!profile?.name });
                                             try {
                                                 const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
                                                 if (payload?.aal && payload.aal !== 'aal2') {
-                                                    console.warn('[AuthContext] Restored token AAL not aal2 — marking MFA required and not setting user');
                                                     setNeedsMfa(true);
                                                 } else {
                                                     setUser({
@@ -432,7 +380,6 @@ export function AuthProvider({ children }) {
                                                     });
                                                 }
                                             } catch (e) {
-                                                console.warn('[AuthContext] Failed to parse token during restored profile handling:', e);
                                                 setUser({
                                                     ...tokens.user,
                                                     avatarUrl: profile?.avatar_url || null,
@@ -440,17 +387,14 @@ export function AuthProvider({ children }) {
                                                 });
                                             }
                                         } catch (err) {
-                                            console.warn('[AuthContext] Failed to fetch profile for restored user:', err);
                                             try {
                                                 const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
                                                 if (payload?.aal && payload.aal !== 'aal2') {
-                                                    console.warn('[AuthContext] Restored token AAL not aal2 — marking MFA required and not setting user');
                                                     setNeedsMfa(true);
                                                 } else {
                                                     setUser(tokens.user);
                                                 }
                                             } catch (e) {
-                                                console.warn('[AuthContext] Failed to parse token during restored fallback:', e);
                                                 setUser(tokens.user);
                                             }
                                         }
@@ -458,9 +402,7 @@ export function AuthProvider({ children }) {
                                     }
                                 }
                             } catch (e) {
-                                console.warn('[AuthContext] Error checking localStorage in else branch:', e);
                             }
-                            console.log('[AuthContext] No session and no localStorage tokens, clearing user, event:', _event);
                             setUser(null);
                         }
                     }
@@ -510,7 +452,6 @@ export function AuthProvider({ children }) {
                 }
             });
         } catch (e) {
-            console.warn('Error clearing auth tokens from localStorage:', e);
         }
 
         // Sign out from Supabase (fire and forget - don't wait)
@@ -524,26 +465,18 @@ export function AuthProvider({ children }) {
 
     const refreshUser = async () => {
         if (!supabase || !user?.id) {
-            console.warn('Cannot refresh user: supabase or user.id missing', {
-                hasSupabase: !!supabase,
-                userId: user?.id
-            });
             return;
         }
         try {
-            console.log('Fetching latest profile for user:', user.id);
 
             const { profile, error } = await fetchProfileViaAPI();
 
-            console.log('Profile fetch result:', { profile, error: error?.message });
 
             if (error) {
-                console.warn('Profile refresh error:', error.message);
                 return;
             }
 
             if (profile) {
-                console.log('Updating user state with new profile:', profile);
                 setUser(prev => ({
                     ...prev,
                     avatarUrl: profile.avatar_url || null,
@@ -569,7 +502,6 @@ export function AuthProvider({ children }) {
             if (storedTokens) {
                 const tokens = JSON.parse(storedTokens);
                 if (tokens?.user && tokens?.access_token) {
-                    console.log('[AuthContext] Emergency recovery: setting user from localStorage');
                     userSetFromLocalStorageRef.current = true;
 
                     // Check if user already has REAL profile data from localStorage
@@ -577,50 +509,41 @@ export function AuthProvider({ children }) {
 
                     if (hasProfileData) {
                         // User already has profile data, use it directly
-                        console.log('[AuthContext] Emergency recovery: user has profile data, using directly');
                         try {
                             const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
                             if (payload?.aal && payload.aal !== 'aal2') {
-                                console.warn('[AuthContext] Emergency recovery: token AAL is not aal2 (', payload.aal, ') — not setting user to prevent bypass');
                                 // Do not set user to prevent bypassing MFA; keep tokens in localStorage and let Dashboard enforce MFA
                             } else {
                                 setUser(tokens.user);
                             }
                         } catch (parseErr) {
-                            console.warn('[AuthContext] Emergency recovery: failed to parse token, setting user as fallback', parseErr);
                             setUser(tokens.user);
                         }
                     } else {
                         // Set user immediately (without profile) to avoid null state
-                        console.log('[AuthContext] Emergency recovery: setting user immediately, then fetching profile');
                         try {
                             const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
                             if (payload?.aal && payload.aal !== 'aal2') {
-                                console.warn('[AuthContext] Emergency recovery: token AAL not aal2 — marking MFA required and not setting user');
                                 setNeedsMfa(true);
                             } else {
                                 setUser(tokens.user);
                             }
                         } catch (e) {
-                            console.warn('[AuthContext] Emergency recovery: failed to parse token, setting user as fallback', e);
                             setUser(tokens.user);
                         }
 
                         // Fetch fresh profile data asynchronously and update
                         (async () => {
                             try {
-                                console.log('[AuthContext] Emergency recovery: fetching profile data via API');
 
                                 // Use our API endpoint instead of Supabase SDK (which times out)
                                 const { profile, error } = await fetchProfileViaAPI();
 
                                 if (error) {
-                                    console.warn('[AuthContext] Emergency recovery: profile fetch failed:', error);
                                     return;
                                 }
 
                                 if (profile) {
-                                    console.log('[AuthContext] Emergency recovery: fetched profile data via API');
                                     const updatedUser = {
                                         ...tokens.user,
                                         avatar_url: profile.avatar_url,
@@ -638,17 +561,13 @@ export function AuthProvider({ children }) {
                                             const parsed = JSON.parse(storedData);
                                             parsed.user = updatedUser;
                                             localStorage.setItem(storageKey, JSON.stringify(parsed));
-                                            console.log('[AuthContext] Emergency recovery: saved profile to localStorage');
                                         }
                                     } catch (e) {
-                                        console.warn('[AuthContext] Failed to save profile to localStorage:', e);
                                     }
                                 } else {
-                                    console.log('[AuthContext] Emergency recovery: no profile found, using basic user');
                                     setUser(tokens.user);
                                 }
                             } catch (err) {
-                                console.warn('[AuthContext] Emergency recovery: profile fetch failed:', err);
                                 setUser(tokens.user);
                             }
                         })();
@@ -656,7 +575,6 @@ export function AuthProvider({ children }) {
                 }
             }
         } catch (e) {
-            console.warn('[AuthContext] Error in emergency user recovery:', e);
         }
     }, [user, loading]);
 
@@ -683,11 +601,9 @@ export function AuthProvider({ children }) {
                         name: user.displayName
                     };
                     localStorage.setItem(storageKey, JSON.stringify(parsed));
-                    console.log('[AuthContext] Synced profile data to localStorage');
                 }
             }
         } catch (e) {
-            console.warn('[AuthContext] Failed to sync profile to localStorage:', e);
         }
     }, [user]);
 
@@ -699,12 +615,10 @@ export function AuthProvider({ children }) {
 
         const fetchMissingProfile = async () => {
             try {
-                console.log('[AuthContext] Fetching missing profile data for user:', user.id);
 
                 const { profile } = await fetchProfileViaAPI();
 
                 if (profile && (profile.avatar_url || profile.name)) {
-                    console.log('[AuthContext] Got missing profile:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
                     setUser(prev => ({
                         ...prev,
                         avatarUrl: profile.avatar_url || prev?.avatarUrl || null,
@@ -712,7 +626,6 @@ export function AuthProvider({ children }) {
                     }));
                 }
             } catch (err) {
-                console.warn('[AuthContext] Failed to fetch missing profile:', err);
             }
         };
 
