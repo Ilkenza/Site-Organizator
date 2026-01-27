@@ -8,12 +8,6 @@ export default async function handler(req, res) {
   const authHeader = req.headers.authorization;
   const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-  console.log('[Categories API] Auth check:', {
-    hasUserToken: !!userToken,
-    tokenPreview: userToken ? userToken.substring(0, 20) + '...' : 'none',
-    hasAnonKey: !!SUPABASE_ANON_KEY
-  });
-
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
   }
@@ -24,7 +18,6 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     // POST requires user authentication - can't create categories without valid user token
     if (!userToken) {
-      console.log('[Categories API] POST rejected - no user token');
       return res.status(401).json({ success: false, error: 'Authentication required to create categories' });
     }
 
@@ -40,8 +33,6 @@ export default async function handler(req, res) {
         }
       }
 
-      console.log('[Categories API] Creating category with user token:', filteredBody);
-
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories`;
       const r = await fetch(url, {
         method: 'POST',
@@ -56,7 +47,6 @@ export default async function handler(req, res) {
       });
 
       const text = await r.text();
-      console.log('[Categories API] POST response:', r.status, text.substring(0, 200));
 
       if (!r.ok) {
         // Handle duplicate name attempt: return existing category if present
@@ -71,7 +61,6 @@ export default async function handler(req, res) {
             }
           }
         } catch (lookupErr) {
-          console.warn('category duplicate lookup failed', lookupErr);
         }
 
         return res.status(502).json({ success: false, error: 'Upstream REST error', details: text });

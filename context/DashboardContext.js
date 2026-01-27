@@ -172,7 +172,6 @@ export function DashboardProvider({ children }) {
                                 if (parsed?.access_token && parsed?.expires_at) {
                                     const expiresAt = parsed.expires_at * 1000; // Convert to ms
                                     if (Date.now() < expiresAt) {
-                                        console.log('[DashboardContext] User is null but valid tokens found - NOT clearing data');
                                         return true;
                                     }
                                 }
@@ -180,7 +179,6 @@ export function DashboardProvider({ children }) {
                         }
                     }
                 } catch (e) {
-                    console.warn('[DashboardContext] Error checking localStorage tokens:', e);
                 }
                 return false;
             })();
@@ -189,7 +187,6 @@ export function DashboardProvider({ children }) {
             // Use debounce if we recently had a user (auth transition in progress)
             if (!hasValidTokens) {
                 const clearData = () => {
-                    console.log('[DashboardContext] No valid tokens found - clearing data');
                     setSites([]);
                     setCategories([]);
                     setTags([]);
@@ -199,7 +196,6 @@ export function DashboardProvider({ children }) {
 
                 // If we had a user recently, wait 500ms before clearing (gives time for auth to recover)
                 if (hadUserRef.current) {
-                    console.log('[DashboardContext] User became null but had user recently - waiting 500ms before clearing');
                     clearDataTimeoutRef.current = setTimeout(clearData, 500);
                 } else {
                     clearData();
@@ -222,28 +218,21 @@ export function DashboardProvider({ children }) {
         const channel = supabase
             .channel('dashboard-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'sites' }, () => {
-                console.log('Sites table changed, refreshing data...');
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
-                console.log('Categories table changed, refreshing data...');
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'tags' }, () => {
-                console.log('Tags table changed, refreshing data...');
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'site_categories' }, () => {
-                console.log('Site-categories relation changed, refreshing data...');
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'site_tags' }, () => {
-                console.log('Site-tags relation changed, refreshing data...');
                 fetchData();
             })
-            .subscribe((status) => {
-                console.log('Realtime subscription status:', status);
-            });
+            .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
@@ -293,9 +282,7 @@ export function DashboardProvider({ children }) {
 
     const deleteSite = useCallback(async (id) => {
         try {
-            console.log('Deleting site with id:', id);
             const response = await fetchAPI(`/sites/${id}`, { method: 'DELETE' });
-            console.log('Delete response:', response);
             setSites(prev => prev.filter(s => s.id !== id));
             setStats(prev => ({ ...prev, sites: prev.sites - 1 }));
             showToast('✓ Site deleted successfully', 'success');
