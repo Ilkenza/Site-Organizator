@@ -238,7 +238,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                 className="px-2 py-1 text-xs bg-app-bg-secondary border border-app-border rounded text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-1 focus:ring-app-accent w-28"
                             />
                         </div>
-                        <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                        <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
                             {categories
                                 .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
                                 .map(cat => (
@@ -280,7 +280,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                 className="px-2 py-1 text-xs bg-app-bg-secondary border border-app-border rounded text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-1 focus:ring-purple-500 w-28"
                             />
                         </div>
-                        <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                        <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-48 overflow-y-auto">
                             {tags
                                 .filter(tag => tag.name.toLowerCase().includes(tagSearch.toLowerCase()))
                                 .map(tag => (
