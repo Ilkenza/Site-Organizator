@@ -87,11 +87,13 @@ const convertToHTML = (sites) => {
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
+        console.error('❌ Wrong method:', req.method);
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
     // Check environment
     if (!SUPABASE_URL || !KEY) {
+        console.error('❌ Missing Supabase config - URL:', !!SUPABASE_URL, 'Key:', !!KEY);
         return res.status(500).json({ error: 'Supabase not configured', details: 'Missing API credentials' });
     }
 
@@ -100,6 +102,7 @@ export default async function handler(req, res) {
         const format = (req.query.format || 'json').toLowerCase();
 
         if (!userId) {
+            console.error('❌ No userId provided');
             return res.status(401).json({ error: 'User ID required' });
         }
 
@@ -110,6 +113,7 @@ export default async function handler(req, res) {
             .eq('user_id', userId);
 
         if (sitesError) {
+            console.error('❌ Sites error:', sitesError.message);
             throw sitesError;
         }
 
@@ -120,6 +124,7 @@ export default async function handler(req, res) {
             .in('site_id', (sites || []).map(s => s.id));
 
         if (scError) {
+            console.error('❌ Site categories error:', scError.message);
             throw scError;
         }
 
@@ -141,6 +146,7 @@ export default async function handler(req, res) {
             .in('site_id', (sites || []).map(s => s.id));
 
         if (stError) {
+            console.error('❌ Site tags error:', stError.message);
             throw stError;
         }
 
@@ -162,6 +168,7 @@ export default async function handler(req, res) {
             .in('site_id', (sites || []).map(s => s.id));
 
         if (scData.error) {
+            console.error('❌ Site categories error:', scData.error.message);
             throw scData.error;
         }
         const siteCategories = scData.data || [];
@@ -173,6 +180,7 @@ export default async function handler(req, res) {
             .in('site_id', (sites || []).map(s => s.id));
 
         if (stData.error) {
+            console.error('❌ Site tags error:', stData.error.message);
             throw stData.error;
         }
         const siteTags = stData.data || [];
@@ -223,6 +231,8 @@ export default async function handler(req, res) {
         res.setHeader('Content-Type', 'application/json');
         return res.json(exportData);
     } catch (error) {
+        console.error('💥 Export error:', error.message);
+        console.error('Stack:', error.stack);
         return res.status(500).json({
             error: 'Export failed',
             message: error.message,

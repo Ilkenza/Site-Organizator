@@ -7,7 +7,10 @@ export default async function handler(req, res) {
   const authHeader = req.headers.authorization;
   const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.error('Missing env vars:', { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY });
+    return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
+  }
 
   // Use user's token for authenticated requests (respects RLS), fallback to anon key for reads
   const AUTH_TOKEN = userToken || SUPABASE_ANON_KEY;
@@ -67,7 +70,8 @@ export default async function handler(req, res) {
           const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
           const delCatRes = await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
           if (!delCatRes.ok) {
-            await delCatRes.text();
+            const errText = await delCatRes.text();
+            console.error('Failed to delete site_categories:', delCatRes.status, errText);
           }
 
           // Insert new categories
@@ -80,10 +84,11 @@ export default async function handler(req, res) {
               body: JSON.stringify(catPayload)
             });
             if (!insCatRes.ok) {
-              await insCatRes.text();
+              const errText = await insCatRes.text();
+              console.error('Failed to insert site_categories:', insCatRes.status, errText);
             }
           }
-        } catch (err) { }
+        } catch (err) { console.error('Exception updating categories:', err); }
       }
 
       // Update tags if provided
@@ -93,7 +98,8 @@ export default async function handler(req, res) {
           const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
           const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
           if (!delTagRes.ok) {
-            await delTagRes.text();
+            const errText = await delTagRes.text();
+            console.error('Failed to delete site_tags:', delTagRes.status, errText);
           }
 
           // Insert new tags
@@ -106,10 +112,11 @@ export default async function handler(req, res) {
               body: JSON.stringify(tagPayload)
             });
             if (!insTagRes.ok) {
-              await insTagRes.text();
+              const errText = await insTagRes.text();
+              console.error('Failed to insert site_tags:', insTagRes.status, errText);
             }
           }
-        } catch (err) { }
+        } catch (err) { console.error('Exception updating tags:', err); }
       }
 
       // Refetch the site with all related data
@@ -133,6 +140,7 @@ export default async function handler(req, res) {
         return res.status(502).json({ success: false, error: 'Failed to refetch site', details: errorText });
       }
     } catch (err) {
+      console.error('PUT/PATCH exception:', err);
       return res.status(500).json({ success: false, error: err.message || String(err) });
     }
   }
@@ -171,10 +179,12 @@ export default async function handler(req, res) {
       });
       if (!r.ok) {
         const errorText = await r.text();
+        console.error('Supabase DELETE error:', r.status, errorText);
         return res.status(502).json({ success: false, error: 'Upstream REST error', status: r.status, details: errorText });
       }
       return res.status(200).json({ success: true });
     } catch (err) {
+      console.error('DELETE exception:', err);
       return res.status(500).json({ success: false, error: err.message || String(err) });
     }
   }
