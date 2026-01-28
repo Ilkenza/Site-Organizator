@@ -290,6 +290,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ success: true, report });
   } catch (err) {
+    console.error('import failed', err);
     return res.status(500).json({ success: false, error: err.message || String(err) });
   }
 }
