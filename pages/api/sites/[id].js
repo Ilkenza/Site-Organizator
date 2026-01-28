@@ -7,13 +7,6 @@ export default async function handler(req, res) {
   const authHeader = req.headers.authorization;
   const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-  console.log('[Sites/ID API] Auth check:', {
-    id,
-    method: req.method,
-    hasUserToken: !!userToken,
-    tokenPreview: userToken ? userToken.substring(0, 20) + '...' : 'none'
-  });
-
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error('Missing env vars:', { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY });
     return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
@@ -51,8 +44,6 @@ export default async function handler(req, res) {
       // Add updated_at timestamp
       filteredData.updated_at = new Date().toISOString();
 
-      console.log('Updating site:', id, 'with data:', filteredData);
-
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
       const r = await fetch(url, {
         method: 'PATCH',
@@ -67,13 +58,10 @@ export default async function handler(req, res) {
       });
       if (!r.ok) {
         const errorText = await r.text();
-        console.error('Supabase PATCH error:', r.status, errorText);
         return res.status(502).json({ success: false, error: 'Upstream REST error', status: r.status, details: errorText });
       }
       const updated = await r.json();
-      console.log('Supabase PATCH response:', updated);
       const updatedSite = Array.isArray(updated) ? updated[0] : updated;
-      console.log('Updated site to return:', updatedSite);
 
       // Update categories if provided
       if (Array.isArray(category_ids)) {
@@ -84,14 +72,11 @@ export default async function handler(req, res) {
           if (!delCatRes.ok) {
             const errText = await delCatRes.text();
             console.error('Failed to delete site_categories:', delCatRes.status, errText);
-          } else {
-            console.log('Deleted existing site_categories for site:', id);
           }
 
           // Insert new categories
           if (category_ids.length > 0) {
             const catPayload = category_ids.map(category_id => ({ site_id: id, category_id }));
-            console.log('Inserting categories:', catPayload);
             const insCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
             const insCatRes = await fetch(insCatUrl, {
               method: 'POST',
@@ -101,8 +86,6 @@ export default async function handler(req, res) {
             if (!insCatRes.ok) {
               const errText = await insCatRes.text();
               console.error('Failed to insert site_categories:', insCatRes.status, errText);
-            } else {
-              console.log('Inserted', category_ids.length, 'categories for site:', id);
             }
           }
         } catch (err) { console.error('Exception updating categories:', err); }
@@ -117,14 +100,11 @@ export default async function handler(req, res) {
           if (!delTagRes.ok) {
             const errText = await delTagRes.text();
             console.error('Failed to delete site_tags:', delTagRes.status, errText);
-          } else {
-            console.log('Deleted existing site_tags for site:', id);
           }
 
           // Insert new tags
           if (tag_ids.length > 0) {
             const tagPayload = tag_ids.map(tag_id => ({ site_id: id, tag_id }));
-            console.log('Inserting tags:', tagPayload);
             const insTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
             const insTagRes = await fetch(insTagUrl, {
               method: 'POST',
@@ -134,8 +114,6 @@ export default async function handler(req, res) {
             if (!insTagRes.ok) {
               const errText = await insTagRes.text();
               console.error('Failed to insert site_tags:', insTagRes.status, errText);
-            } else {
-              console.log('Inserted', tag_ids.length, 'tags for site:', id);
             }
           }
         } catch (err) { console.error('Exception updating tags:', err); }
@@ -156,7 +134,6 @@ export default async function handler(req, res) {
           completeSite.tags_array = completeSite.tags_array.map(st => st.tag).filter(Boolean);
         }
 
-        console.log('Complete site after update:', completeSite);
         return res.status(200).json({ success: true, data: completeSite });
       } else {
         const errorText = await refetchRes.text();
@@ -170,9 +147,6 @@ export default async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     try {
-      console.log('Deleting site:', id);
-      console.log('Using auth:', userToken ? 'USER_TOKEN' : 'ANON_KEY');
-
       // First, delete related site_categories
       try {
         const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
@@ -180,9 +154,7 @@ export default async function handler(req, res) {
           method: 'DELETE',
           headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` }
         });
-        console.log('Deleted site_categories for site:', id);
       } catch (err) {
-        console.warn('Failed to delete site_categories:', err);
       }
 
       // Then, delete related site_tags
@@ -192,14 +164,11 @@ export default async function handler(req, res) {
           method: 'DELETE',
           headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` }
         });
-        console.log('Deleted site_tags for site:', id);
       } catch (err) {
-        console.warn('Failed to delete site_tags:', err);
       }
 
       // Now delete the site itself
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
-      console.log('Deleting site from database, URL:', url);
       const r = await fetch(url, {
         method: 'DELETE',
         headers: {
@@ -208,13 +177,11 @@ export default async function handler(req, res) {
           Accept: 'application/json'
         }
       });
-      console.log('Delete response status:', r.status, r.statusText);
       if (!r.ok) {
         const errorText = await r.text();
         console.error('Supabase DELETE error:', r.status, errorText);
         return res.status(502).json({ success: false, error: 'Upstream REST error', status: r.status, details: errorText });
       }
-      console.log('Site deleted successfully:', id);
       return res.status(200).json({ success: true });
     } catch (err) {
       console.error('DELETE exception:', err);

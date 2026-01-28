@@ -36,22 +36,18 @@ export default function Header({ onAddClick, onMenuClick }) {
 
                                 if (result?.success && result?.data) {
                                     const profile = result.data;
-                                    console.log('[Header] Fetched profile via API');
                                     setLocalUser({
                                         ...tokens.user,
                                         avatarUrl: profile.avatar_url || null,
                                         displayName: profile.name || null
                                     });
                                 } else {
-                                    console.warn('[Header] Profile API returned no data:', result?.error);
                                 }
                             } catch (err) {
-                                console.warn('[Header] Failed to fetch profile via API:', err);
                             }
                         }
                     }
                 } catch (e) {
-                    console.warn('[Header] Error in fallback user fetch:', e);
                 }
             };
             fetchLocalUserWithProfile();

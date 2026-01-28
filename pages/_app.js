@@ -9,11 +9,9 @@ export default function App({ Component, pageProps }) {
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
       navigator.serviceWorker
         .register('/sw.js')
-        .then((registration) => {
-          console.log('SW registered:', registration.scope);
+        .then(() => {
         })
-        .catch((error) => {
-          console.log('SW registration failed:', error);
+        .catch(() => {
         });
     }
   }, []);
