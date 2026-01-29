@@ -40,7 +40,7 @@ export default async function handler(req, res) {
       const { category_ids, tag_ids, ...siteData } = body;
 
       // Update the site itself (only allowed fields)
-      const allowedFields = ['name', 'url', 'pricing'];
+      const allowedFields = ['name', 'url', 'pricing', 'is_favorite'];
       const filteredData = {};
       for (const key of allowedFields) {
         if (Object.prototype.hasOwnProperty.call(siteData, key)) {
