@@ -127,11 +127,14 @@ export default function SettingsPanel() {
                 console.log('[SettingsPanel] Fetching profile via API for user:', user.id);
 
                 // Use our API endpoint instead of Supabase SDK (which can timeout)
+                // Use the active Supabase session to get a reliable access token
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
                 const response = await fetch('/api/profile', {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('sb-' + (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1]?.split('.')[0] + '-auth-token') ? JSON.parse(localStorage.getItem('sb-' + (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1]?.split('.')[0] + '-auth-token'))?.access_token : ''}`
+                        'Authorization': token ? `Bearer ${token}` : ''
                     }
                 });
 
@@ -930,14 +933,14 @@ export default function SettingsPanel() {
                     <div className="flex items-center gap-4 mb-6">
                         <div className="relative">
                             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-2xl font-medium overflow-hidden">
-                                {avatar ? (
+                                {typeof avatar === 'string' && avatar ? (
                                     <Image
                                         src={avatar}
                                         alt="Avatar preview"
                                         width={64}
                                         height={64}
                                         className="rounded-full object-cover"
-                                        unoptimized={typeof avatar === 'string' && avatar.startsWith('data:')}
+                                        unoptimized={avatar.startsWith('data:') || avatar.startsWith('blob:') || avatar.startsWith('http')}
                                     />
                                 ) : (
                                     user?.email?.charAt(0).toUpperCase()
