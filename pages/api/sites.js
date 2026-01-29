@@ -66,13 +66,21 @@ export default async function handler(req, res) {
         try {
           console.error('Rolling back site creation due to:', reason);
           const deleteUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${newSite.id}`;
-          await fetch(deleteUrl, {
+          const deleteRes = await fetch(deleteUrl, {
             method: 'DELETE',
             headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}` }
           });
-          console.log('Site rolled back successfully');
+          if (deleteRes.ok) {
+            console.log('Site rolled back successfully');
+            return true;
+          } else {
+            const errText = await deleteRes.text();
+            console.error('Rollback DELETE failed:', { status: deleteRes.status, body: errText });
+            return false;
+          }
         } catch (rollbackErr) {
           console.error('Failed to rollback site:', rollbackErr);
+          return false;
         }
       };
 
@@ -86,8 +94,8 @@ export default async function handler(req, res) {
           if (!stRes.ok) {
             const errText = await stRes.text();
             console.error('site_tags insert failed:', { status: stRes.status, statusText: stRes.statusText, body: errText, payload });
-            const errorMsg = `Failed to save tags (Status ${stRes.status}). This might be a permissions issue. Please check that you have permission to create site-tag relationships.`;
-            await rollbackSite(errorMsg);
+            const rollbackSuccess = await rollbackSite('tag insertion failed');
+            const errorMsg = `Failed to save tags (Status ${stRes.status}). This might be a permissions issue. Please check that you have permission to create site-tag relationships.${rollbackSuccess ? '' : ' WARNING: Failed to rollback site - manual cleanup may be needed (site ID: ' + newSite.id + ')'}`;
             throw new Error(errorMsg);
           } else {
             const inserted = await stRes.json();
@@ -113,8 +121,8 @@ export default async function handler(req, res) {
           if (!scRes.ok) {
             const errText = await scRes.text();
             console.error('site_categories insert failed:', { status: scRes.status, statusText: scRes.statusText, body: errText, toInsert });
-            const errorMsg = `Failed to save categories (Status ${scRes.status}). This might be a permissions issue. Please check that you have permission to create site-category relationships.`;
-            await rollbackSite(errorMsg);
+            const rollbackSuccess = await rollbackSite('category insertion failed');
+            const errorMsg = `Failed to save categories (Status ${scRes.status}). This might be a permissions issue. Please check that you have permission to create site-category relationships.${rollbackSuccess ? '' : ' WARNING: Failed to rollback site - manual cleanup may be needed (site ID: ' + newSite.id + ')'}`;
             throw new Error(errorMsg);
           } else {
             const inserted = await scRes.json();
@@ -139,14 +147,25 @@ export default async function handler(req, res) {
               if (cid) toInsert.push({ site_id: newSite.id, category_id: cid });
             });
             if (toInsert.length > 0) {
+              console.log('Inserting site_categories (from names):', toInsert);
               const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
               const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
               if (!scRes.ok) {
-                const errText = await scRes.text(); console.warn('site_categories insert failed', errText);
+                const errText = await scRes.text();
+                console.error('site_categories insert failed:', { status: scRes.status, statusText: scRes.statusText, body: errText, toInsert });
+                const rollbackSuccess = await rollbackSite('category insertion failed (from names)');
+                const errorMsg = `Failed to save categories (Status ${scRes.status}). This might be a permissions issue. Please check that you have permission to create site-category relationships.${rollbackSuccess ? '' : ' WARNING: Failed to rollback site - manual cleanup may be needed (site ID: ' + newSite.id + ')'}`;
+                throw new Error(errorMsg);
+              } else {
+                const inserted = await scRes.json();
+                console.log('site_categories inserted successfully (from names):', inserted);
               }
             }
           }
-        } catch (err) { console.warn('site_categories attach failed', err); }
+        } catch (err) {
+          console.error('site_categories attach error (from names):', err);
+          throw err;
+        }
       }
 
       // Refetch the complete site with categories and tags
