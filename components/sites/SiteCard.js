@@ -7,6 +7,9 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
     const [imageError, setImageError] = useState(false);
     const { selectedSites, setSelectedSites, multiSelectMode, toggleFavorite, togglePinned, activeTab } = useDashboard();
 
+    // Icon visibility: show always on small screens, on larger screens show on hover or when in Favorites tab
+    const iconWrapperClass = `flex items-center gap-1 flex-shrink-0 transition-opacity duration-200 ${activeTab === 'favorites' ? 'opacity-100' : 'sm:opacity-0 sm:group-hover:opacity-100'}`;
+
     // Support multiple possible field names from API
     const categories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
     const tags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
@@ -105,7 +108,7 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
 
                 {/* Favorite and Pin Icons - Side by Side */}
                 {activeTab !== 'settings' && (
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className={iconWrapperClass}>
                         {/* Favorite Star */}
                         <button
                             onClick={(e) => {
