@@ -254,17 +254,38 @@ export function DashboardProvider({ children }) {
     const addSite = useCallback(async (siteData) => {
         if (!user) throw new Error('Must be logged in to add a site');
         try {
+            console.log('DashboardContext: Adding site with data:', { 
+                ...siteData, 
+                user_id: user.id,
+                hasCategoryIds: !!siteData.category_ids,
+                hasTagIds: !!siteData.tag_ids
+            });
+            
             const response = await fetchAPI('/sites', {
                 method: 'POST',
                 body: JSON.stringify({ ...siteData, user_id: user.id })
             });
+            
+            console.log('DashboardContext: Site creation response:', response);
+            
             const newSite = response?.data || response;
+            
+            // Verify that categories and tags are present in the response
+            if (!newSite.categories_array || newSite.categories_array.length === 0) {
+                console.warn('Warning: Site created but categories_array is empty or missing', newSite);
+            }
+            if (!newSite.tags_array || newSite.tags_array.length === 0) {
+                console.warn('Warning: Site created but tags_array is empty or missing', newSite);
+            }
+            
             setSites(prev => [newSite, ...prev]);
             setStats(prev => ({ ...prev, sites: prev.sites + 1 }));
-            showToast(`✓ Site "${newSite.name}" created successfully`, 'success');
+            showToast(`✓ Site "${newSite.name}" created successfully with ${newSite.categories_array?.length || 0} categories and ${newSite.tags_array?.length || 0} tags`, 'success');
             return newSite;
         } catch (err) {
-            showToast(`✗ Failed to add site: ${err.message}`, 'error');
+            console.error('DashboardContext: Failed to add site:', err);
+            const errorMessage = err.message || String(err);
+            showToast(`✗ Failed to add site: ${errorMessage}`, 'error', 5000);
             throw err;
         }
     }, [user, showToast]);

@@ -116,17 +116,27 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 is_favorite: formData.is_favorite
             };
 
+            console.log('Submitting site:', { 
+                ...payload, 
+                categoryCount: payload.category_ids.length,
+                tagCount: payload.tag_ids.length
+            });
+
             if (isEditing) {
                 await updateSite(site.id, payload);
                 // Wait for complete refetch including categories/tags
                 await new Promise(resolve => setTimeout(resolve, 500));
             } else {
-                await addSite(payload);
+                const result = await addSite(payload);
+                console.log('Site created successfully:', result);
             }
 
             onClose();
         } catch (err) {
-            setError(err.message);
+            console.error('Site submission error:', err);
+            // Display detailed error message to user
+            const errorMessage = err.message || 'Unknown error occurred';
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -151,8 +161,16 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
         >
             <form onSubmit={handleSubmit} className="space-y-4">
                 {error && (
-                    <div className="p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
-                        {error}
+                    <div className="p-4 bg-red-900/30 border-2 border-red-700 rounded-lg text-red-300">
+                        <div className="flex items-start gap-3">
+                            <svg className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div className="flex-1">
+                                <p className="font-semibold text-sm mb-1">Error</p>
+                                <p className="text-sm whitespace-pre-wrap">{error}</p>
+                            </div>
+                        </div>
                     </div>
                 )}
 
