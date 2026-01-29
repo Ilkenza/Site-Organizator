@@ -107,7 +107,7 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_categories
           const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
-          const delCatRes = await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}` } });
+          const delCatRes = await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}` } });
           if (!delCatRes.ok) {
             const errText = await delCatRes.text();
             console.error('Failed to delete site_categories:', delCatRes.status, errText);
@@ -123,7 +123,7 @@ export default async function handler(req, res) {
             const insCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
             const insCatRes = await fetch(insCatUrl, {
               method: 'POST',
-              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
+              headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(catPayload)
             });
             if (!insCatRes.ok) {
@@ -142,7 +142,7 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_tags
           const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
-          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}` } });
+          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}` } });
           if (!delTagRes.ok) {
             const errText = await delTagRes.text();
             console.error('Failed to delete site_tags:', delTagRes.status, errText);
@@ -158,7 +158,7 @@ export default async function handler(req, res) {
             const insTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
             const insTagRes = await fetch(insTagUrl, {
               method: 'POST',
-              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
+              headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(tagPayload)
             });
             if (!insTagRes.ok) {
