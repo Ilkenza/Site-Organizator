@@ -39,6 +39,7 @@ export default async function handler(req, res) {
           if (ownerRows && ownerRows[0] && ownerRows[0].user_id === userSub) {
             REL_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
             console.log('[Sites/ID API] Using service role key for relation updates for site owner:', id);
+            console.log('[Sites/ID API] Service role key present:', !!(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY));
           }
         }
       }
@@ -107,7 +108,7 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_categories
           const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
-          const delCatRes = await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}` } });
+          const delCatRes = await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}` } });
           if (!delCatRes.ok) {
             const errText = await delCatRes.text();
             console.error('Failed to delete site_categories:', delCatRes.status, errText);
@@ -121,15 +122,38 @@ export default async function handler(req, res) {
             const catPayload = category_ids.map(category_id => ({ site_id: id, category_id }));
             console.log('Inserting categories:', catPayload);
             const insCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-            const insCatRes = await fetch(insCatUrl, {
+
+            // Try with REL_KEY first (may be user token, anon key, or service key)
+            let insCatRes = await fetch(insCatUrl, {
               method: 'POST',
-              headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
+              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(catPayload)
             });
+
             if (!insCatRes.ok) {
               const errText = await insCatRes.text();
-              console.error('Failed to insert site_categories:', insCatRes.status, errText);
-              warnings.push({ stage: 'insert_site_categories', status: insCatRes.status, details: errText });
+              console.error('Failed to insert site_categories (first attempt):', insCatRes.status, errText);
+
+              // If we have a service role key available and didn't already use it, retry using it for both apikey and Authorization.
+              const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+              if (SERVICE_KEY && REL_KEY !== SERVICE_KEY) {
+                console.log('[Sites/ID API] Retrying insert_site_categories with SERVICE_ROLE_KEY');
+                const retryRes = await fetch(insCatUrl, {
+                  method: 'POST',
+                  headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify(catPayload)
+                });
+                if (retryRes.ok) {
+                  console.log('Inserted', category_ids.length, 'categories for site (service key retry):', id);
+                  insCatRes = retryRes; // treat as success
+                } else {
+                  const errText2 = await retryRes.text();
+                  console.error('Retry with service key failed for site_categories:', retryRes.status, errText2);
+                  warnings.push({ stage: 'insert_site_categories', status: retryRes.status, details: errText2 });
+                }
+              } else {
+                warnings.push({ stage: 'insert_site_categories', status: insCatRes.status, details: errText });
+              }
             } else {
               console.log('Inserted', category_ids.length, 'categories for site:', id);
             }
@@ -142,7 +166,7 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_tags
           const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
-          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}` } });
+          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}` } });
           if (!delTagRes.ok) {
             const errText = await delTagRes.text();
             console.error('Failed to delete site_tags:', delTagRes.status, errText);
@@ -156,15 +180,38 @@ export default async function handler(req, res) {
             const tagPayload = tag_ids.map(tag_id => ({ site_id: id, tag_id }));
             console.log('Inserting tags:', tagPayload);
             const insTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
-            const insTagRes = await fetch(insTagUrl, {
+
+            // Try with REL_KEY first (may be user token, anon key, or service key)
+            let insTagRes = await fetch(insTagUrl, {
               method: 'POST',
-              headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
+              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(tagPayload)
             });
+
             if (!insTagRes.ok) {
               const errText = await insTagRes.text();
-              console.error('Failed to insert site_tags:', insTagRes.status, errText);
-              warnings.push({ stage: 'insert_site_tags', status: insTagRes.status, details: errText });
+              console.error('Failed to insert site_tags (first attempt):', insTagRes.status, errText);
+
+              // If we have a service role key available and didn't already use it, retry using it for both apikey and Authorization.
+              const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+              if (SERVICE_KEY && REL_KEY !== SERVICE_KEY) {
+                console.log('[Sites/ID API] Retrying insert_site_tags with SERVICE_ROLE_KEY');
+                const retryRes = await fetch(insTagUrl, {
+                  method: 'POST',
+                  headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify(tagPayload)
+                });
+                if (retryRes.ok) {
+                  console.log('Inserted', tag_ids.length, 'tags for site (service key retry):', id);
+                  insTagRes = retryRes; // treat as success
+                } else {
+                  const errText2 = await retryRes.text();
+                  console.error('Retry with service key failed for site_tags:', retryRes.status, errText2);
+                  warnings.push({ stage: 'insert_site_tags', status: retryRes.status, details: errText2 });
+                }
+              } else {
+                warnings.push({ stage: 'insert_site_tags', status: insTagRes.status, details: errText });
+              }
             } else {
               console.log('Inserted', tag_ids.length, 'tags for site:', id);
             }
