@@ -1,8 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import { ConfirmModal } from '../ui/Modal';
+import Pagination from '../ui/Pagination';
+
+const ITEMS_PER_PAGE = 100;
 
 export default function CategoriesList({ onEdit }) {
+    const router = useRouter();
     const {
         categories,
         sites,
@@ -21,12 +26,44 @@ export default function CategoriesList({ onEdit }) {
     const [categoryToDelete, setCategoryToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
 
+    // Get current page from URL or default to 1
+    const currentPage = parseInt(router.query.page) || 1;
+
     const filteredCategories = useMemo(() => {
         if (!searchQuery.trim()) return categories;
         return categories.filter(cat =>
             cat.name.toLowerCase().includes(searchQuery.toLowerCase())
         );
     }, [categories, searchQuery]);
+
+    // Calculate pagination
+    const totalItems = filteredCategories.length;
+    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedCategories = filteredCategories.slice(startIndex, endIndex);
+
+    // Reset to page 1 when search filter changes
+    useEffect(() => {
+        if (currentPage > 1 && searchQuery) {
+            router.push({
+                pathname: router.pathname,
+                query: { ...router.query, page: 1 }
+            }, undefined, { shallow: true });
+        }
+    }, [searchQuery]);
+
+    // Handle page change
+    const handlePageChange = (newPage) => {
+        if (newPage >= 1 && newPage <= totalPages) {
+            router.push({
+                pathname: router.pathname,
+                query: { ...router.query, page: newPage }
+            }, undefined, { shallow: true });
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
 
     const handleSelectCategory = (e, categoryId) => {
         e.stopPropagation();
@@ -111,9 +148,16 @@ export default function CategoriesList({ onEdit }) {
     return (
         <div className="p-3 sm:p-6">
 
+            {/* Results count */}
+            {totalItems > 0 && (
+                <div className="mb-4 text-sm text-gray-400">
+                    Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} categories
+                </div>
+            )}
+
             {/* Categories Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filteredCategories.map(category => (
+                {paginatedCategories.map(category => (
                     <div
                         key={category.id}
                         className={`bg-app-bg-light border rounded-lg p-4 transition-colors ${selectedCategories.has(category.id)
@@ -177,6 +221,13 @@ export default function CategoriesList({ onEdit }) {
                     </div>
                 ))}
             </div>
+
+            {/* Pagination */}
+            <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+            />
 
             {/* Delete Confirmation Modal */}
             <ConfirmModal
