@@ -1,28 +1,65 @@
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Basic URL health check with timeout and HEAD fallback to GET
+// Robust URL health check with retries, browser-like headers and HEAD->GET fallback
 async function checkUrl(url) {
     if (!url || typeof url !== 'string') return { ok: false, status: 'invalid' };
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 7000);
-        let res;
-        try {
-            // Try HEAD first to avoid downloading content
-            res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
-            if (!res || !res.ok) {
-                // Fallback to GET in case HEAD isn't supported by the server
-                res = await fetch(url, { method: 'GET', redirect: 'follow', signal: controller.signal });
-            }
-        } finally {
-            clearTimeout(timeout);
-        }
 
-        return { ok: !!(res && res.status >= 200 && res.status < 400), status: res ? res.status : 'no-response' };
-    } catch (err) {
-        return { ok: false, status: err.name === 'AbortError' ? 'timeout' : String(err) };
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36';
+    const referer = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL ? (process.env.NEXT_PUBLIC_SITE_URL || `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`) : undefined;
+
+    const maxRetries = 2;
+    let lastErr = null;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const timeoutMs = attempt === 0 ? 7000 : 15000;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+        const headers = {
+            'User-Agent': UA,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9'
+        };
+        if (referer) headers['Referer'] = referer;
+
+        try {
+            let res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: controller.signal, headers });
+
+            // If HEAD is not allowed or returns non-2xx, try GET
+            if (!res || res.status >= 400) {
+                // In some cases servers return 403 for HEAD but allow GET; try GET
+                res = await fetch(url, { method: 'GET', redirect: 'follow', signal: controller.signal, headers });
+
+                // If still 403, try GET with cache-control/pragmas to bypass CDN edge caches
+                if (res && res.status === 403) {
+                    const extraHeaders = { ...headers, 'Cache-Control': 'no-cache', Pragma: 'no-cache' };
+                    res = await fetch(url, { method: 'GET', redirect: 'follow', signal: controller.signal, headers: extraHeaders });
+                }
+            }
+
+            clearTimeout(timeout);
+
+            if (res) {
+                const ok = res.status >= 200 && res.status < 400;
+                if (!ok) console.warn('Link check upstream status', { url, status: res.status, attempt });
+                return { ok, status: res.status };
+            }
+
+            // If no response, continue to retry
+            lastErr = new Error('no-response');
+        } catch (err) {
+            clearTimeout(timeout);
+            lastErr = err;
+            // If timeout, classify as timeout immediately on last attempt
+            if (err.name === 'AbortError') {
+                if (attempt === maxRetries - 1) return { ok: false, status: 'timeout' };
+            }
+            // otherwise, retry if attempts remain
+        }
     }
+
+    return { ok: false, status: lastErr ? (lastErr.name === 'AbortError' ? 'timeout' : String(lastErr)) : 'failed' };
 }
 
 export default async function handler(req, res) {
