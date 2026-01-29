@@ -285,7 +285,17 @@ export function DashboardProvider({ children }) {
             const updated = response?.data || response;
 
             // Zamijeni kompletan site sa updated verzijom (sa svim kategorijama/tagovima)
+            // Update local cache with server value, and then ensure authoritative data is fetched (fixes relation persistence mismatches)
             setSites(prev => prev.map(s => s.id === id ? updated : s));
+            try {
+                if (response?.warnings && response.warnings.length) {
+                    console.warn('[DashboardContext] updateSite warnings:', response.warnings);
+                    showToast && showToast('Site updated, but related updates failed. Refreshing data...', 'warning');
+                }
+                await fetchData();
+            } catch (e) {
+                console.warn('fetchData after updateSite failed', e);
+            }
             if (response?.warnings && response.warnings.length) {
                 console.warn('Site updated with warnings:', response.warnings);
                 showToast('Site updated but some relation updates failed (refreshing...)', 'warning');
