@@ -263,7 +263,9 @@ export function DashboardProvider({ children }) {
             setStats(prev => ({ ...prev, sites: prev.sites + 1 }));
             if (response?.warnings && response.warnings.length) {
                 console.warn('Site created with warnings:', response.warnings);
-                showToast(`Site created but some relations failed (check Settings)`, 'warning');
+                showToast(`Site created but some relations failed (refreshing...)`, 'warning');
+                // Refresh authoritative data from server to reflect actual state
+                try { await fetchData(); } catch (e) { console.warn('fetchData after addSite warnings failed', e); }
             } else {
                 showToast(`✓ Site "${newSite.name}" created successfully`, 'success');
             }
@@ -272,7 +274,7 @@ export function DashboardProvider({ children }) {
             showToast(`✗ Failed to add site: ${err.message}`, 'error');
             throw err;
         }
-    }, [user, showToast]);
+    }, [user, showToast, fetchData]);
 
     const updateSite = useCallback(async (id, siteData) => {
         try {
@@ -286,20 +288,18 @@ export function DashboardProvider({ children }) {
             setSites(prev => prev.map(s => s.id === id ? updated : s));
             if (response?.warnings && response.warnings.length) {
                 console.warn('Site updated with warnings:', response.warnings);
-                showToast('Site updated but some relation updates failed', 'warning');
+                showToast('Site updated but some relation updates failed (refreshing...)', 'warning');
+                try { await fetchData(); } catch (e) { console.warn('fetchData after updateSite warnings failed', e); }
             } else {
                 showToast(`✓ Site "${updated.name}" updated successfully`, 'success');
             }
-
-            // Ili opciono, refresh sve podatke nakon update-a:
-            // await fetchData();
 
             return updated;
         } catch (err) {
             showToast(`✗ Failed to update site: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast]);
+    }, [showToast, fetchData]);
 
     const deleteSite = useCallback(async (id) => {
         try {
