@@ -61,6 +61,9 @@ export default async function handler(req, res) {
       const created = JSON.parse(text);
       const newSite = Array.isArray(created) ? created[0] : created;
 
+      // Prepare warnings collector
+      const warnings = [];
+
       // Attach tags (tag_ids) if provided
       if (Array.isArray(body.tag_ids) && body.tag_ids.length > 0) {
         try {
@@ -69,10 +72,10 @@ export default async function handler(req, res) {
           const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
           if (!stRes.ok) {
             const errText = await stRes.text();
-            // non-fatal: log and continue
-            console.warn('site_tags insert failed', errText);
+            console.error('site_tags insert failed', stRes.status, errText);
+            warnings.push({ stage: 'site_tags_insert', status: stRes.status, details: errText });
           }
-        } catch (err) { console.warn('site_tags insert failed', err); }
+        } catch (err) { console.error('site_tags insert failed', err); warnings.push({ stage: 'site_tags_insert', error: String(err) }); }
       }
 
       // Attach categories - support both category_ids (array of IDs) and categories (array of names)
@@ -86,9 +89,11 @@ export default async function handler(req, res) {
           const toInsert = categoryIds.map(category_id => ({ site_id: newSite.id, category_id }));
           const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
           if (!scRes.ok) {
-            const errText = await scRes.text(); console.warn('site_categories insert failed', errText);
+            const errText = await scRes.text();
+            console.error('site_categories insert failed', scRes.status, errText);
+            warnings.push({ stage: 'site_categories_insert', status: scRes.status, details: errText });
           }
-        } catch (err) { console.warn('site_categories insert failed', err); }
+        } catch (err) { console.error('site_categories insert failed', err); warnings.push({ stage: 'site_categories_insert', error: String(err) }); }
       } else if (categoryNames.length > 0) {
         // Resolve names to IDs first
         try {
@@ -107,7 +112,9 @@ export default async function handler(req, res) {
               const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
               const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
               if (!scRes.ok) {
-                const errText = await scRes.text(); console.warn('site_categories insert failed', errText);
+                const errText = await scRes.text();
+                console.error('site_categories insert failed', scRes.status, errText);
+                warnings.push({ stage: 'site_categories_insert', status: scRes.status, details: errText });
               }
             }
           }
@@ -131,10 +138,10 @@ export default async function handler(req, res) {
           }
 
           console.log('Complete site after creation:', completeSite);
-          return res.status(201).json({ success: true, data: completeSite });
+          return res.status(201).json({ success: true, data: completeSite, warnings: warnings.length ? warnings : undefined });
         } else {
           console.warn('Failed to refetch complete site, returning basic data');
-          return res.status(201).json({ success: true, data: newSite });
+          return res.status(201).json({ success: true, data: newSite, warnings: warnings.length ? warnings : undefined });
         }
       } catch (err) {
         console.warn('Refetch complete site failed:', err);
