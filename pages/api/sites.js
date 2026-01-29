@@ -61,6 +61,21 @@ export default async function handler(req, res) {
       const created = JSON.parse(text);
       const newSite = Array.isArray(created) ? created[0] : created;
 
+      // Helper function to rollback (delete the site) if junction inserts fail
+      const rollbackSite = async (reason) => {
+        try {
+          console.error('Rolling back site creation due to:', reason);
+          const deleteUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${newSite.id}`;
+          await fetch(deleteUrl, {
+            method: 'DELETE',
+            headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}` }
+          });
+          console.log('Site rolled back successfully');
+        } catch (rollbackErr) {
+          console.error('Failed to rollback site:', rollbackErr);
+        }
+      };
+
       // Attach tags (tag_ids) if provided
       if (Array.isArray(body.tag_ids) && body.tag_ids.length > 0) {
         try {
@@ -71,7 +86,9 @@ export default async function handler(req, res) {
           if (!stRes.ok) {
             const errText = await stRes.text();
             console.error('site_tags insert failed:', { status: stRes.status, statusText: stRes.statusText, body: errText, payload });
-            throw new Error(`Failed to insert tags: ${errText}`);
+            const errorMsg = `Failed to save tags (Status ${stRes.status}). This might be a permissions issue. Please check that you have permission to create site-tag relationships.`;
+            await rollbackSite(errorMsg);
+            throw new Error(errorMsg);
           } else {
             const inserted = await stRes.json();
             console.log('site_tags inserted successfully:', inserted);
@@ -96,7 +113,9 @@ export default async function handler(req, res) {
           if (!scRes.ok) {
             const errText = await scRes.text();
             console.error('site_categories insert failed:', { status: scRes.status, statusText: scRes.statusText, body: errText, toInsert });
-            throw new Error(`Failed to insert categories: ${errText}`);
+            const errorMsg = `Failed to save categories (Status ${scRes.status}). This might be a permissions issue. Please check that you have permission to create site-category relationships.`;
+            await rollbackSite(errorMsg);
+            throw new Error(errorMsg);
           } else {
             const inserted = await scRes.json();
             console.log('site_categories inserted successfully:', inserted);
