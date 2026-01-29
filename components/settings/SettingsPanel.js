@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth, supabase } from '../../context/AuthContext';
+import { fetchAPI } from '../../lib/supabase';
 // export/import helpers are loaded dynamically in client-only code
 import { useDashboard } from '../../context/DashboardContext';
 import Modal from '../ui/Modal';
 
 export default function SettingsPanel() {
     const { user, signOut, refreshUser } = useAuth();
-    const { fetchData, showToast, activeTab } = useDashboard();
+    const { fetchData, showToast, activeTab, stats, sites } = useDashboard();
 
     const [avatar, setAvatar] = useState(null);
     const [avatarFile, setAvatarFile] = useState(null);
@@ -810,6 +811,26 @@ export default function SettingsPanel() {
         }
     };
 
+    // ---------- Link Checker (broken link detection) ----------
+    const [linkCheckLoading, setLinkCheckLoading] = useState(false);
+    const [linkCheckResult, setLinkCheckResult] = useState(null);
+
+    const handleRunLinkCheck = async () => {
+        setLinkCheckLoading(true);
+        setLinkCheckResult(null);
+        try {
+            const payload = { sites: (sites || []).map(s => ({ id: s.id, url: s.url, name: s.name })) };
+            const result = await fetchAPI('/links/check', { method: 'POST', body: JSON.stringify(payload) });
+            setLinkCheckResult(result);
+        } catch (err) {
+            setLinkCheckResult({ error: err.message });
+        } finally {
+            setLinkCheckLoading(false);
+        }
+    };
+
+    const brokenCount = linkCheckResult?.brokenCount ?? null;
+
     return (
         <div className="p-3 sm:p-6">
             <div>
@@ -1087,6 +1108,47 @@ export default function SettingsPanel() {
                         </button>
                     )}
                 </div>
+                {/* Link Checker & Statistics Section */}
+                <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
+                    <h2 className="text-lg font-semibold text-app-text-primary mb-2">Link Checker & Statistics</h2>
+                    <p className="text-sm text-app-text-secondary mb-4">Run a quick check to find unreachable links. Results are not saved automatically.</p>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between p-3 sm:p-4 bg-app-bg-secondary rounded-lg border border-app-border mb-3">
+                        <div>
+                            <h3 className="text-app-text-primary font-medium text-sm sm:text-base">Quick Stats</h3>
+                            <div className="text-sm text-app-text-secondary mt-1">
+                                <div>Sites: <strong className="text-app-text-primary">{stats?.sites ?? 0}</strong></div>
+                                <div>Categories: <strong className="text-app-text-primary">{stats?.categories ?? 0}</strong></div>
+                                <div>Tags: <strong className="text-app-text-primary">{stats?.tags ?? 0}</strong></div>
+                                <div>Broken links: <strong className="text-app-text-primary">{linkCheckResult?.brokenCount ?? '—'}</strong></div>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleRunLinkCheck}
+                                disabled={linkCheckLoading}
+                                className="px-3 py-1.5 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors text-sm"
+                            >
+                                {linkCheckLoading ? 'Checking...' : 'Run Link Checker'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {linkCheckResult?.broken && linkCheckResult.broken.length > 0 && (
+                        <div className="p-3 bg-app-bg-primary rounded-lg border border-app-border">
+                            <h4 className="text-sm font-medium text-app-text-primary mb-2">Broken links ({linkCheckResult.broken.length})</h4>
+                            <ul className="text-sm text-app-text-secondary list-disc list-inside space-y-1 max-h-40 overflow-auto">
+                                {linkCheckResult.broken.map(b => (
+                                    <li key={b.id}>
+                                        <a className="underline text-app-accent" href={b.url} target="_blank" rel="noreferrer">{b.name || b.url}</a>
+                                        <span className="text-xs text-app-text-muted ml-2">{b.status}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+
                 {/* Security Section */}
                 <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
                     <h2 className="text-lg font-semibold text-app-text-primary mb-4 flex items-center gap-2">
