@@ -22,6 +22,31 @@ export default async function handler(req, res) {
   // Use user's token for authenticated requests (respects RLS), fallback to anon key for reads
   const AUTH_TOKEN = userToken || SUPABASE_ANON_KEY;
 
+  // Determine key to use for relation updates. If the requester is the site owner,
+  // prefer using the service role key to avoid RLS blocking relation writes.
+  let REL_KEY = userToken || SUPABASE_ANON_KEY;
+  try {
+    if (userToken && id) {
+      // Parse token to get user id
+      let userSub = null;
+      try { userSub = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString())?.sub; } catch (e) { /* ignore */ }
+
+      if (userSub) {
+        const ownerUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}&select=user_id`;
+        const ownerRes = await fetch(ownerUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, Accept: 'application/json' } });
+        if (ownerRes.ok) {
+          const ownerRows = await ownerRes.json();
+          if (ownerRows && ownerRows[0] && ownerRows[0].user_id === userSub) {
+            REL_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+            console.log('[Sites/ID API] Using service role key for relation updates for site owner:', id);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Sites/ID API] Owner check for relation updates failed:', e);
+  }
+
   if (req.method === 'GET') {
     try {
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
@@ -82,7 +107,7 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_categories
           const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
-          const delCatRes = await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
+          const delCatRes = await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}` } });
           if (!delCatRes.ok) {
             const errText = await delCatRes.text();
             console.error('Failed to delete site_categories:', delCatRes.status, errText);
@@ -98,7 +123,7 @@ export default async function handler(req, res) {
             const insCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
             const insCatRes = await fetch(insCatUrl, {
               method: 'POST',
-              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(catPayload)
             });
             if (!insCatRes.ok) {
@@ -117,7 +142,7 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_tags
           const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
-          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` } });
+          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}` } });
           if (!delTagRes.ok) {
             const errText = await delTagRes.text();
             console.error('Failed to delete site_tags:', delTagRes.status, errText);
@@ -133,7 +158,7 @@ export default async function handler(req, res) {
             const insTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
             const insTagRes = await fetch(insTagUrl, {
               method: 'POST',
-              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
+              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(tagPayload)
             });
             if (!insTagRes.ok) {
