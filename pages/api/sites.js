@@ -34,7 +34,7 @@ export default async function handler(req, res) {
           'Content-Type': 'application/json',
           Prefer: 'return=representation'
         },
-        body: JSON.stringify(((b) => { const allowed = ['name', 'url', 'pricing', 'user_id']; const t = {}; for (const k of allowed) if (Object.prototype.hasOwnProperty.call(b, k)) t[k] = b[k]; return t; })(body))
+        body: JSON.stringify(((b) => { const allowed = ['name', 'url', 'pricing', 'user_id', 'is_favorite']; const t = {}; for (const k of allowed) if (Object.prototype.hasOwnProperty.call(b, k)) t[k] = b[k]; return t; })(body))
       });
 
       const text = await r.text();
@@ -61,18 +61,84 @@ export default async function handler(req, res) {
       const created = JSON.parse(text);
       const newSite = Array.isArray(created) ? created[0] : created;
 
+      // Helper function to create error message for junction insert failures
+      const createJunctionErrorMsg = (type, status, rollbackSuccess) => {
+        const baseMsg = `Failed to save ${type} (Status ${status}). This might be a permissions issue. Please check that you have permission to create site-${type} relationships.`;
+        if (rollbackSuccess) {
+          return baseMsg;
+        }
+        return `${baseMsg} WARNING: Failed to rollback site - manual cleanup may be needed (site ID: ${newSite.id})`;
+      };
+
+      // Helper function to rollback (delete the site and any inserted junction records) if creation fails
+      const rollbackSite = async (reason) => {
+        try {
+          console.error('Rolling back site creation due to:', reason);
+          
+          // First, try to delete any inserted site_tags
+          try {
+            const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${newSite.id}`;
+            await fetch(delTagUrl, {
+              method: 'DELETE',
+              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}` }
+            });
+            console.log('Deleted any inserted site_tags during rollback');
+          } catch (err) {
+            console.error('Failed to delete site_tags during rollback:', err);
+          }
+
+          // Then, try to delete any inserted site_categories
+          try {
+            const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${newSite.id}`;
+            await fetch(delCatUrl, {
+              method: 'DELETE',
+              headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}` }
+            });
+            console.log('Deleted any inserted site_categories during rollback');
+          } catch (err) {
+            console.error('Failed to delete site_categories during rollback:', err);
+          }
+
+          // Finally, delete the site itself
+          const deleteUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${newSite.id}`;
+          const deleteRes = await fetch(deleteUrl, {
+            method: 'DELETE',
+            headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}` }
+          });
+          if (deleteRes.ok) {
+            console.log('Site rolled back successfully');
+            return true;
+          } else {
+            const errText = await deleteRes.text();
+            console.error('Rollback DELETE failed:', { status: deleteRes.status, body: errText });
+            return false;
+          }
+        } catch (rollbackErr) {
+          console.error('Failed to rollback site:', rollbackErr);
+          return false;
+        }
+      };
+
       // Attach tags (tag_ids) if provided
       if (Array.isArray(body.tag_ids) && body.tag_ids.length > 0) {
         try {
           const stUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
           const payload = body.tag_ids.map(tag_id => ({ site_id: newSite.id, tag_id }));
+          console.log('Inserting site_tags:', payload);
           const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
           if (!stRes.ok) {
             const errText = await stRes.text();
-            // non-fatal: log and continue
-            console.warn('site_tags insert failed', errText);
+            console.error('site_tags insert failed:', { status: stRes.status, statusText: stRes.statusText, body: errText, payload });
+            const rollbackSuccess = await rollbackSite('tag insertion failed');
+            throw new Error(createJunctionErrorMsg('tags', stRes.status, rollbackSuccess));
+          } else {
+            const inserted = await stRes.json();
+            console.log('site_tags inserted successfully:', inserted);
           }
-        } catch (err) { console.warn('site_tags insert failed', err); }
+        } catch (err) {
+          console.error('site_tags insert error:', err);
+          throw err;
+        }
       }
 
       // Attach categories - support both category_ids (array of IDs) and categories (array of names)
@@ -84,39 +150,65 @@ export default async function handler(req, res) {
         try {
           const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
           const toInsert = categoryIds.map(category_id => ({ site_id: newSite.id, category_id }));
+          console.log('Inserting site_categories:', toInsert);
           const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
           if (!scRes.ok) {
-            const errText = await scRes.text(); console.warn('site_categories insert failed', errText);
+            const errText = await scRes.text();
+            console.error('site_categories insert failed:', { status: scRes.status, statusText: scRes.statusText, body: errText, toInsert });
+            const rollbackSuccess = await rollbackSite('category insertion failed');
+            throw new Error(createJunctionErrorMsg('categories', scRes.status, rollbackSuccess));
+          } else {
+            const inserted = await scRes.json();
+            console.log('site_categories inserted successfully:', inserted);
           }
-        } catch (err) { console.warn('site_categories insert failed', err); }
+        } catch (err) {
+          console.error('site_categories insert error:', err);
+          throw err;
+        }
       } else if (categoryNames.length > 0) {
         // Resolve names to IDs first
         try {
           const encoded = categoryNames.map(n => encodeURIComponent(n.replace(/\)/g, '\\)'))).join(',');
           const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&name=in.(${encoded})`;
           const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
-          if (catRes.ok) {
-            const cats = await catRes.json();
-            const nameToId = new Map(cats.map(c => [c.name, c.id]));
-            const toInsert = [];
-            categoryNames.forEach(name => {
-              const cid = nameToId.get(name);
-              if (cid) toInsert.push({ site_id: newSite.id, category_id: cid });
-            });
-            if (toInsert.length > 0) {
-              const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-              const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
-              if (!scRes.ok) {
-                const errText = await scRes.text(); console.warn('site_categories insert failed', errText);
-              }
+          if (!catRes.ok) {
+            const errText = await catRes.text();
+            console.error('Failed to lookup category names:', { status: catRes.status, body: errText });
+            const rollbackSuccess = await rollbackSite('category name lookup failed');
+            throw new Error(createJunctionErrorMsg('categories', catRes.status, rollbackSuccess));
+          }
+          
+          const cats = await catRes.json();
+          const nameToId = new Map(cats.map(c => [c.name, c.id]));
+          const toInsert = [];
+          categoryNames.forEach(name => {
+            const cid = nameToId.get(name);
+            if (cid) toInsert.push({ site_id: newSite.id, category_id: cid });
+          });
+          if (toInsert.length > 0) {
+            console.log('Inserting site_categories (from names):', toInsert);
+            const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
+            const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
+            if (!scRes.ok) {
+              const errText = await scRes.text();
+              console.error('site_categories insert failed:', { status: scRes.status, statusText: scRes.statusText, body: errText, toInsert });
+              const rollbackSuccess = await rollbackSite('category insertion failed (from names)');
+              throw new Error(createJunctionErrorMsg('categories', scRes.status, rollbackSuccess));
+            } else {
+              const inserted = await scRes.json();
+              console.log('site_categories inserted successfully (from names):', inserted);
             }
           }
-        } catch (err) { console.warn('site_categories attach failed', err); }
+        } catch (err) {
+          console.error('site_categories attach error (from names):', err);
+          throw err;
+        }
       }
 
       // Refetch the complete site with categories and tags
       try {
         const refetchUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${newSite.id}&select=*,categories_array:site_categories(category:categories(*)),tags_array:site_tags(tag:tags(*))`;
+        console.log('Refetching complete site:', refetchUrl);
         const refetchRes = await fetch(refetchUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
         if (refetchRes.ok) {
           const refetchData = await refetchRes.json();
@@ -130,14 +222,16 @@ export default async function handler(req, res) {
             completeSite.tags_array = completeSite.tags_array.map(st => st.tag).filter(Boolean);
           }
 
-          console.log('Complete site after creation:', completeSite);
+          console.log('Complete site after creation:', JSON.stringify(completeSite, null, 2));
           return res.status(201).json({ success: true, data: completeSite });
         } else {
-          console.warn('Failed to refetch complete site, returning basic data');
+          const errText = await refetchRes.text();
+          console.error('Failed to refetch complete site:', { status: refetchRes.status, statusText: refetchRes.statusText, body: errText });
+          console.warn('Returning basic site data without categories/tags');
           return res.status(201).json({ success: true, data: newSite });
         }
       } catch (err) {
-        console.warn('Refetch complete site failed:', err);
+        console.error('Refetch complete site error:', err);
         return res.status(201).json({ success: true, data: newSite });
       }
     } catch (err) {
