@@ -270,12 +270,21 @@ export function DashboardProvider({ children }) {
             
             const newSite = response?.data || response;
             
-            // Verify that categories and tags are present in the response
-            if (!newSite.categories_array || newSite.categories_array.length === 0) {
-                console.warn('Warning: Site created but categories_array is empty or missing', newSite);
+            // Verify that categories and tags are present in the response if they were requested
+            const hadCategoryIds = siteData.category_ids && siteData.category_ids.length > 0;
+            const hadTagIds = siteData.tag_ids && siteData.tag_ids.length > 0;
+            
+            if (hadCategoryIds && (!newSite.categories_array || newSite.categories_array.length === 0)) {
+                console.warn('Warning: Categories were requested but categories_array is empty or missing', {
+                    requested: siteData.category_ids,
+                    received: newSite.categories_array
+                });
             }
-            if (!newSite.tags_array || newSite.tags_array.length === 0) {
-                console.warn('Warning: Site created but tags_array is empty or missing', newSite);
+            if (hadTagIds && (!newSite.tags_array || newSite.tags_array.length === 0)) {
+                console.warn('Warning: Tags were requested but tags_array is empty or missing', {
+                    requested: siteData.tag_ids,
+                    received: newSite.tags_array
+                });
             }
             
             setSites(prev => [newSite, ...prev]);
