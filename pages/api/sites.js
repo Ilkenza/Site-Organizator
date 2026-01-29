@@ -24,6 +24,17 @@ export default async function handler(req, res) {
       if (!body.name || !body.url || !body.pricing) return res.status(400).json({ success: false, error: 'Missing required fields: name, url, pricing' });
       if (!body.user_id) return res.status(400).json({ success: false, error: 'Missing user_id (you must be logged in to add a site)' });
 
+      console.log('Creating new site:', { 
+        name: body.name, 
+        url: body.url, 
+        pricing: body.pricing,
+        hasCategoryIds: !!body.category_ids,
+        categoryCount: body.category_ids?.length || 0,
+        hasTagIds: !!body.tag_ids,
+        tagCount: body.tag_ids?.length || 0,
+        hasAuthToken: !!userToken
+      });
+
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites`;
       const r = await fetch(url, {
         method: 'POST',
@@ -62,12 +73,28 @@ export default async function handler(req, res) {
       const newSite = Array.isArray(created) ? created[0] : created;
 
       // Helper function to create error message for junction insert failures
-      const createJunctionErrorMsg = (type, status, rollbackSuccess) => {
-        const baseMsg = `Failed to save ${type} (Status ${status}). This might be a permissions issue. Please check that you have permission to create site-${type} relationships.`;
-        if (rollbackSuccess) {
-          return baseMsg;
+      const createJunctionErrorMsg = (type, status, errorDetails, rollbackSuccess) => {
+        let baseMsg = `Failed to save ${type} to database (HTTP ${status}).`;
+        
+        // Add specific guidance based on status code
+        if (status === 401 || status === 403) {
+          baseMsg += ' Permission denied - check your login status and database permissions.';
+        } else if (status === 400) {
+          baseMsg += ' Invalid data format.';
+        } else if (status >= 500) {
+          baseMsg += ' Database server error.';
         }
-        return `${baseMsg} WARNING: Failed to rollback site - manual cleanup may be needed (site ID: ${newSite.id})`;
+        
+        // Include error details if available
+        if (errorDetails) {
+          baseMsg += ` Details: ${errorDetails}`;
+        }
+        
+        if (!rollbackSuccess) {
+          baseMsg += ` WARNING: Site was created (ID: ${newSite.id}) but ${type} could not be saved and cleanup failed. Please contact support.`;
+        }
+        
+        return baseMsg;
       };
 
       // Helper function to rollback (delete the site and any inserted junction records) if creation fails
@@ -124,16 +151,40 @@ export default async function handler(req, res) {
         try {
           const stUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
           const payload = body.tag_ids.map(tag_id => ({ site_id: newSite.id, tag_id }));
-          console.log('Inserting site_tags:', payload);
-          const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
+          console.log('Inserting site_tags:', { 
+            url: stUrl, 
+            payload, 
+            tagCount: payload.length,
+            hasAuthHeader: !!KEY,
+            authType: userToken ? 'user' : 'anon'
+          });
+          
+          const stRes = await fetch(stUrl, { 
+            method: 'POST', 
+            headers: { 
+              apikey: SUPABASE_ANON_KEY, 
+              Authorization: `Bearer ${KEY}`, 
+              Accept: 'application/json', 
+              'Content-Type': 'application/json', 
+              Prefer: 'return=representation' 
+            }, 
+            body: JSON.stringify(payload) 
+          });
+          
           if (!stRes.ok) {
             const errText = await stRes.text();
-            console.error('site_tags insert failed:', { status: stRes.status, statusText: stRes.statusText, body: errText, payload });
+            console.error('site_tags insert failed:', { 
+              status: stRes.status, 
+              statusText: stRes.statusText, 
+              body: errText, 
+              payload,
+              hasAuthHeader: !!KEY
+            });
             const rollbackSuccess = await rollbackSite('tag insertion failed');
-            throw new Error(createJunctionErrorMsg('tags', stRes.status, rollbackSuccess));
+            throw new Error(createJunctionErrorMsg('tags', stRes.status, errText, rollbackSuccess));
           } else {
             const inserted = await stRes.json();
-            console.log('site_tags inserted successfully:', inserted);
+            console.log('site_tags inserted successfully:', { count: inserted?.length || 0, inserted });
           }
         } catch (err) {
           console.error('site_tags insert error:', err);
@@ -150,16 +201,40 @@ export default async function handler(req, res) {
         try {
           const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
           const toInsert = categoryIds.map(category_id => ({ site_id: newSite.id, category_id }));
-          console.log('Inserting site_categories:', toInsert);
-          const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
+          console.log('Inserting site_categories:', { 
+            url: scUrl, 
+            toInsert, 
+            categoryCount: toInsert.length,
+            hasAuthHeader: !!KEY,
+            authType: userToken ? 'user' : 'anon'
+          });
+          
+          const scRes = await fetch(scUrl, { 
+            method: 'POST', 
+            headers: { 
+              apikey: SUPABASE_ANON_KEY, 
+              Authorization: `Bearer ${KEY}`, 
+              Accept: 'application/json', 
+              'Content-Type': 'application/json', 
+              Prefer: 'return=representation' 
+            }, 
+            body: JSON.stringify(toInsert) 
+          });
+          
           if (!scRes.ok) {
             const errText = await scRes.text();
-            console.error('site_categories insert failed:', { status: scRes.status, statusText: scRes.statusText, body: errText, toInsert });
+            console.error('site_categories insert failed:', { 
+              status: scRes.status, 
+              statusText: scRes.statusText, 
+              body: errText, 
+              toInsert,
+              hasAuthHeader: !!KEY
+            });
             const rollbackSuccess = await rollbackSite('category insertion failed');
-            throw new Error(createJunctionErrorMsg('categories', scRes.status, rollbackSuccess));
+            throw new Error(createJunctionErrorMsg('categories', scRes.status, errText, rollbackSuccess));
           } else {
             const inserted = await scRes.json();
-            console.log('site_categories inserted successfully:', inserted);
+            console.log('site_categories inserted successfully:', { count: inserted?.length || 0, inserted });
           }
         } catch (err) {
           console.error('site_categories insert error:', err);
@@ -170,33 +245,72 @@ export default async function handler(req, res) {
         try {
           const encoded = categoryNames.map(n => encodeURIComponent(n.replace(/\)/g, '\\)'))).join(',');
           const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&name=in.(${encoded})`;
-          const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          console.log('Looking up category names:', { names: categoryNames, url: catUrl });
+          
+          const catRes = await fetch(catUrl, { 
+            headers: { 
+              apikey: SUPABASE_ANON_KEY, 
+              Authorization: `Bearer ${KEY}`, 
+              Accept: 'application/json' 
+            } 
+          });
+          
           if (!catRes.ok) {
             const errText = await catRes.text();
-            console.error('Failed to lookup category names:', { status: catRes.status, body: errText });
+            console.error('Failed to lookup category names:', { 
+              status: catRes.status, 
+              body: errText,
+              requestedNames: categoryNames
+            });
             const rollbackSuccess = await rollbackSite('category name lookup failed');
-            throw new Error(createJunctionErrorMsg('categories', catRes.status, rollbackSuccess));
+            throw new Error(createJunctionErrorMsg('categories', catRes.status, 'Failed to lookup category names: ' + errText, rollbackSuccess));
           }
           
           const cats = await catRes.json();
+          console.log('Category lookup results:', { found: cats.length, expected: categoryNames.length, cats });
+          
           const nameToId = new Map(cats.map(c => [c.name, c.id]));
           const toInsert = [];
           categoryNames.forEach(name => {
             const cid = nameToId.get(name);
             if (cid) toInsert.push({ site_id: newSite.id, category_id: cid });
           });
+          
           if (toInsert.length > 0) {
-            console.log('Inserting site_categories (from names):', toInsert);
+            console.log('Inserting site_categories (from names):', { 
+              toInsert, 
+              categoryCount: toInsert.length,
+              hasAuthHeader: !!KEY,
+              authType: userToken ? 'user' : 'anon'
+            });
+            
             const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-            const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
+            const scRes = await fetch(scUrl, { 
+              method: 'POST', 
+              headers: { 
+                apikey: SUPABASE_ANON_KEY, 
+                Authorization: `Bearer ${KEY}`, 
+                Accept: 'application/json', 
+                'Content-Type': 'application/json', 
+                Prefer: 'return=representation' 
+              }, 
+              body: JSON.stringify(toInsert) 
+            });
+            
             if (!scRes.ok) {
               const errText = await scRes.text();
-              console.error('site_categories insert failed:', { status: scRes.status, statusText: scRes.statusText, body: errText, toInsert });
+              console.error('site_categories insert failed (from names):', { 
+                status: scRes.status, 
+                statusText: scRes.statusText, 
+                body: errText, 
+                toInsert,
+                hasAuthHeader: !!KEY
+              });
               const rollbackSuccess = await rollbackSite('category insertion failed (from names)');
-              throw new Error(createJunctionErrorMsg('categories', scRes.status, rollbackSuccess));
+              throw new Error(createJunctionErrorMsg('categories', scRes.status, errText, rollbackSuccess));
             } else {
               const inserted = await scRes.json();
-              console.log('site_categories inserted successfully (from names):', inserted);
+              console.log('site_categories inserted successfully (from names):', { count: inserted?.length || 0, inserted });
             }
           }
         } catch (err) {
