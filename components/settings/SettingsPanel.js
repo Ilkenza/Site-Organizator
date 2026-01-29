@@ -937,7 +937,7 @@ export default function SettingsPanel() {
                                         width={64}
                                         height={64}
                                         className="rounded-full object-cover"
-                                        unoptimized={avatar.startsWith('data:')}
+                                        unoptimized={typeof avatar === 'string' && avatar.startsWith('data:')}
                                     />
                                 ) : (
                                     user?.email?.charAt(0).toUpperCase()
