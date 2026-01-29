@@ -1,13 +1,21 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import { ConfirmModal } from '../ui/Modal';
 import Input from '../ui/Input';
+import Pagination from '../ui/Pagination';
+
+const ITEMS_PER_PAGE = 100;
 
 export default function TagsList({ onEdit }) {
+    const router = useRouter();
     const { tags, sites, deleteTag, loading, searchQuery, multiSelectMode, selectedTags, setSelectedTags } = useDashboard();
     const [deletingId, setDeletingId] = useState(null);
     const [tagToDelete, setTagToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
+
+    // Get current page from URL or default to 1
+    const currentPage = parseInt(router.query.page) || 1;
 
     // Filter tags based on search query
     const filteredTags = useMemo(() => {
@@ -16,6 +24,35 @@ export default function TagsList({ onEdit }) {
             tag.name.toLowerCase().includes(searchQuery.toLowerCase())
         );
     }, [tags, searchQuery]);
+
+    // Calculate pagination
+    const totalItems = filteredTags.length;
+    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedTags = filteredTags.slice(startIndex, endIndex);
+
+    // Reset to page 1 when search filter changes
+    useEffect(() => {
+        if (currentPage > 1 && searchQuery) {
+            router.push({
+                pathname: router.pathname,
+                query: { ...router.query, page: 1 }
+            }, undefined, { shallow: true });
+        }
+    }, [searchQuery]);
+
+    // Handle page change
+    const handlePageChange = (newPage) => {
+        if (newPage >= 1 && newPage <= totalPages) {
+            router.push({
+                pathname: router.pathname,
+                query: { ...router.query, page: newPage }
+            }, undefined, { shallow: true });
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
 
     const handleSelectTag = (e, tagId) => {
         e.stopPropagation();
@@ -108,9 +145,17 @@ export default function TagsList({ onEdit }) {
                     </p>
                 </div>
             ) : (
-                /* Tags List */
-                <div className="flex flex-wrap gap-2 sm:gap-3">
-                    {filteredTags.map(tag => (
+                <>
+                    {/* Results count */}
+                    {totalItems > 0 && (
+                        <div className="mb-4 text-sm text-gray-400">
+                            Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} tags
+                        </div>
+                    )}
+
+                    {/* Tags List */}
+                    <div className="flex flex-wrap gap-2 sm:gap-3">
+                        {paginatedTags.map(tag => (
                         <div
                             key={tag.id}
                             className={`group flex items-center gap-2 border rounded-full px-4 py-2 transition-colors ${selectedTags.has(tag.id)
@@ -160,6 +205,14 @@ export default function TagsList({ onEdit }) {
                         </div>
                     ))}
                 </div>
+
+                {/* Pagination */}
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                />
+            </>
             )}
 
             {/* Delete Confirmation Modal */}
