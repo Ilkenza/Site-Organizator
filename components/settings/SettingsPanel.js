@@ -32,11 +32,39 @@ export default function SettingsPanel() {
     const [linkCheckResult, setLinkCheckResult] = useState(null);
     const [linkCheckError, setLinkCheckError] = useState(null);
 
-    // Password change state
-    const [passwordModalOpen, setPasswordModalOpen] = useState(false);
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
+    // Ignored/broken link handling (persisted in localStorage per user)
+    const [ignoredLinks, setIgnoredLinks] = useState(new Set());
+    const [showIgnored, setShowIgnored] = useState(false);
+
+    const getIgnoreKey = () => `link_ignored_${user?.id || 'anon'}`;
+    const loadIgnored = () => {
+        try {
+            const raw = typeof window !== 'undefined' ? localStorage.getItem(getIgnoreKey()) : null;
+            const arr = raw ? JSON.parse(raw) : [];
+            setIgnoredLinks(new Set(Array.isArray(arr) ? arr : []));
+        } catch (e) {
+            setIgnoredLinks(new Set());
+        }
+    };
+    const saveIgnored = (set) => {
+        try {
+            if (typeof window !== 'undefined') localStorage.setItem(getIgnoreKey(), JSON.stringify(Array.from(set)));
+        } catch (e) { /* ignore */ }
+    };
+    const toggleIgnore = (id) => {
+        if (!id) return;
+        setIgnoredLinks(prev => {
+            const ns = new Set(prev);
+            if (ns.has(id)) ns.delete(id); else ns.add(id);
+            saveIgnored(ns);
+            return ns;
+        });
+    };
+
+    // Reload ignored when opening settings or when user changes
+    useEffect(() => {
+        if (activeTab === 'settings') loadIgnored();
+    }, [activeTab, user?.id]);
     const [passwordMessage, setPasswordMessage] = useState(null);
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -1207,24 +1235,39 @@ export default function SettingsPanel() {
                             >
                                 {checkingLinks ? 'Checking...' : 'Run Link Health Check'}
                             </button>
+
                             {linkCheckResult && (
-                                <div className="text-sm text-app-text-secondary">{linkCheckResult.total} checked — {linkCheckResult.brokenCount} broken</div>
+                                <div className="text-sm text-app-text-secondary">
+                                    {linkCheckResult.total} checked — {linkCheckResult.brokenCount} broken
+                                    {typeof displayedBroken !== 'undefined' && (
+                                        <> — showing {displayedBroken.length}{showIgnored ? ' (including ignored)' : ''}</>
+                                    )}
+                                </div>
                             )}
+
                             {linkCheckError && (
                                 <div className="text-sm text-red-400">Error: {String(linkCheckError)}</div>
                             )}
+
+                            <label className="ml-auto flex items-center gap-2 text-sm">
+                                <input type="checkbox" className="w-4 h-4" checked={showIgnored} onChange={(e) => setShowIgnored(e.target.checked)} />
+                                <span className="text-xs text-app-text-secondary">Show ignored</span>
+                            </label>
                         </div>
 
-                        {linkCheckResult?.broken?.length > 0 && (
-                            <div className="mt-3 bg-app-bg-light border border-app-border rounded-lg p-3 max-h-52 overflow-auto">
-                                {linkCheckResult.broken.slice(0, 20).map(b => (
-                                    <div key={b.id} className="flex items-center justify-between py-1">
+                        {displayedBroken && displayedBroken.length > 0 && (
+                            <div className="mt-3 bg-app-bg-light border border-app-border rounded-lg p-3 max-h-52 overflow-auto space-y-2">
+                                {displayedBroken.slice(0, 200).map(b => (
+                                    <div key={b.id || b.url} className={`flex items-center justify-between py-1 ${ignoredLinks.has(b.id) ? 'opacity-60' : ''}`}>
                                         <div className="text-sm">
                                             <div className="font-medium text-app-text-primary">{b.name}</div>
-                                            <div className="text-xs text-app-text-tertiary">{b.url} — {b.status}</div>
+                                            <div className="text-xs text-app-text-tertiary">{b.url} — {b.status} {ignoredLinks.has(b.id) && <span className="ml-2 text-yellow-400">Ignored</span>}</div>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <a href={b.url} target="_blank" rel="noreferrer" className="text-app-accent hover:underline text-sm">Open</a>
+                                            <button onClick={() => toggleIgnore(b.id)} className={`text-sm px-2 py-1 rounded-md ${ignoredLinks.has(b.id) ? 'bg-app-bg-secondary text-app-text-secondary' : 'bg-app-bg-card text-app-text-primary hover:bg-app-bg-light'}`}>
+                                                {ignoredLinks.has(b.id) ? 'Unignore' : 'Ignore'}
+                                            </button>
                                         </div>
                                     </div>
                                 ))}
