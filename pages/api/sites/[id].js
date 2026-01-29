@@ -37,9 +37,8 @@ export default async function handler(req, res) {
         if (ownerRes.ok) {
           const ownerRows = await ownerRes.json();
           if (ownerRows && ownerRows[0] && ownerRows[0].user_id === userSub) {
-            const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-            REL_KEY = SERVICE_KEY || SUPABASE_ANON_KEY;
-            if (!SERVICE_KEY) {
+            REL_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+            if (REL_KEY === SUPABASE_ANON_KEY) {
               console.warn('[Sites/ID API] No service role key configured - falling back to anon key. Relation writes may be blocked by RLS.');
             } else {
               console.log('[Sites/ID API] Using service role key for relation updates for site owner:', id);
@@ -137,34 +136,8 @@ export default async function handler(req, res) {
               if (insCatRes.status === 401 || (errText && errText.includes('42501'))) {
                 console.warn('[Sites/ID API] Relation insert likely blocked by RLS; REL_KEY type:', REL_KEY === SUPABASE_ANON_KEY ? 'anon' : 'service');
                 console.warn('Upstream response for site_categories insert:', errText);
-
-                // Attempt retry using explicit service key if available
-                if (SERVICE_KEY) {
-                  try {
-                    console.log('[Sites/ID API] Retrying site_categories insert using SERVICE_KEY');
-                    const retryRes = await fetch(insCatUrl, {
-                      method: 'POST',
-                      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
-                      body: JSON.stringify(catPayload)
-                    });
-                    if (retryRes.ok) {
-                      console.log('[Sites/ID API] Retry insert site_categories succeeded');
-                      // Success on retry - do not push warning
-                    } else {
-                      const retryErr = await retryRes.text();
-                      console.error('[Sites/ID API] Retry failed for site_categories:', retryRes.status, retryErr);
-                      warnings.push({ stage: 'insert_site_categories', status: retryRes.status, details: retryErr });
-                    }
-                  } catch (retryErr) {
-                    console.error('[Sites/ID API] Retry error for site_categories:', retryErr);
-                    warnings.push({ stage: 'insert_site_categories', error: String(retryErr) });
-                  }
-                } else {
-                  warnings.push({ stage: 'insert_site_categories', status: insCatRes.status, details: errText });
-                }
-              } else {
-                warnings.push({ stage: 'insert_site_categories', status: insCatRes.status, details: errText });
               }
+              warnings.push({ stage: 'insert_site_categories', status: insCatRes.status, details: errText });
             } else {
               console.log('Inserted', category_ids.length, 'categories for site:', id);
             }
@@ -202,34 +175,8 @@ export default async function handler(req, res) {
               if (insTagRes.status === 401 || (errText && errText.includes('42501'))) {
                 console.warn('[Sites/ID API] Relation insert likely blocked by RLS; REL_KEY type:', REL_KEY === SUPABASE_ANON_KEY ? 'anon' : 'service');
                 console.warn('Upstream response for site_tags insert:', errText);
-
-                // Attempt retry using explicit service key if available
-                if (SERVICE_KEY) {
-                  try {
-                    console.log('[Sites/ID API] Retrying site_tags insert using SERVICE_KEY');
-                    const retryRes = await fetch(insTagUrl, {
-                      method: 'POST',
-                      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
-                      body: JSON.stringify(tagPayload)
-                    });
-                    if (retryRes.ok) {
-                      console.log('[Sites/ID API] Retry insert site_tags succeeded');
-                      // Success on retry - do not push warning
-                    } else {
-                      const retryErr = await retryRes.text();
-                      console.error('[Sites/ID API] Retry failed for site_tags:', retryRes.status, retryErr);
-                      warnings.push({ stage: 'insert_site_tags', status: retryRes.status, details: retryErr });
-                    }
-                  } catch (retryErr) {
-                    console.error('[Sites/ID API] Retry error for site_tags:', retryErr);
-                    warnings.push({ stage: 'insert_site_tags', error: String(retryErr) });
-                  }
-                } else {
-                  warnings.push({ stage: 'insert_site_tags', status: insTagRes.status, details: errText });
-                }
-              } else {
-                warnings.push({ stage: 'insert_site_tags', status: insTagRes.status, details: errText });
               }
+              warnings.push({ stage: 'insert_site_tags', status: insTagRes.status, details: errText });
             } else {
               console.log('Inserted', tag_ids.length, 'tags for site:', id);
             }
