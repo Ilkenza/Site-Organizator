@@ -116,7 +116,7 @@ export function DashboardProvider({ children }) {
         setError(null);
         try {
             const [sitesRes, categoriesRes, tagsRes] = await Promise.all([
-                fetchAPI('/sites'),
+                fetchAPI('/sites?limit=500'),
                 fetchAPI('/categories'),
                 fetchAPI('/tags')
             ]);
