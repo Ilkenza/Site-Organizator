@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
 import Head from 'next/head';
 import { DashboardProvider, useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +14,32 @@ import TagModal from '../components/tags/TagModal';
 import SettingsPanel from '../components/settings/SettingsPanel';
 import { ConfirmModal } from '../components/ui/Modal';
 import Toast from '../components/ui/Toast';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-300">
+          <p className="font-medium">Something went wrong.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function DashboardContent() {
   const {
@@ -135,7 +161,11 @@ function DashboardContent() {
       case 'tags':
         return <TagsList onEdit={handleEditTag} />;
       case 'settings':
-        return <SettingsPanel key="settings-panel" />;
+        return (
+          <ErrorBoundary>
+            <SettingsPanel key="settings-panel" />
+          </ErrorBoundary>
+        );
       default:
         return null;
     }

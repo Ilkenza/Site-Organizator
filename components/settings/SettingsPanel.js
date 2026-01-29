@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { useAuth, supabase } from '../../context/AuthContext';
 // export/import helpers are loaded dynamically in client-only code
 import { useDashboard } from '../../context/DashboardContext';
@@ -67,6 +68,10 @@ export default function SettingsPanel() {
     }, [activeTab, user?.id]);
     const [passwordMessage, setPasswordMessage] = useState(null);
     const [passwordLoading, setPasswordLoading] = useState(false);
+    const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -257,6 +262,13 @@ export default function SettingsPanel() {
             setLoadingStats(false);
         }
     }, [showToast]);
+
+    // Compute displayed broken links based on ignored state
+    const displayedBroken = linkCheckResult?.broken
+        ? (showIgnored
+            ? linkCheckResult.broken
+            : linkCheckResult.broken.filter(b => !ignoredLinks.has(b.id)))
+        : [];
 
     // Run broken-link health check for user's sites
     const runLinkCheck = async () => {
@@ -917,12 +929,15 @@ export default function SettingsPanel() {
 
                     <div className="flex items-center gap-4 mb-6">
                         <div className="relative">
-                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-2xl font-medium">
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-2xl font-medium overflow-hidden">
                                 {avatar ? (
-                                    <img
+                                    <Image
                                         src={avatar}
                                         alt="Avatar preview"
-                                        className="w-16 h-16 rounded-full object-cover"
+                                        width={64}
+                                        height={64}
+                                        className="rounded-full object-cover"
+                                        unoptimized={avatar.startsWith('data:')}
                                     />
                                 ) : (
                                     user?.email?.charAt(0).toUpperCase()
