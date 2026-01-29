@@ -34,7 +34,7 @@ export default async function handler(req, res) {
           'Content-Type': 'application/json',
           Prefer: 'return=representation'
         },
-        body: JSON.stringify(((b) => { const allowed = ['name', 'url', 'pricing', 'user_id']; const t = {}; for (const k of allowed) if (Object.prototype.hasOwnProperty.call(b, k)) t[k] = b[k]; return t; })(body))
+        body: JSON.stringify(((b) => { const allowed = ['name', 'url', 'pricing', 'user_id', 'is_favorite']; const t = {}; for (const k of allowed) if (Object.prototype.hasOwnProperty.call(b, k)) t[k] = b[k]; return t; })(body))
       });
 
       const text = await r.text();
