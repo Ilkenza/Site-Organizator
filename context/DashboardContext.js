@@ -261,7 +261,12 @@ export function DashboardProvider({ children }) {
             const newSite = response?.data || response;
             setSites(prev => [newSite, ...prev]);
             setStats(prev => ({ ...prev, sites: prev.sites + 1 }));
-            showToast(`✓ Site "${newSite.name}" created successfully`, 'success');
+            if (response?.warnings && response.warnings.length) {
+                console.warn('Site created with warnings:', response.warnings);
+                showToast(`Site created but some relations failed (check Settings)`, 'warning');
+            } else {
+                showToast(`✓ Site "${newSite.name}" created successfully`, 'success');
+            }
             return newSite;
         } catch (err) {
             showToast(`✗ Failed to add site: ${err.message}`, 'error');
@@ -279,7 +284,12 @@ export function DashboardProvider({ children }) {
 
             // Zamijeni kompletan site sa updated verzijom (sa svim kategorijama/tagovima)
             setSites(prev => prev.map(s => s.id === id ? updated : s));
-            showToast(`✓ Site "${updated.name}" updated successfully`, 'success');
+            if (response?.warnings && response.warnings.length) {
+                console.warn('Site updated with warnings:', response.warnings);
+                showToast('Site updated but some relation updates failed', 'warning');
+            } else {
+                showToast(`✓ Site "${updated.name}" updated successfully`, 'success');
+            }
 
             // Ili opciono, refresh sve podatke nakon update-a:
             // await fetchData();

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth, supabase } from '../../context/AuthContext';
 // export/import helpers are loaded dynamically in client-only code
 import { useDashboard } from '../../context/DashboardContext';
@@ -212,10 +212,10 @@ export default function SettingsPanel() {
         };
 
         checkMfaStatus();
-    }, [activeTab, supabase, user?.id]);
+    }, [activeTab, user?.id]);
 
     // Fetch statistics for Settings panel
-    const fetchStats = async () => {
+    const fetchStats = useCallback(async () => {
         setLoadingStats(true);
         try {
             const r = await fetch('/api/stats');
@@ -228,7 +228,7 @@ export default function SettingsPanel() {
         } finally {
             setLoadingStats(false);
         }
-    };
+    }, [showToast]);
 
     // Run broken-link health check for user's sites
     const runLinkCheck = async () => {
@@ -242,15 +242,29 @@ export default function SettingsPanel() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' }
             });
-            const json = await r.json();
-            if (!r.ok || !json.success) {
-                setLinkCheckError(json?.error || 'Link check failed');
-                showToast && showToast('Link check failed', 'error');
+
+            // Read text first to avoid unexpected end of JSON errors
+            const text = await r.text();
+            let json = null;
+            if (text && text.trim()) {
+                try { json = JSON.parse(text); } catch (e) { json = null; }
+            }
+
+            if (!r.ok) {
+                const errMsg = json?.error || text || `HTTP ${r.status}`;
+                console.error('Link check failed upstream:', r.status, errMsg);
+                setLinkCheckError(errMsg);
+                showToast && showToast(`Link check failed: ${errMsg}`, 'error');
+            } else if (!json || !json.success) {
+                const errMsg = json?.error || 'Invalid response from link check';
+                setLinkCheckError(errMsg);
+                showToast && showToast(`Link check failed: ${errMsg}`, 'error');
             } else {
                 setLinkCheckResult(json);
                 showToast && showToast(`Link check complete — ${json.brokenCount} broken`, json.brokenCount ? 'warning' : 'success');
             }
         } catch (err) {
+            console.error('Link check client error:', err);
             setLinkCheckError(err.message);
             showToast && showToast(`Link check failed: ${err.message}`, 'error');
         } finally {
@@ -261,7 +275,7 @@ export default function SettingsPanel() {
     // Auto-refresh stats when opening settings
     useEffect(() => {
         if (activeTab === 'settings') fetchStats();
-    }, [activeTab]);
+    }, [activeTab, fetchStats]);
 
     // Handle MFA enrollment
     const handleEnrollMfa = async () => {
@@ -1146,12 +1160,25 @@ export default function SettingsPanel() {
 
                 {/* Statistics Section */}
                 <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
-                    <h2 className="text-lg font-semibold text-app-text-primary mb-2 flex items-center gap-2">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18" />
-                        </svg>
-                        Statistics
-                    </h2>
+                    <div className="flex items-center justify-between mb-2">
+                        <h2 className="text-lg font-semibold text-app-text-primary flex items-center gap-2">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18" />
+                            </svg>
+                            Statistics
+                        </h2>
+                        <button
+                            onClick={async (e) => { e.preventDefault(); await fetchStats(); }}
+                            title="Refresh statistics"
+                            className="p-2 rounded-lg bg-app-bg-secondary hover:bg-app-bg-light text-app-text-secondary transition-colors"
+                        >
+                            {loadingStats ? (
+                                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            ) : (
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 12h3m0 0a7 7 0 101.94-4.94L8 12" /></svg>
+                            )}
+                        </button>
+                    </div>
                     <p className="text-sm text-app-text-secondary mb-4">Overview of your content and link health.</p>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
@@ -1169,7 +1196,7 @@ export default function SettingsPanel() {
                         </div>
                     </div>
 
-                    <p className="text-sm text-app-text-tertiary mb-3">Keyboard shortcuts: <span className="font-medium">Ctrl/Cmd+N</span> (Add), <span className="font-medium">Ctrl/Cmd+K</span> (Search), <span className="font-medium">M</span> (Multi-select)</p>
+
 
                     <div className="border-t border-app-border pt-3">
                         <div className="flex items-center gap-3">
@@ -1182,6 +1209,9 @@ export default function SettingsPanel() {
                             </button>
                             {linkCheckResult && (
                                 <div className="text-sm text-app-text-secondary">{linkCheckResult.total} checked — {linkCheckResult.brokenCount} broken</div>
+                            )}
+                            {linkCheckError && (
+                                <div className="text-sm text-red-400">Error: {String(linkCheckError)}</div>
                             )}
                         </div>
 

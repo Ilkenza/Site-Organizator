@@ -173,12 +173,19 @@ export default function Header({ onAddClick, onMenuClick }) {
                 if (typeof onAddClick === 'function') onAddClick();
             }
 
-            // Ctrl/Cmd+K - Focus search input
+            // Ctrl/Cmd+K - Focus search input (with fallback)
             if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
                 e.preventDefault();
+                // Preferred: use the ref
                 if (searchInputRef?.current) {
-                    try { searchInputRef.current.focus(); searchInputRef.current.select && searchInputRef.current.select(); } catch (err) { /* ignore */ }
+                    try { searchInputRef.current.focus(); searchInputRef.current.select && searchInputRef.current.select(); return; } catch (err) { /* ignore */ }
                 }
+                // Fallback: try to query a visible search input in the header
+                try {
+                    const header = document.querySelector('header');
+                    const fallback = header?.querySelector('input[type="text"]');
+                    if (fallback) { fallback.focus(); fallback.select && fallback.select(); }
+                } catch (err) { /* ignore */ }
             }
 
             // Delete or Backspace - Delete selected items

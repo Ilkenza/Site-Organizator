@@ -75,6 +75,8 @@ export default async function handler(req, res) {
       const updatedSite = Array.isArray(updated) ? updated[0] : updated;
       console.log('Updated site to return:', updatedSite);
 
+      const warnings = [];
+
       // Update categories if provided
       if (Array.isArray(category_ids)) {
         try {
@@ -84,6 +86,7 @@ export default async function handler(req, res) {
           if (!delCatRes.ok) {
             const errText = await delCatRes.text();
             console.error('Failed to delete site_categories:', delCatRes.status, errText);
+            warnings.push({ stage: 'delete_site_categories', status: delCatRes.status, details: errText });
           } else {
             console.log('Deleted existing site_categories for site:', id);
           }
@@ -101,11 +104,12 @@ export default async function handler(req, res) {
             if (!insCatRes.ok) {
               const errText = await insCatRes.text();
               console.error('Failed to insert site_categories:', insCatRes.status, errText);
+              warnings.push({ stage: 'insert_site_categories', status: insCatRes.status, details: errText });
             } else {
               console.log('Inserted', category_ids.length, 'categories for site:', id);
             }
           }
-        } catch (err) { console.error('Exception updating categories:', err); }
+        } catch (err) { console.error('Exception updating categories:', err); warnings.push({ stage: 'exception_update_categories', error: String(err) }); }
       }
 
       // Update tags if provided
@@ -117,6 +121,7 @@ export default async function handler(req, res) {
           if (!delTagRes.ok) {
             const errText = await delTagRes.text();
             console.error('Failed to delete site_tags:', delTagRes.status, errText);
+            warnings.push({ stage: 'delete_site_tags', status: delTagRes.status, details: errText });
           } else {
             console.log('Deleted existing site_tags for site:', id);
           }
@@ -134,11 +139,12 @@ export default async function handler(req, res) {
             if (!insTagRes.ok) {
               const errText = await insTagRes.text();
               console.error('Failed to insert site_tags:', insTagRes.status, errText);
+              warnings.push({ stage: 'insert_site_tags', status: insTagRes.status, details: errText });
             } else {
               console.log('Inserted', tag_ids.length, 'tags for site:', id);
             }
           }
-        } catch (err) { console.error('Exception updating tags:', err); }
+        } catch (err) { console.error('Exception updating tags:', err); warnings.push({ stage: 'exception_update_tags', error: String(err) }); }
       }
 
       // Refetch the site with all related data
@@ -157,7 +163,7 @@ export default async function handler(req, res) {
         }
 
         console.log('Complete site after update:', completeSite);
-        return res.status(200).json({ success: true, data: completeSite });
+        return res.status(200).json({ success: true, data: completeSite, warnings: warnings && warnings.length ? warnings : undefined });
       } else {
         const errorText = await refetchRes.text();
         return res.status(502).json({ success: false, error: 'Failed to refetch site', details: errorText });
