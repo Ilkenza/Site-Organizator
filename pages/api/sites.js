@@ -263,7 +263,7 @@ export default async function handler(req, res) {
               requestedNames: categoryNames
             });
             const rollbackSuccess = await rollbackSite('category name lookup failed');
-            throw new Error(createJunctionErrorMsg('categories', catRes.status, 'Failed to lookup category names: ' + errText, rollbackSuccess));
+            throw new Error(`Failed to lookup category names (HTTP ${catRes.status}). ${catRes.status === 401 || catRes.status === 403 ? 'Permission denied - check your login status and database permissions.' : catRes.status >= 500 ? 'Database server error.' : ''} Details: ${errText}${!rollbackSuccess ? ` WARNING: Site was created (ID: ${newSite.id}) but could not be cleaned up. Please contact support.` : ''}`);
           }
           
           const cats = await catRes.json();
