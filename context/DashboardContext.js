@@ -12,6 +12,7 @@ export function DashboardProvider({ children }) {
     const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [failedRelationUpdates, setFailedRelationUpdates] = useState({}); // { [siteId]: { categoryIds, tagIds, warnings } }
 
     // Toast notification
     const [toast, setToast] = useState(null);
@@ -290,7 +291,21 @@ export function DashboardProvider({ children }) {
             try {
                 if (response?.warnings && response.warnings.length) {
                     console.warn('[DashboardContext] updateSite warnings:', response.warnings);
-                    showToast && showToast('Site updated, but related updates failed. Refreshing data...', 'warning');
+
+                    // If relation inserts/updates failed, capture details so user can retry
+                    const relationRelated = response.warnings.some(w => w.stage && (w.stage.includes('site_categories') || w.stage.includes('site_tags') || w.stage === 'service_role_key_missing'));
+                    if (relationRelated) {
+                        setFailedRelationUpdates(prev => ({
+                            ...prev,
+                            [id]: {
+                                categoryIds: siteData.category_ids || siteData.categoryIds || [],
+                                tagIds: siteData.tag_ids || siteData.tagIds || [],
+                                warnings: response.warnings
+                            }
+                        }));
+                    }
+
+                    showToast && showToast('Site updated, but related updates failed. You can retry relation updates from the site editor after configuring SUPABASE_SERVICE_ROLE_KEY.', 'warning');
                 }
                 await fetchData();
             } catch (e) {
@@ -324,6 +339,38 @@ export function DashboardProvider({ children }) {
             throw err;
         }
     }, [showToast]);
+
+    // Retry failed relation updates for a site (requires service role key configured)
+    const retrySiteRelations = useCallback(async (id) => {
+        try {
+            const failed = failedRelationUpdates[id];
+            if (!failed) throw new Error('No failed relation update recorded for this site');
+
+            const res = await fetchAPI(`/sites/${id}/relations/retry`, {
+                method: 'POST',
+                body: JSON.stringify({ category_ids: failed.categoryIds || [], tag_ids: failed.tagIds || [] })
+            });
+
+            if (!res || res?.success === false) {
+                const err = res?.error || JSON.stringify(res);
+                throw new Error(err);
+            }
+
+            // Success: clear failure record and refresh data
+            setFailedRelationUpdates(prev => {
+                const copy = { ...prev };
+                delete copy[id];
+                return copy;
+            });
+            await fetchData();
+            showToast('✓ Relation updates retried successfully', 'success');
+            return res.data || res;
+        } catch (err) {
+            console.error('retrySiteRelations error:', err);
+            showToast(`✗ Failed to retry relations: ${err.message || err}`, 'error');
+            throw err;
+        }
+    }, [failedRelationUpdates, fetchData, showToast]);
 
     // Category operations
     const addCategory = useCallback(async (categoryData) => {
@@ -592,6 +639,9 @@ export function DashboardProvider({ children }) {
         addTag,
         updateTag,
         deleteTag,
+        // Failed relation updates map and retry helper
+        failedRelationUpdates,
+        retrySiteRelations,
         sites
     };
 

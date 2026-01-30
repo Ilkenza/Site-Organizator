@@ -5,7 +5,7 @@ import Button from '../ui/Button';
 import Input, { Textarea, Select } from '../ui/Input';
 
 export default function SiteModal({ isOpen, onClose, site = null, defaultFavorite = false, defaultCategoryId = null, defaultTagId = null }) {
-    const { categories, tags, addSite, updateSite } = useDashboard();
+    const { categories, tags, addSite, updateSite, failedRelationUpdates, retrySiteRelations } = useDashboard();
     const isEditing = !!site;
 
     const [formData, setFormData] = useState({
@@ -20,6 +20,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
     const [error, setError] = useState(null);
     const [categorySearch, setCategorySearch] = useState('');
     const [tagSearch, setTagSearch] = useState('');
+    const [retryingRelations, setRetryingRelations] = useState(false);
 
     // Reset form when modal opens/closes or site changes
     useEffect(() => {
@@ -156,13 +157,36 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                     </div>
                 )}
 
-                <Input
-                    label="Site Name *"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="e.g., GitHub"
-                    autoFocus
+                {/* Retry relations banner (shown when previous update failed to attach categories/tags) */}
+                {isEditing && site?.id && failedRelationUpdates?.[site.id] && (
+                    <div className="mb-3 p-3 bg-yellow-900/20 border border-yellow-700 rounded-lg text-yellow-200 text-sm flex items-center justify-between gap-3">
+                        <div>
+                            Relation updates for this site previously failed (missing SUPABASE_SERVICE_ROLE_KEY or RLS). You can retry attaching categories/tags now.
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={async () => {
+                                    setRetryingRelations(true);
+                                    try {
+                                        await retrySiteRelations(site.id);
+                                        setError(null);
+                                    } catch (err) {
+                                        setError(err.message || String(err));
+                                    } finally {
+                                        setRetryingRelations(false);
+                                    }
+                                }}
+                                disabled={retryingRelations}
+                                className="px-3 py-1 bg-yellow-600 hover:bg-yellow-500 text-black rounded-lg font-medium disabled:opacity-60"
+                            >
+                                {retryingRelations ? 'Retrying...' : 'Retry relations'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+                onChange={handleChange}
+                placeholder="e.g., GitHub"
+                autoFocus
                 />
 
                 <Input
