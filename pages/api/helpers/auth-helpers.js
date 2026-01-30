@@ -11,35 +11,41 @@ export async function verifyUserFromAuthHeader(authHeader) {
     const token = authHeader.slice(7); // Remove 'Bearer ' prefix
     
     try {
-        // Decode JWT to extract user information
-        // JWT structure: header.payload.signature
-        const parts = token.split('.');
-        if (parts.length !== 3) {
-            console.error('Invalid JWT format');
-            return null;
-        }
-
-        // Decode the payload (second part)
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+        // For proper JWT verification, we should verify the signature using Supabase's auth API
+        // This is more secure than just decoding the JWT payload
+        const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         
-        // Verify token hasn't expired
-        if (payload.exp && payload.exp * 1000 < Date.now()) {
-            console.error('Token has expired');
+        if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+            console.error('Missing Supabase environment variables');
             return null;
         }
 
-        // Extract user ID from payload
-        const userId = payload.sub || payload.user_id;
-        if (!userId) {
-            console.error('No user ID found in token');
+        // Verify token using Supabase's auth endpoint
+        const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'apikey': SUPABASE_ANON_KEY
+            }
+        });
+
+        if (!response.ok) {
+            console.error('Token verification failed:', response.status);
+            return null;
+        }
+
+        const user = await response.json();
+        
+        if (!user || !user.id) {
+            console.error('Invalid user data from token verification');
             return null;
         }
 
         return {
             user: {
-                id: userId,
-                email: payload.email,
-                ...payload
+                id: user.id,
+                email: user.email,
+                ...user
             },
             token
         };
