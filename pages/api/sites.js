@@ -23,6 +23,15 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const body = req.body || {};
+      console.log('[Sites API POST] Received payload:', { 
+        name: body.name, 
+        url: body.url, 
+        pricing: body.pricing, 
+        user_id: body.user_id,
+        category_ids: body.category_ids,
+        tag_ids: body.tag_ids,
+        hasUserToken: !!userToken 
+      });
 
       // Basic validation
       if (!body.name || !body.url || !body.pricing) return res.status(400).json({ success: false, error: 'Missing required fields: name, url, pricing' });
@@ -97,13 +106,17 @@ export default async function handler(req, res) {
         try {
           const stUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
           const payload = body.tag_ids.map(tag_id => ({ site_id: newSite.id, tag_id }));
-          const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
+          console.log('[Sites API] Inserting site_tags:', { site_id: newSite.id, tag_ids: body.tag_ids, payload });
+          const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
           if (!stRes.ok) {
             const errText = await stRes.text();
-            console.error('site_tags insert failed', stRes.status, errText);
+            console.error('[Sites API] site_tags insert failed', stRes.status, errText);
             warnings.push({ stage: 'site_tags_insert', status: stRes.status, details: errText });
+          } else {
+            const result = await stRes.text();
+            console.log('[Sites API] site_tags insert succeeded:', result);
           }
-        } catch (err) { console.error('site_tags insert failed', err); warnings.push({ stage: 'site_tags_insert', error: String(err) }); }
+        } catch (err) { console.error('[Sites API] site_tags insert failed', err); warnings.push({ stage: 'site_tags_insert', error: String(err) }); }
       }
 
       // Attach categories - support both category_ids (array of IDs) and categories (array of names)
@@ -115,13 +128,17 @@ export default async function handler(req, res) {
         try {
           const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
           const toInsert = categoryIds.map(category_id => ({ site_id: newSite.id, category_id }));
-          const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
+          console.log('[Sites API] Inserting site_categories:', { site_id: newSite.id, category_ids: categoryIds, toInsert });
+          const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
           if (!scRes.ok) {
             const errText = await scRes.text();
-            console.error('site_categories insert failed', scRes.status, errText);
+            console.error('[Sites API] site_categories insert failed', scRes.status, errText);
             warnings.push({ stage: 'site_categories_insert', status: scRes.status, details: errText });
+          } else {
+            const result = await scRes.text();
+            console.log('[Sites API] site_categories insert succeeded:', result);
           }
-        } catch (err) { console.error('site_categories insert failed', err); warnings.push({ stage: 'site_categories_insert', error: String(err) }); }
+        } catch (err) { console.error('[Sites API] site_categories insert failed', err); warnings.push({ stage: 'site_categories_insert', error: String(err) }); }
       } else if (categoryNames.length > 0) {
         // Resolve names to IDs first
         try {
@@ -138,11 +155,15 @@ export default async function handler(req, res) {
             });
             if (toInsert.length > 0) {
               const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-              const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
+              console.log('[Sites API] Inserting site_categories (from names):', { site_id: newSite.id, toInsert });
+              const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
               if (!scRes.ok) {
                 const errText = await scRes.text();
-                console.error('site_categories insert failed', scRes.status, errText);
+                console.error('[Sites API] site_categories insert failed', scRes.status, errText);
                 warnings.push({ stage: 'site_categories_insert', status: scRes.status, details: errText });
+              } else {
+                const result = await scRes.text();
+                console.log('[Sites API] site_categories insert succeeded:', result);
               }
             }
           }
