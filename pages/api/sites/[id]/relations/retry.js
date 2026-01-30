@@ -1,5 +1,5 @@
 import { parse } from 'url';
-import { verifyUserFromAuthHeader } from '../../helpers/auth-helpers';
+import { verifyUserFromAuthHeader } from '../../../helpers/auth-helpers';
 
 export default async function handler(req, res) {
     const { query: { id } } = parse(req.url, true);
