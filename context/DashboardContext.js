@@ -264,6 +264,17 @@ export function DashboardProvider({ children }) {
             setStats(prev => ({ ...prev, sites: prev.sites + 1 }));
             if (response?.warnings && response.warnings.length) {
                 console.warn('Site created with warnings:', response.warnings);
+
+                // Record failed relation updates so user can retry attaching them later
+                setFailedRelationUpdates(prev => ({
+                    ...prev,
+                    [newSite.id]: {
+                        categoryIds: siteData.category_ids || siteData.categoryIds || [],
+                        tagIds: siteData.tag_ids || siteData.tagIds || [],
+                        warnings: response.warnings
+                    }
+                }));
+
                 showToast(`Site created but some relations failed (refreshing...)`, 'warning');
                 // Refresh authoritative data from server to reflect actual state
                 try { await fetchData(); } catch (e) { console.warn('fetchData after addSite warnings failed', e); }
