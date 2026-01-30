@@ -28,6 +28,24 @@ export default async function handler(req, res) {
       if (!body.name || !body.url || !body.pricing) return res.status(400).json({ success: false, error: 'Missing required fields: name, url, pricing' });
       if (!body.user_id) return res.status(400).json({ success: false, error: 'Missing user_id (you must be logged in to add a site)' });
 
+      // Verify that the authenticated user matches the user_id in the request body
+      if (userToken) {
+        try {
+          const tokenPayload = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString());
+          const authenticatedUserId = tokenPayload.sub;
+          
+          if (authenticatedUserId && authenticatedUserId !== body.user_id) {
+            return res.status(403).json({ 
+              success: false, 
+              error: 'Forbidden: Cannot create site for another user' 
+            });
+          }
+        } catch (e) {
+          console.warn('[Sites API] Failed to decode user token for ownership check:', e);
+          // Continue if we can't decode - the RLS policy will handle it
+        }
+      }
+
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites`;
       const r = await fetch(url, {
         method: 'POST',
@@ -71,7 +89,7 @@ export default async function handler(req, res) {
       // Check if service role key is available for relation inserts
       if (!SUPABASE_SERVICE_ROLE_KEY) {
         console.warn('[Sites API] SUPABASE_SERVICE_ROLE_KEY not configured - relation inserts may fail due to RLS policies');
-        warnings.push({ stage: 'service_role_key_missing', status: 400, details: 'SUPABASE_SERVICE_ROLE_KEY not configured on server environment' });
+        warnings.push({ stage: 'service_role_key_missing', details: 'SUPABASE_SERVICE_ROLE_KEY not configured on server environment' });
       }
 
       // Attach tags (tag_ids) if provided
