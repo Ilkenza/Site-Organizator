@@ -22,6 +22,9 @@ export default async function handler(req, res) {
   // Use user's token for authenticated requests (respects RLS), fallback to anon key for reads
   const AUTH_TOKEN = userToken || SUPABASE_ANON_KEY;
 
+  // Warnings array to collect relation update issues
+  const warnings = [];
+
   // Determine key to use for relation updates. If the requester is the site owner,
   // prefer using the service role key to avoid RLS blocking relation writes.
   let REL_KEY = userToken || SUPABASE_ANON_KEY;
@@ -37,10 +40,10 @@ export default async function handler(req, res) {
         if (ownerRes.ok) {
           const ownerRows = await ownerRes.json();
           if (ownerRows && ownerRows[0] && ownerRows[0].user_id === userSub) {
-            REL_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+            REL_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
             if (REL_KEY === SUPABASE_ANON_KEY) {
               console.warn('[Sites/ID API] No service role key configured - falling back to anon key. Relation writes may be blocked by RLS.');
-              warnings.push({ stage: 'service_role_key_missing', status: 400, details: 'SUPABASE_SERVICE_ROLE_KEY not configured on server environment' });
+              warnings.push({ stage: 'service_role_key_missing', details: 'SUPABASE_SERVICE_ROLE_KEY not configured on server environment' });
             } else {
               console.log('[Sites/ID API] Using service role key for relation updates for site owner:', id);
             }
@@ -104,8 +107,6 @@ export default async function handler(req, res) {
       console.log('Supabase PATCH response:', updated);
       const updatedSite = Array.isArray(updated) ? updated[0] : updated;
       console.log('Updated site to return:', updatedSite);
-
-      const warnings = [];
 
       // Update categories if provided
       if (Array.isArray(category_ids)) {
