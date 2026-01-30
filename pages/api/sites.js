@@ -6,6 +6,7 @@ export default async function handler(req, res) {
 
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
   // Extract user's JWT token from Authorization header (sent by fetchAPI)
   const authHeader = req.headers.authorization;
@@ -15,6 +16,9 @@ export default async function handler(req, res) {
 
   // Use user's token for authenticated requests (respects RLS), fallback to anon key for reads
   const KEY = userToken || SUPABASE_ANON_KEY;
+  
+  // Use service role key for junction table inserts (bypasses RLS)
+  const REL_KEY = SUPABASE_SERVICE_ROLE_KEY || KEY;
 
   if (req.method === 'POST') {
     try {
@@ -23,6 +27,24 @@ export default async function handler(req, res) {
       // Basic validation
       if (!body.name || !body.url || !body.pricing) return res.status(400).json({ success: false, error: 'Missing required fields: name, url, pricing' });
       if (!body.user_id) return res.status(400).json({ success: false, error: 'Missing user_id (you must be logged in to add a site)' });
+
+      // Verify that the authenticated user matches the user_id in the request body
+      if (userToken) {
+        try {
+          const tokenPayload = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString());
+          const authenticatedUserId = tokenPayload.sub;
+          
+          if (authenticatedUserId && authenticatedUserId !== body.user_id) {
+            return res.status(403).json({ 
+              success: false, 
+              error: 'Forbidden: Cannot create site for another user' 
+            });
+          }
+        } catch (e) {
+          console.warn('[Sites API] Failed to decode user token for ownership check:', e);
+          // Continue if we can't decode - the RLS policy will handle it
+        }
+      }
 
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites`;
       const r = await fetch(url, {
@@ -63,13 +85,19 @@ export default async function handler(req, res) {
 
       // Prepare warnings collector
       const warnings = [];
+      
+      // Check if service role key is available for relation inserts
+      if (!SUPABASE_SERVICE_ROLE_KEY) {
+        console.warn('[Sites API] SUPABASE_SERVICE_ROLE_KEY not configured - relation inserts may fail due to RLS policies');
+        warnings.push({ stage: 'service_role_key_missing', details: 'SUPABASE_SERVICE_ROLE_KEY not configured on server environment' });
+      }
 
       // Attach tags (tag_ids) if provided
       if (Array.isArray(body.tag_ids) && body.tag_ids.length > 0) {
         try {
           const stUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
           const payload = body.tag_ids.map(tag_id => ({ site_id: newSite.id, tag_id }));
-          const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
+          const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
           if (!stRes.ok) {
             const errText = await stRes.text();
             console.error('site_tags insert failed', stRes.status, errText);
@@ -87,7 +115,7 @@ export default async function handler(req, res) {
         try {
           const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
           const toInsert = categoryIds.map(category_id => ({ site_id: newSite.id, category_id }));
-          const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
+          const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
           if (!scRes.ok) {
             const errText = await scRes.text();
             console.error('site_categories insert failed', scRes.status, errText);
@@ -110,7 +138,7 @@ export default async function handler(req, res) {
             });
             if (toInsert.length > 0) {
               const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-              const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
+              const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
               if (!scRes.ok) {
                 const errText = await scRes.text();
                 console.error('site_categories insert failed', scRes.status, errText);
