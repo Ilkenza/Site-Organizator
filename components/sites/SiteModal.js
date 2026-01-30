@@ -184,9 +184,14 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                         </div>
                     </div>
                 )}
-                onChange={handleChange}
-                placeholder="e.g., GitHub"
-                autoFocus
+
+                <Input
+                    label="Site Name *"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="e.g., GitHub"
+                    autoFocus
                 />
 
                 <Input
