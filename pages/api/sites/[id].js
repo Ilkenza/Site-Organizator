@@ -40,6 +40,7 @@ export default async function handler(req, res) {
             REL_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
             if (REL_KEY === SUPABASE_ANON_KEY) {
               console.warn('[Sites/ID API] No service role key configured - falling back to anon key. Relation writes may be blocked by RLS.');
+              warnings.push({ stage: 'service_role_key_missing', status: 400, details: 'SUPABASE_SERVICE_ROLE_KEY not configured on server environment' });
             } else {
               console.log('[Sites/ID API] Using service role key for relation updates for site owner:', id);
             }
