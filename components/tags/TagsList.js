@@ -118,121 +118,125 @@ export default function TagsList({ onEdit }) {
                         return (
                             <div
                                 key={tag.id}
-                                className={`group relative bg-gradient-to-br from-app-bg-card to-app-bg-light border rounded-xl p-4 transition-all hover:shadow-lg hover:shadow-purple-500/10 ${selectedTags.has(tag.id)
-                                    ? 'border-purple-500 ring-1 ring-purple-500/30'
-                                    : 'border-app-border hover:border-purple-500/50'
+                                className={`group relative bg-app-bg-light border rounded-xl p-4 transition-colors ${selectedTags.has(tag.id)
+                                    ? 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
+                                    : 'border-app-border hover:border-app-accent/50'
                                     }`}
                             >
-                                {/* Multi-select checkbox */}
-                                {multiSelectMode && (
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedTags.has(tag.id)}
-                                        onChange={(e) => handleSelectTag(e, tag.id)}
-                                        className="absolute top-3 left-3 w-4 h-4 rounded border-app-border bg-app-bg-card cursor-pointer accent-purple-500"
-                                        title="Select tag for bulk actions"
-                                    />
-                                )}
-
                                 {/* Tag Content */}
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span
-                                                className="text-lg font-semibold truncate"
-                                                style={{ color: tag.color || '#5B8DEE' }}
-                                            >
-                                                #{tag.name}
-                                            </span>
+                                <div className="flex items-start justify-between gap-2 mb-3">
+                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        {multiSelectMode && (
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedTags.has(tag.id)}
+                                                onChange={(e) => handleSelectTag(e, tag.id)}
+                                                className="w-4 h-4 rounded-full border-2 border-app-accent/50 bg-app-bg-card cursor-pointer accent-app-accent flex-shrink-0"
+                                                title="Select tag for bulk actions"
+                                            />
+                                        )}
+                                        <div
+                                            className="w-4 h-4 rounded-full flex-shrink-0"
+                                            style={{ backgroundColor: tag.color || '#5B8DEE' }}
+                                            title={tag.color}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <h3 className="font-semibold text-app-text-primary truncate">#{tag.name}</h3>
+                                            <p className="text-xs text-app-text-secondary">
+                                                {tag.created_at ? new Date(tag.created_at).toLocaleDateString() : 'N/A'}
+                                            </p>
                                         </div>
-                                        <div className="flex items-center gap-1 text-xs text-app-text-muted">
-                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                            </svg>
-                                            <span>{siteCount} {siteCount === 1 ? 'site' : 'sites'}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Actions - visible on mobile, hover on tablet+ */}
-                                    <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                        <button
-                                            onClick={() => onEdit(tag)}
-                                            className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-accent/10 rounded-lg transition-colors"
-                                            title="Edit"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteClick(tag)}
-                                            disabled={deletingId === tag.id}
-                                            className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
-                                            title="Delete"
-                                        >
-                                            {deletingId === tag.id ? (
-                                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                                </svg>
-                                            ) : (
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                </svg>
-                                            )}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* Delete Confirmation Modal */}
-            <ConfirmModal
-                isOpen={!!tagToDelete}
-                onClose={() => setTagToDelete(null)}
-                onConfirm={confirmDelete}
-                title="Delete Tag"
-                message={`Are you sure you want to delete "#${tagToDelete?.name}"? Sites tagged with this will not be deleted.`}
-                confirmText="Delete"
-                cancelText="Cancel"
-                variant="danger"
-            />
-            {/* Usage Warning Modal */}
-            {usageWarning?.type === 'tag' && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-app-bg-primary rounded-lg shadow-lg max-w-md w-full mx-4">
-                        <div className="p-6">
-                            <h2 className="text-lg font-semibold text-app-text-primary mb-4 flex items-center gap-2">
-                                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    {/* Actions - visible on mobile, hover on tablet+ */}
+                    <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button
+                            onClick={() => onEdit(tag)}
+                            className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-accent/10 rounded-lg transition-colors"
+                            title="Edit"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                        </button>
+                        <button
+                            onClick={() => handleDeleteClick(tag)}
+                            disabled={deletingId === tag.id}
+                            className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                            title="Delete"
+                        >
+                            {deletingId === tag.id ? (
+                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                 </svg>
-                                Cannot Delete Tag
-                            </h2>
-                            <p className="text-app-text-secondary mb-4">
-                                The tag <strong>"{usageWarning.name}"</strong> is used on <strong>{usageWarning.count}</strong> site{usageWarning.count !== 1 ? 's' : ''}:
-                            </p>
-                            <div className="bg-app-bg-light rounded p-3 mb-4 max-h-40 overflow-y-auto">
-                                {usageWarning.sites?.map(site => (
-                                    <div key={site.id} className="text-sm text-app-text-secondary py-1">
-                                        • {site.name}
-                                    </div>
-                                ))}
-                            </div>
-                            <p className="text-sm text-app-text-secondary mb-6">
-                                Remove this tag from all sites first to delete it.
-                            </p>
-                            <button
-                                onClick={() => setUsageWarning(null)}
-                                className="w-full px-4 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
-                            >
-                                Got it
-                            </button>
-                        </div>
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            )}
+                        </button>
                     </div>
                 </div>
-            )}    </div>
+            </div>
+
+            {/* Site count */}
+            <div className="flex items-center gap-1 text-xs text-app-text-muted">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                <span>{siteCount} {siteCount === 1 ? 'site' : 'sites'}</span>
+            </div>
+        </div>
+    );
+})}
+                </div >
+            )}
+
+{/* Delete Confirmation Modal */ }
+<ConfirmModal
+    isOpen={!!tagToDelete}
+    onClose={() => setTagToDelete(null)}
+    onConfirm={confirmDelete}
+    title="Delete Tag"
+    message={`Are you sure you want to delete "#${tagToDelete?.name}"? Sites tagged with this will not be deleted.`}
+    confirmText="Delete"
+    cancelText="Cancel"
+    variant="danger"
+/>
+{/* Usage Warning Modal */ }
+{
+    usageWarning?.type === 'tag' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-app-bg-primary rounded-lg shadow-lg max-w-md w-full mx-4">
+                <div className="p-6">
+                    <h2 className="text-lg font-semibold text-app-text-primary mb-4 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Cannot Delete Tag
+                    </h2>
+                    <p className="text-app-text-secondary mb-4">
+                        The tag <strong>"{usageWarning.name}"</strong> is used on <strong>{usageWarning.count}</strong> site{usageWarning.count !== 1 ? 's' : ''}:
+                    </p>
+                    <div className="bg-app-bg-light rounded p-3 mb-4 max-h-40 overflow-y-auto">
+                        {usageWarning.sites?.map(site => (
+                            <div key={site.id} className="text-sm text-app-text-secondary py-1">
+                                • {site.name}
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-sm text-app-text-secondary mb-6">
+                        Remove this tag from all sites first to delete it.
+                    </p>
+                    <button
+                        onClick={() => setUsageWarning(null)}
+                        className="w-full px-4 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
+                    >
+                        Got it
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}    </div >
     );
 }

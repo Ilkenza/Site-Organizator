@@ -113,69 +113,84 @@ export default function CategoriesList({ onEdit }) {
 
             {/* Categories Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filteredCategories.map(category => (
-                    <div
-                        key={category.id}
-                        className={`bg-app-bg-light border rounded-lg p-4 transition-colors ${selectedCategories.has(category.id)
-                            ? 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
-                            : 'border-app-border hover:border-app-accent/50'
-                            }`}
-                    >
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                {multiSelectMode && (
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedCategories.has(category.id)}
-                                        onChange={(e) => handleSelectCategory(e, category.id)}
-                                        className="w-4 h-4 rounded-full border-2 border-app-accent/50 bg-app-bg-card cursor-pointer accent-app-accent flex-shrink-0"
-                                        title="Select category for bulk actions"
+                {filteredCategories.map(category => {
+                    // Count sites using this category
+                    const siteCount = sites.filter(site =>
+                        site.categories_array?.some(c => c?.id === category.id)
+                    ).length;
+
+                    return (
+                        <div
+                            key={category.id}
+                            className={`bg-app-bg-light border rounded-lg p-4 transition-colors ${selectedCategories.has(category.id)
+                                ? 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
+                                : 'border-app-border hover:border-app-accent/50'
+                                }`}
+                        >
+                            <div className="flex items-start justify-between gap-3 mb-3">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    {multiSelectMode && (
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedCategories.has(category.id)}
+                                            onChange={(e) => handleSelectCategory(e, category.id)}
+                                            className="w-4 h-4 rounded-full border-2 border-app-accent/50 bg-app-bg-card cursor-pointer accent-app-accent flex-shrink-0"
+                                            title="Select category for bulk actions"
+                                        />
+                                    )}
+                                    <div
+                                        className="w-4 h-4 rounded-full flex-shrink-0"
+                                        style={{ backgroundColor: category.color || '#6CBBFB' }}
+                                        title={category.color}
                                     />
-                                )}
-                                <div
-                                    className="w-4 h-4 rounded-full flex-shrink-0"
-                                    style={{ backgroundColor: category.color || '#6CBBFB' }}
-                                    title={category.color}
-                                />
-                                <div className="min-w-0 flex-1">
-                                    <h3 className="font-semibold text-app-text-primary truncate">{category.name}</h3>
-                                    <p className="text-xs text-app-text-secondary">
-                                        {category.created_at ? new Date(category.created_at).toLocaleDateString() : 'N/A'}
-                                    </p>
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="font-semibold text-app-text-primary truncate">{category.name}</h3>
+                                        <p className="text-xs text-app-text-secondary">
+                                            {category.created_at ? new Date(category.created_at).toLocaleDateString() : 'N/A'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                    <button
+                                        onClick={() => onEdit(category)}
+                                        disabled={deletingId === category.id}
+                                        className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-bg-hover rounded-lg transition-colors disabled:opacity-50"
+                                        title="Edit"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                    </button>
+                                    <button
+                                        onClick={() => handleDeleteClick(category)}
+                                        disabled={deletingId === category.id}
+                                        className="p-1.5 text-app-text-secondary hover:text-btn-danger hover:bg-app-bg-light rounded-lg transition-colors disabled:opacity-50"
+                                        title="Delete"
+                                    >
+                                        {deletingId === category.id ? (
+                                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                        ) : (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        )}
+                                    </button>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                                <button
-                                    onClick={() => onEdit(category)}
-                                    disabled={deletingId === category.id}
-                                    className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-bg-hover rounded-lg transition-colors disabled:opacity-50"
-                                    title="Edit"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                </button>
-                                <button
-                                    onClick={() => handleDeleteClick(category)}
-                                    disabled={deletingId === category.id}
-                                    className="p-1.5 text-app-text-secondary hover:text-btn-danger hover:bg-app-bg-light rounded-lg transition-colors disabled:opacity-50"
-                                    title="Delete"
-                                >
-                                    {deletingId === category.id ? (
-                                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                        </svg>
-                                    ) : (
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                    )}
-                                </button>
+
+                            {/* Site count */}
+                            <div className="flex items-center gap-1 text-xs text-app-text-muted">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                </svg>
+                                <span>{siteCount} {siteCount === 1 ? 'site' : 'sites'}</span>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Delete Confirmation Modal */}
