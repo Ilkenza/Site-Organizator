@@ -3,6 +3,7 @@ export default async function handler(req, res) {
 
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
   // Extract user's JWT token from Authorization header (sent by fetchAPI)
   const authHeader = req.headers.authorization;
@@ -11,15 +12,16 @@ export default async function handler(req, res) {
   console.log('[Tags API] Auth check:', {
     hasUserToken: !!userToken,
     tokenPreview: userToken ? userToken.substring(0, 20) + '...' : 'none',
-    hasAnonKey: !!SUPABASE_ANON_KEY
+    hasAnonKey: !!SUPABASE_ANON_KEY,
+    hasServiceKey: !!SERVICE_ROLE_KEY
   });
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
   }
 
-  // Use user's token for authenticated requests (respects RLS), fallback to anon key for public reads
-  const AUTH_TOKEN = userToken || SUPABASE_ANON_KEY;
+  // Use service role key to bypass RLS for reads, or user token for writes
+  const READ_TOKEN = SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
   if (req.method === 'POST') {
     // POST requires user authentication - can't create tags without valid user token
@@ -62,11 +64,23 @@ export default async function handler(req, res) {
         // Handle duplicate name: return existing tag if present
         try {
           const bodyName = (body && body.name) ? body.name : null;
-          if (bodyName && /duplicate|unique|violat/i.test(text)) {
+          // Check for duplicate error by code 23505 or text pattern
+          if (bodyName && (/duplicate|unique|violat|23505/i.test(text))) {
+            console.log('[Tags API] Duplicate detected, looking up existing tag:', bodyName);
             const lookupUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=*&name=eq.${encodeURIComponent(bodyName)}`;
-            const lookupRes = await fetch(lookupUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, Accept: 'application/json' } });
+            // Use service role key to bypass RLS for lookup
+            const lookupToken = SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+            const lookupRes = await fetch(lookupUrl, {
+              headers: {
+                apikey: SUPABASE_ANON_KEY,
+                Authorization: `Bearer ${lookupToken}`,
+                Accept: 'application/json'
+              }
+            });
+            console.log('[Tags API] Lookup response status:', lookupRes.status);
             if (lookupRes.ok) {
               const rows = await lookupRes.json();
+              console.log('[Tags API] Lookup found rows:', rows?.length);
               if (rows && rows.length > 0) return res.status(200).json({ success: true, data: rows[0] });
             }
           }
@@ -84,13 +98,13 @@ export default async function handler(req, res) {
     }
   }
 
-  // GET - use user token if available for RLS, otherwise anon key
+  // GET - use service role key to bypass RLS and return all user's tags
   try {
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=*`;
     const r = await fetch(url, {
       headers: {
         apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${AUTH_TOKEN}`,
+        Authorization: `Bearer ${READ_TOKEN}`,
         Accept: 'application/json'
       }
     });
