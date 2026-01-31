@@ -167,7 +167,8 @@ export default async function handler(req, res) {
       // Refetch the complete site with categories and tags
       try {
         const refetchUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${newSite.id}&select=*,categories_array:site_categories(category:categories(*)),tags_array:site_tags(tag:tags(*))`;
-        const refetchRes = await fetch(refetchUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+        // Use REL_KEY (service role) to bypass RLS and get all categories/tags
+        const refetchRes = await fetch(refetchUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
         if (refetchRes.ok) {
           const refetchData = await refetchRes.json();
           const completeSite = Array.isArray(refetchData) ? refetchData[0] : refetchData;
@@ -241,10 +242,11 @@ export default async function handler(req, res) {
         const encodedInList = encodeURIComponent(rawInList);
 
         // Fetch site_categories with embedded category object (URL-encoded IN list)
+        // Use REL_KEY (service role) to bypass RLS and get all site_categories
         const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?select=*,category:categories(*)&site_id=in.(${encodedInList})`;
         siteCategories = [];
         try {
-          const scRes = await fetch(scUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          const scRes = await fetch(scUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
           const scText = await scRes.text();
           scDebug = { ok: scRes.ok, status: scRes.status, statusText: scRes.statusText, body: scText, url: scUrl };
           if (scRes.ok) {
@@ -263,10 +265,11 @@ export default async function handler(req, res) {
         });
 
         // Fetch site_tags with embedded tag object
+        // Use REL_KEY (service role) to bypass RLS and get all site_tags
         const stUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?select=*,tag:tags(*)&site_id=in.(${encodedInList})`;
         siteTags = [];
         try {
-          const stRes = await fetch(stUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          const stRes = await fetch(stUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
           const stText = await stRes.text();
           stDebug = { ok: stRes.ok, status: stRes.status, statusText: stRes.statusText, body: stText, url: stUrl };
           if (stRes.ok) {
