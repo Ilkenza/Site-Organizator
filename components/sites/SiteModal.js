@@ -29,13 +29,23 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 const siteCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
                 const siteTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
 
+                // Filter and map to IDs, handling both object and string formats
+                const categoryIds = (Array.isArray(siteCategories) ? siteCategories : [])
+                    .map(c => typeof c === 'object' && c?.id ? c.id : null)
+                    .filter(Boolean);
+                const tagIds = (Array.isArray(siteTags) ? siteTags : [])
+                    .map(t => typeof t === 'object' && t?.id ? t.id : null)
+                    .filter(Boolean);
+
+                console.log('[SiteModal] Editing site:', site.id, { siteCategories, siteTags, categoryIds, tagIds });
+
                 setFormData({
                     name: site.name || '',
                     url: site.url || '',
                     pricing: site.pricing || 'fully_free',
                     is_favorite: site.is_favorite || false,
-                    categoryIds: siteCategories.map(c => c.id),
-                    tagIds: siteTags.map(t => t.id)
+                    categoryIds,
+                    tagIds
                 });
             } else {
                 setFormData({

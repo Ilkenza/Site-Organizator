@@ -36,7 +36,8 @@ export default async function handler(req, res) {
       if (body.category_ids && body.category_ids.length > 0) {
         const catIdsParam = body.category_ids.map(id => `"${id}"`).join(',');
         const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?id=in.(${catIdsParam})&select=name`;
-        const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+        // Use REL_KEY to bypass RLS
+        const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
         if (catRes.ok) {
           const cats = await catRes.json();
           fetchedCategoryNames = cats.map(c => c.name);
@@ -48,7 +49,8 @@ export default async function handler(req, res) {
       if (body.tag_ids && body.tag_ids.length > 0) {
         const tagIdsParam = body.tag_ids.map(id => `"${id}"`).join(',');
         const tagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?id=in.(${tagIdsParam})&select=name`;
-        const tagRes = await fetch(tagUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+        // Use REL_KEY to bypass RLS
+        const tagRes = await fetch(tagUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
         if (tagRes.ok) {
           const tagsData = await tagRes.json();
           tagNames = tagsData.map(t => t.name);
@@ -297,7 +299,8 @@ export default async function handler(req, res) {
         if (categoryNames.size > 0) {
           const enc = Array.from(categoryNames).map(n => encodeURIComponent(n.replace(/\)/g, '\\)'))).join(',');
           const catLookupUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name,color&name=in.(${enc})`;
-          const catLookupRes = await fetch(catLookupUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          // Use REL_KEY (service role) to bypass RLS and find all categories
+          const catLookupRes = await fetch(catLookupUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
           if (catLookupRes.ok) {
             const catsFound = await catLookupRes.json();
             catsFound.forEach(c => nameToCategory.set(c.name, c));
@@ -308,7 +311,8 @@ export default async function handler(req, res) {
         if (tagNames.size > 0) {
           const enc = Array.from(tagNames).map(n => encodeURIComponent(n.replace(/\)/g, '\\)'))).join(',');
           const tagLookupUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=id,name,color&name=in.(${enc})`;
-          const tagLookupRes = await fetch(tagLookupUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+          // Use REL_KEY (service role) to bypass RLS and find all tags
+          const tagLookupRes = await fetch(tagLookupUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
           if (tagLookupRes.ok) {
             const tagsFound = await tagLookupRes.json();
             tagsFound.forEach(t => nameToTag.set(t.name, t));
