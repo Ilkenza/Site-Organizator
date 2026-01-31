@@ -188,6 +188,9 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                         {cat.name}
                     </Badge>
                 ))}
+                {categories.length > 0 && tags.length > 0 && (
+                    <span className="text-app-text-muted/40 px-1 self-center">|</span>
+                )}
                 {tags.map((tag, index) => (
                     <Badge key={`tag-${tag.id || index}`} color={tag.color || '#5B8DEE'} size="xs" variant="tag">
                         {tag.name}

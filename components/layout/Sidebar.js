@@ -307,13 +307,13 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                 className="w-full px-2 py-1.5 bg-app-bg-light border border-app-border rounded text-xs text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-1 focus:ring-app-accent"
                             />
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
                             <button
                                 onClick={() => setSelectedCategory(null)}
-                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all font-medium
                 ${!selectedCategory
-                                        ? 'bg-app-bg-light text-app-text-primary'
-                                        : 'text-app-text-secondary hover:bg-app-bg-light/50 hover:text-app-text-primary'
+                                        ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light/50 hover:text-app-text-primary border border-transparent'
                                     }`}
                             >
                                 All Categories
@@ -321,23 +321,34 @@ export default function Sidebar({ isOpen = false, onClose }) {
                             {categories
                                 .filter(cat => cat.name.toLowerCase().includes(categoriesSearchQuery.toLowerCase()))
                                 .sort((a, b) => a.name.localeCompare(b.name))
-                                .map(cat => (
-                                    <button
-                                        key={cat.id}
-                                        onClick={() => setSelectedCategory(cat.id)}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2
-                  ${selectedCategory === cat.id
-                                                ? 'bg-gray-800 text-white'
-                                                : 'text-gray-400 hover:bg-gray-800/50'
-                                            }`}
-                                    >
-                                        <span
-                                            className="w-2 h-2 rounded-full"
-                                            style={{ backgroundColor: cat.color || '#6b7280' }}
-                                        />
-                                        <span className="truncate">{cat.name}</span>
-                                    </button>
-                                ))}
+                                .map(cat => {
+                                    const siteCount = sites.filter(site =>
+                                        site.categories_array?.some(c => c?.id === cat.id)
+                                    ).length;
+                                    return (
+                                        <button
+                                            key={cat.id}
+                                            onClick={() => setSelectedCategory(cat.id)}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group
+                      ${selectedCategory === cat.id
+                                                    ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm'
+                                                    : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent'
+                                                }`}
+                                        >
+                                            <span
+                                                className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0"
+                                                style={{ backgroundColor: cat.color || '#6b7280' }}
+                                            />
+                                            <span className="truncate flex-1">{cat.name}</span>
+                                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedCategory === cat.id
+                                                    ? 'bg-app-accent/30 text-app-accent'
+                                                    : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
+                                                }`}>
+                                                {siteCount}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
                         </div>
 
                         {/* Tags Filter */}
@@ -355,13 +366,13 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         className="w-full px-2 py-1.5 bg-app-bg-light border border-app-border rounded text-xs text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-1 focus:ring-app-accent"
                                     />
                                 </div>
-                                <div className="flex flex-wrap gap-1.5">
+                                <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
                                     <button
                                         onClick={() => setSelectedTag(null)}
-                                        className={`px-2 py-1 rounded-full text-xs transition-colors
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all font-medium
                       ${!selectedTag
-                                                ? 'bg-app-accent text-app-bg-primary'
-                                                : 'bg-app-bg-light text-app-text-secondary hover:bg-app-accent hover:text-app-bg-primary'
+                                                ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
+                                                : 'text-app-text-secondary hover:bg-app-bg-light/50 hover:text-app-text-primary border border-transparent'
                                             }`}
                                     >
                                         All Tags
@@ -369,19 +380,34 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     {tags
                                         .filter(tag => tag.name.toLowerCase().includes(tagsSearchQuery.toLowerCase()))
                                         .sort((a, b) => a.name.localeCompare(b.name))
-                                        .map(tag => (
-                                            <button
-                                                key={tag.id}
-                                                onClick={() => setSelectedTag(selectedTag === tag.id ? null : tag.id)}
-                                                className={`px-2 py-1 rounded-full text-xs transition-colors
+                                        .map(tag => {
+                                            const siteCount = sites.filter(site =>
+                                                site.tags_array?.some(t => t?.id === tag.id)
+                                            ).length;
+                                            return (
+                                                <button
+                                                    key={tag.id}
+                                                    onClick={() => setSelectedTag(selectedTag === tag.id ? null : tag.id)}
+                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group
                       ${selectedTag === tag.id
-                                                        ? 'bg-app-accent text-app-bg-primary'
-                                                        : 'bg-app-bg-light text-app-text-secondary hover:bg-app-accent hover:text-app-bg-primary'
-                                                    }`}
-                                            >
-                                                {tag.name}
-                                            </button>
-                                        ))}
+                                                            ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm'
+                                                            : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent'
+                                                        }`}
+                                                >
+                                                    <span
+                                                        className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0"
+                                                        style={{ backgroundColor: tag.color || '#5B8DEE' }}
+                                                    />
+                                                    <span className="truncate flex-1">#{tag.name}</span>
+                                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedTag === tag.id
+                                                            ? 'bg-app-accent/30 text-app-accent'
+                                                            : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
+                                                        }`}>
+                                                        {siteCount}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
                                 </div>
                             </>
                         )}
