@@ -1,6 +1,16 @@
 export default function Pagination({ currentPage, totalPages, onPageChange }) {
     if (totalPages <= 1) return null;
 
+    // Wrapper to scroll to top when changing pages
+    const handlePageChange = (page) => {
+        // Use instant scroll before navigation so it completes before page re-renders
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        // Also try scrolling the main content area if it exists
+        const mainContent = document.querySelector('main') || document.querySelector('[role="main"]');
+        if (mainContent) mainContent.scrollTop = 0;
+        onPageChange(page);
+    };
+
     const pages = [];
     const maxVisiblePages = 5;
 
@@ -19,7 +29,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
         <div className="flex items-center justify-center gap-2 py-4 px-4">
             {/* Previous Button */}
             <button
-                onClick={() => onPageChange(currentPage - 1)}
+                onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors
                     ${currentPage === 1
@@ -37,7 +47,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
             {startPage > 1 && (
                 <>
                     <button
-                        onClick={() => onPageChange(1)}
+                        onClick={() => handlePageChange(1)}
                         className="px-3 py-2 rounded-lg text-sm font-medium text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light transition-colors"
                     >
                         1
@@ -52,7 +62,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
             {pages.map(page => (
                 <button
                     key={page}
-                    onClick={() => onPageChange(page)}
+                    onClick={() => handlePageChange(page)}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors
                         ${page === currentPage
                             ? 'bg-app-accent text-app-bg-primary'
@@ -70,7 +80,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
                         <span className="text-gray-500">...</span>
                     )}
                     <button
-                        onClick={() => onPageChange(totalPages)}
+                        onClick={() => handlePageChange(totalPages)}
                         className="px-3 py-2 rounded-lg text-sm font-medium text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light transition-colors"
                     >
                         {totalPages}
@@ -80,7 +90,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
 
             {/* Next Button */}
             <button
-                onClick={() => onPageChange(currentPage + 1)}
+                onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors
                     ${currentPage === totalPages
