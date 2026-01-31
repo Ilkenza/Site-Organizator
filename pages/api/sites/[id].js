@@ -95,6 +95,10 @@ export default async function handler(req, res) {
       // Add updated_at timestamp
       filteredData.updated_at = new Date().toISOString();
 
+      // Save categories and tags directly to the sites table columns
+      filteredData.categories = category_ids || [];
+      filteredData.tags = tag_ids || [];
+
       console.log('Updating site:', id, 'with data:', filteredData);
 
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
