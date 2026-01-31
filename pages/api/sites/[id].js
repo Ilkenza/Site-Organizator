@@ -232,8 +232,9 @@ export default async function handler(req, res) {
       }
 
       // Refetch the site with all related data
+      // Use REL_KEY (service role) to bypass RLS and get all categories/tags
       const refetchUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}&select=*,categories_array:site_categories(category:categories(*)),tags_array:site_tags(tag:tags(*))`;
-      const refetchRes = await fetch(refetchUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, Accept: 'application/json' } });
+      const refetchRes = await fetch(refetchUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
       if (refetchRes.ok) {
         const refetchData = await refetchRes.json();
         const completeSite = Array.isArray(refetchData) ? refetchData[0] : refetchData;
