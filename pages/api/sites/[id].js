@@ -77,6 +77,12 @@ export default async function handler(req, res) {
       // Extract category_ids and tag_ids before sending to Supabase
       const { category_ids, tag_ids, ...siteData } = body;
 
+      console.log('[Sites/ID API PUT] === START ===');
+      console.log('[Sites/ID API PUT] Site ID:', id);
+      console.log('[Sites/ID API PUT] REL_KEY type:', REL_KEY === SUPABASE_ANON_KEY ? 'anon' : 'service_role');
+      console.log('[Sites/ID API PUT] category_ids received:', body.category_ids || category_ids);
+      console.log('[Sites/ID API PUT] tag_ids received:', body.tag_ids || tag_ids);
+
       // Update the site itself (only allowed fields)
       const allowedFields = ['name', 'url', 'pricing'];
       const filteredData = {};
@@ -139,6 +145,7 @@ export default async function handler(req, res) {
               headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(catPayload)
             });
+            console.log('[Sites/ID API PUT] site_categories insert response status:', insCatRes.status, insCatRes.ok ? 'OK' : 'FAILED');
             if (!insCatRes.ok) {
               const errText = await insCatRes.text();
               console.error('Failed to insert site_categories:', insCatRes.status, errText);
@@ -148,7 +155,7 @@ export default async function handler(req, res) {
               }
               warnings.push({ stage: 'insert_site_categories', status: insCatRes.status, details: errText });
             } else {
-              console.log('Inserted', category_ids.length, 'categories for site:', id);
+              console.log('[Sites/ID API PUT] Inserted', category_ids.length, 'categories for site:', id);
             }
           }
         } catch (err) { console.error('Exception updating categories:', err); warnings.push({ stage: 'exception_update_categories', error: String(err) }); }
@@ -178,6 +185,7 @@ export default async function handler(req, res) {
               headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
               body: JSON.stringify(tagPayload)
             });
+            console.log('[Sites/ID API PUT] site_tags insert response status:', insTagRes.status, insTagRes.ok ? 'OK' : 'FAILED');
             if (!insTagRes.ok) {
               const errText = await insTagRes.text();
               console.error('Failed to insert site_tags:', insTagRes.status, errText);
@@ -187,7 +195,7 @@ export default async function handler(req, res) {
               }
               warnings.push({ stage: 'insert_site_tags', status: insTagRes.status, details: errText });
             } else {
-              console.log('Inserted', tag_ids.length, 'tags for site:', id);
+              console.log('[Sites/ID API PUT] Inserted', tag_ids.length, 'tags for site:', id);
             }
           }
         } catch (err) { console.error('Exception updating tags:', err); warnings.push({ stage: 'exception_update_tags', error: String(err) }); }
