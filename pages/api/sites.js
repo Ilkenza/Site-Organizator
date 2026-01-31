@@ -31,6 +31,30 @@ export default async function handler(req, res) {
       if (!body.name || !body.url || !body.pricing) return res.status(400).json({ success: false, error: 'Missing required fields: name, url, pricing' });
       if (!body.user_id) return res.status(400).json({ success: false, error: 'Missing user_id (you must be logged in to add a site)' });
 
+      // Fetch category names
+      let fetchedCategoryNames = [];
+      if (body.category_ids && body.category_ids.length > 0) {
+        const catIdsParam = body.category_ids.map(id => `"${id}"`).join(',');
+        const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?id=in.(${catIdsParam})&select=name`;
+        const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+        if (catRes.ok) {
+          const cats = await catRes.json();
+          fetchedCategoryNames = cats.map(c => c.name);
+        }
+      }
+
+      // Fetch tag names
+      let tagNames = [];
+      if (body.tag_ids && body.tag_ids.length > 0) {
+        const tagIdsParam = body.tag_ids.map(id => `"${id}"`).join(',');
+        const tagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?id=in.(${tagIdsParam})&select=name`;
+        const tagRes = await fetch(tagUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+        if (tagRes.ok) {
+          const tagsData = await tagRes.json();
+          tagNames = tagsData.map(t => t.name);
+        }
+      }
+
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites`;
       const r = await fetch(url, {
         method: 'POST',
@@ -45,9 +69,9 @@ export default async function handler(req, res) {
           const allowed = ['name', 'url', 'pricing', 'user_id'];
           const t = {};
           for (const k of allowed) if (Object.prototype.hasOwnProperty.call(b, k)) t[k] = b[k];
-          // Also write categories and tags arrays directly to the sites table
-          t.categories = b.category_ids || [];
-          t.tags = b.tag_ids || [];
+          // Also write categories and tags arrays directly to the sites table (using names, not IDs)
+          t.categories = fetchedCategoryNames;
+          t.tags = tagNames;
           return t;
         })(body))
       });
@@ -96,7 +120,7 @@ export default async function handler(req, res) {
 
       // Attach categories - support both category_ids (array of IDs) and categories (array of names)
       const categoryIds = body.category_ids || [];
-      const categoryNames = body.categories || [];
+      const bodyCategoryNames = body.categories || [];
 
       if (categoryIds.length > 0) {
         // Direct ID insertion
@@ -111,17 +135,17 @@ export default async function handler(req, res) {
             warnings.push({ stage: 'site_categories_insert', status: scRes.status, details: errText });
           }
         } catch (err) { console.error('site_categories insert failed', err); warnings.push({ stage: 'site_categories_insert', error: String(err) }); }
-      } else if (categoryNames.length > 0) {
+      } else if (bodyCategoryNames.length > 0) {
         // Resolve names to IDs first
         try {
-          const encoded = categoryNames.map(n => encodeURIComponent(n.replace(/\)/g, '\\)'))).join(',');
+          const encoded = bodyCategoryNames.map(n => encodeURIComponent(n.replace(/\)/g, '\\)'))).join(',');
           const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&name=in.(${encoded})`;
           const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
           if (catRes.ok) {
             const cats = await catRes.json();
             const nameToId = new Map(cats.map(c => [c.name, c.id]));
             const toInsert = [];
-            categoryNames.forEach(name => {
+            bodyCategoryNames.forEach(name => {
               const cid = nameToId.get(name);
               if (cid) toInsert.push({ site_id: newSite.id, category_id: cid });
             });
