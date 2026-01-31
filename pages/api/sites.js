@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   // Use user's token for authenticated requests (respects RLS), fallback to anon key for reads
   const KEY = userToken || SUPABASE_ANON_KEY;
   // Service role key for junction table inserts (bypasses RLS)
-  const REL_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+  const REL_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
 
   if (req.method === 'POST') {
     try {
