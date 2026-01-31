@@ -17,6 +17,8 @@ export default async function handler(req, res) {
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  const REL_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
   // Extract user's JWT token from Authorization header (sent by fetchAPI)
   const authHeader = req.headers.authorization;
@@ -192,7 +194,7 @@ export default async function handler(req, res) {
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
     console.log(`  🔄 Attaching ${rows.length} site_categories...`);
     // rows: { site_id, category_id }
-    const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
+    const r = await fetch(url, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
     if (r.ok) {
       console.log(`  ✅ Successfully attached ${rows.length} site_categories`);
     } else {
@@ -207,7 +209,7 @@ export default async function handler(req, res) {
     }
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
     console.log(`  🔄 Attaching ${rows.length} site_tags...`);
-    const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
+    const r = await fetch(url, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
     if (r.ok) {
       console.log(`  ✅ Successfully attached ${rows.length} site_tags`);
     } else {
