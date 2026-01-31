@@ -151,7 +151,7 @@ export default async function handler(req, res) {
         try {
           // Delete existing site_tags
           const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
-          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}` } });
+          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}` } });
           if (!delTagRes.ok) {
             const errText = await delTagRes.text();
             console.error('Failed to delete site_tags:', delTagRes.status, errText);
