@@ -8,7 +8,15 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Missing Supabase credentials' });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Extract user's JWT token from Authorization header
+    const authHeader = req.headers.authorization;
+    const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: {
+            headers: userToken ? { Authorization: `Bearer ${userToken}` } : {}
+        }
+    });
     try {
         // GET - Fetch all favorite sites
         if (req.method === 'GET') {
