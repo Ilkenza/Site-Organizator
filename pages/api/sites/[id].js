@@ -95,9 +95,33 @@ export default async function handler(req, res) {
       // Add updated_at timestamp
       filteredData.updated_at = new Date().toISOString();
 
-      // Save categories and tags directly to the sites table columns
-      filteredData.categories = category_ids || [];
-      filteredData.tags = tag_ids || [];
+      // Fetch category names from IDs
+      let categoryNames = [];
+      if (Array.isArray(category_ids) && category_ids.length > 0) {
+        const catIdsParam = category_ids.map(id => `"${id}"`).join(',');
+        const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?id=in.(${catIdsParam})&select=name`;
+        const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, Accept: 'application/json' } });
+        if (catRes.ok) {
+          const cats = await catRes.json();
+          categoryNames = cats.map(c => c.name);
+        }
+      }
+
+      // Fetch tag names from IDs
+      let tagNames = [];
+      if (Array.isArray(tag_ids) && tag_ids.length > 0) {
+        const tagIdsParam = tag_ids.map(id => `"${id}"`).join(',');
+        const tagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?id=in.(${tagIdsParam})&select=name`;
+        const tagRes = await fetch(tagUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, Accept: 'application/json' } });
+        if (tagRes.ok) {
+          const tagsData = await tagRes.json();
+          tagNames = tagsData.map(t => t.name);
+        }
+      }
+
+      // Save categories and tags directly to the sites table columns (using names, not IDs)
+      filteredData.categories = categoryNames;
+      filteredData.tags = tagNames;
 
       console.log('Updating site:', id, 'with data:', filteredData);
 
