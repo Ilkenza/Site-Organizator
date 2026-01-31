@@ -142,8 +142,8 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                     </div>
                 )}
 
-                {/* Actions */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                {/* Actions - visible on mobile, hover on tablet+ */}
+                <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
                     <button
                         onClick={handleVisit}
                         className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-bg-card rounded-lg transition-colors"
@@ -184,13 +184,13 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
             {/* Categories and Tags */}
             <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-2 sm:mb-3">
                 {categories.map((cat, index) => (
-                    <Badge key={`cat-${cat.id || index}`} color={cat.color || 'blue'} size="xs">
+                    <Badge key={`cat-${cat.id || index}`} color={cat.color || 'blue'} size="xs" variant="category">
                         {cat.name}
                     </Badge>
                 ))}
                 {tags.map((tag, index) => (
-                    <Badge key={`tag-${tag.id || index}`} color="#8A9FB5" size="xs">
-                        #{tag.name}
+                    <Badge key={`tag-${tag.id || index}`} color={tag.color || '#5B8DEE'} size="xs" variant="tag">
+                        {tag.name}
                     </Badge>
                 ))}
             </div>
