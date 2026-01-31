@@ -278,9 +278,20 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                             />
                         </div>
                         <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-                            {categories
-                                .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
-                                .map(cat => (
+                            {(() => {
+                                const filtered = categories
+                                    .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
+                                    .sort((a, b) => {
+                                        const aSelected = formData.categoryIds.includes(a.id);
+                                        const bSelected = formData.categoryIds.includes(b.id);
+                                        if (aSelected && !bSelected) return -1;
+                                        if (!aSelected && bSelected) return 1;
+                                        return a.name.localeCompare(b.name);
+                                    });
+                                if (filtered.length === 0) {
+                                    return <span className="text-xs text-app-text-muted italic">No categories found</span>;
+                                }
+                                return filtered.map(cat => (
                                     <button
                                         key={cat.id}
                                         type="button"
@@ -296,7 +307,8 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                         />
                                         {cat.name}
                                     </button>
-                                ))}
+                                ));
+                            })()}
                         </div>
                     </div>
                 )}
@@ -320,9 +332,20 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                             />
                         </div>
                         <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
-                            {tags
-                                .filter(tag => tag.name.toLowerCase().includes(tagSearch.toLowerCase()))
-                                .map(tag => (
+                            {(() => {
+                                const filtered = tags
+                                    .filter(tag => tag.name.toLowerCase().includes(tagSearch.toLowerCase()))
+                                    .sort((a, b) => {
+                                        const aSelected = formData.tagIds.includes(a.id);
+                                        const bSelected = formData.tagIds.includes(b.id);
+                                        if (aSelected && !bSelected) return -1;
+                                        if (!aSelected && bSelected) return 1;
+                                        return a.name.localeCompare(b.name);
+                                    });
+                                if (filtered.length === 0) {
+                                    return <span className="text-xs text-app-text-muted italic">No tags found</span>;
+                                }
+                                return filtered.map(tag => (
                                     <button
                                         key={tag.id}
                                         type="button"
@@ -334,7 +357,8 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                     >
                                         #{tag.name}
                                     </button>
-                                ))}
+                                ));
+                            })()}
                         </div>
                     </div>
                 )}
