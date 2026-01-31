@@ -327,6 +327,12 @@ export function DashboardProvider({ children }) {
                 showToast('Site updated but some relation updates failed (refreshing...)', 'warning');
                 try { await fetchData(); } catch (e) { console.warn('fetchData after updateSite warnings failed', e); }
             } else {
+                // Clear any previous failed relation updates if no new warnings
+                setFailedRelationUpdates(prev => {
+                    const next = { ...prev };
+                    delete next[response.data.id];
+                    return next;
+                });
                 showToast(`✓ Site "${updated.name}" updated successfully`, 'success');
             }
 

@@ -14,6 +14,11 @@ export default async function handler(req, res) {
     tokenPreview: userToken ? userToken.substring(0, 20) + '...' : 'none'
   });
 
+  console.log('[Sites/ID API] Service key check:', {
+    SUPABASE_SERVICE_KEY: !!process.env.SUPABASE_SERVICE_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+  });
+
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error('Missing env vars:', { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY });
     return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
@@ -37,7 +42,9 @@ export default async function handler(req, res) {
         if (ownerRes.ok) {
           const ownerRows = await ownerRes.json();
           if (ownerRows && ownerRows[0] && ownerRows[0].user_id === userSub) {
-            REL_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+            const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+            REL_KEY = rawServiceKey ? rawServiceKey.replace(/^["']|["']$/g, '') : SUPABASE_ANON_KEY;
+            console.log('[Sites/ID API] REL_KEY set to:', REL_KEY === SUPABASE_ANON_KEY ? 'anon' : 'service_role');
             if (REL_KEY === SUPABASE_ANON_KEY) {
               console.warn('[Sites/ID API] No service role key configured - falling back to anon key. Relation writes may be blocked by RLS.');
               // NOTE: warnings.push() removed - warnings array not yet defined at this point
