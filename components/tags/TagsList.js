@@ -8,7 +8,6 @@ export default function TagsList({ onEdit }) {
     const [deletingId, setDeletingId] = useState(null);
     const [tagToDelete, setTagToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
-    const [checkAnimations, setCheckAnimations] = useState(new Set());
     const [editingId, setEditingId] = useState(null);
 
     // Filter tags based on search query
@@ -26,15 +25,6 @@ export default function TagsList({ onEdit }) {
             newSelected.delete(tagId);
         } else {
             newSelected.add(tagId);
-            // Trigger check animation
-            setCheckAnimations(prev => new Set(prev).add(tagId));
-            setTimeout(() => {
-                setCheckAnimations(prev => {
-                    const next = new Set(prev);
-                    next.delete(tagId);
-                    return next;
-                });
-            }, 300);
         }
         setSelectedTags(newSelected);
     };
@@ -142,7 +132,7 @@ export default function TagsList({ onEdit }) {
                     </div>
                     <h3 className="text-lg font-semibold text-app-text-primary mb-1">No results found</h3>
                     <p className="text-app-text-secondary text-center max-w-md mb-3">
-                        No tags match your search <span className="font-semibold text-app-accent">"{searchQuery}"</span>
+                        No tags match your search <span className="font-semibold text-app-accent">&quot;{searchQuery}&quot;</span>
                     </p>
                     <p className="text-xs text-app-text-muted">
                         Try a different search term
@@ -151,7 +141,7 @@ export default function TagsList({ onEdit }) {
             ) : (
                 /* Tags Grid */
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {filteredTags.map((tag, index) => {
+                    {filteredTags.map((tag, _index) => {
                         // Count sites using this tag
                         const siteCount = sites.filter(site =>
                             site.tags_array?.some(t => t?.id === tag.id)
@@ -174,6 +164,10 @@ export default function TagsList({ onEdit }) {
                                                     type="checkbox"
                                                     checked={selectedTags.has(tag.id)}
                                                     onChange={(e) => handleSelectTag(e, tag.id)}
+                                                    onMouseDown={(e) => {
+                                                        // Blur immediately after click to allow Delete key
+                                                        setTimeout(() => e.target.blur(), 0);
+                                                    }}
                                                     className="peer w-5 h-5 rounded border-2 border-app-border bg-app-bg-secondary cursor-pointer appearance-none checked:bg-app-accent checked:border-app-accent hover:border-app-accent/70 transition-all duration-200 flex-shrink-0"
                                                     title="Select tag for bulk actions"
                                                     aria-label={`Select ${tag.name}`}
@@ -280,7 +274,7 @@ export default function TagsList({ onEdit }) {
                                     Cannot Delete Tag
                                 </h2>
                                 <p className="text-app-text-secondary mb-4">
-                                    The tag <strong>"{usageWarning.name}"</strong> is used on <strong>{usageWarning.count}</strong> site{usageWarning.count !== 1 ? 's' : ''}:
+                                    The tag <strong>&quot;{usageWarning.name}&quot;</strong> is used on <strong>{usageWarning.count}</strong> site{usageWarning.count !== 1 ? 's' : ''}:
                                 </p>
                                 <div className="bg-app-bg-light rounded p-3 mb-4 max-h-40 overflow-y-auto">
                                     {usageWarning.sites?.map(site => (

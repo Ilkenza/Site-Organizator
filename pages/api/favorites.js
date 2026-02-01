@@ -38,15 +38,12 @@ export default async function handler(req, res) {
             }
 
             try {
-                console.log('[FAVORITES] site_id:', site_id, 'type:', typeof site_id);
 
                 // Get ALL sites first to see what we have
                 const { data: allSites, error: allError } = await supabase
                     .from('sites')
                     .select('id');
 
-                console.log('[FAVORITES] Total sites in DB:', allSites?.length || 0);
-                console.log('[FAVORITES] Sample IDs:', allSites?.slice(0, 3).map(s => ({ id: s.id, type: typeof s.id })));
 
                 if (allError) {
                     console.error('Error fetching all sites:', allError);
@@ -58,7 +55,6 @@ export default async function handler(req, res) {
                     .select('id, is_favorite')
                     .eq('id', site_id);
 
-                console.log('[FAVORITES] Query result for', site_id, ':', siteData?.length || 0, 'matches');
 
                 if (fetchError) {
                     console.error('[FAVORITES] Fetch error:', fetchError);
@@ -75,7 +71,7 @@ export default async function handler(req, res) {
                 const site = siteData[0];
 
                 // Toggle favorite
-                const { error: updateError, data: updatedData } = await supabase
+                const { error: updateError, data: _updatedData } = await supabase
                     .from('sites')
                     .update({ is_favorite: !site.is_favorite })
                     .eq('id', site_id.toString())

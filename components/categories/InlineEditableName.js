@@ -41,7 +41,7 @@ export default function InlineEditableName({ value, onSave, onCancel, className 
             onChange={(e) => setEditValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
-            className={`block font-semibold text-app-text-primary bg-app-bg-card px-1 py-0 w-full border border-transparent focus:outline-none focus:ring-2 focus:ring-app-accent focus:border-app-accent leading-tight m-0 h-auto align-baseline ${className}`}
+            className={`block font-semibold text-app-text-primary bg-app-bg-card px-2 py-1 sm:px-1 sm:py-0 w-full border border-app-border focus:border-app-accent rounded-md focus:outline-none focus:ring-2 focus:ring-app-accent leading-tight m-0 h-auto align-baseline text-sm sm:text-base ${className}`}
             onClick={(e) => e.stopPropagation()}
         />
     );

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../ui/Button';
@@ -6,7 +7,7 @@ import { ConfirmModal } from '../ui/Modal';
 import ServerStatus from '../ui/ServerStatus';
 
 export default function Header({ onAddClick, onMenuClick }) {
-    const { user: authUser, signOut, supabase } = useAuth();
+    const { user: authUser, signOut } = useAuth();
 
     // Fallback: if authUser is null, try to get user from localStorage AND fetch profile data
     const [localUser, setLocalUser] = useState(null);
@@ -37,7 +38,6 @@ export default function Header({ onAddClick, onMenuClick }) {
 
                                 if (result?.success && result?.data) {
                                     const profile = result.data;
-                                    console.log('[Header] Fetched profile via API');
                                     setLocalUser({
                                         ...tokens.user,
                                         avatarUrl: profile.avatar_url || null,
@@ -68,18 +68,18 @@ export default function Header({ onAddClick, onMenuClick }) {
         activeTab,
         searchQuery,
         setSearchQuery,
-        sortBy,
-        setSortBy,
-        sortOrder,
-        setSortOrder,
-        sortByCategories,
-        setSortByCategories,
-        sortOrderCategories,
-        setSortOrderCategories,
-        sortByTags,
-        setSortByTags,
-        sortOrderTags,
-        setSortOrderTags,
+        sortBy: _sortBy,
+        setSortBy: _setSortBy,
+        sortOrder: _sortOrder,
+        setSortOrder: _setSortOrder,
+        sortByCategories: _sortByCategories,
+        setSortByCategories: _setSortByCategories,
+        sortOrderCategories: _sortOrderCategories,
+        setSortOrderCategories: _setSortOrderCategories,
+        sortByTags: _sortByTags,
+        setSortByTags: _setSortByTags,
+        sortOrderTags: _sortOrderTags,
+        setSortOrderTags: _setSortOrderTags,
         sites,
         filteredSites,
         categories,
@@ -160,12 +160,19 @@ export default function Header({ onAddClick, onMenuClick }) {
                 }
             }
 
-            // ESC - Exit multi-select mode
-            if (e.key === 'Escape' && multiSelectMode) {
-                setMultiSelectMode(false);
-                if (activeTab === 'sites' || activeTab === 'favorites') setSelectedSites(new Set());
-                else if (activeTab === 'categories') setSelectedCategories(new Set());
-                else if (activeTab === 'tags') setSelectedTags(new Set());
+            // ESC - Exit multi-select mode (search input has its own onKeyDown handler)
+            if (e.key === 'Escape') {
+                // Skip if search input is focused (handled by input's onKeyDown)
+                if (searchInputRef?.current && document.activeElement === searchInputRef.current) {
+                    return;
+                }
+                // Otherwise, exit multi-select mode
+                if (multiSelectMode) {
+                    setMultiSelectMode(false);
+                    if (activeTab === 'sites' || activeTab === 'favorites') setSelectedSites(new Set());
+                    else if (activeTab === 'categories') setSelectedCategories(new Set());
+                    else if (activeTab === 'tags') setSelectedTags(new Set());
+                }
             }
 
             // Ctrl/Cmd+N - Open Add Site modal
@@ -216,7 +223,7 @@ export default function Header({ onAddClick, onMenuClick }) {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [multiSelectMode, activeTab, setMultiSelectMode, setSelectedSites, setSelectedCategories, setSelectedTags, filteredSites, categories, tags, onAddClick]);
+    }, [multiSelectMode, activeTab, setMultiSelectMode, setSelectedSites, setSelectedCategories, setSelectedTags, filteredSites, categories, tags, onAddClick, selectedSites, selectedCategories.size, selectedTags.size, sites]);
 
     const getHeaderTitle = () => {
         switch (activeTab) {
@@ -250,8 +257,18 @@ export default function Header({ onAddClick, onMenuClick }) {
         }
     };
 
-    const handleBulkDelete = () => {
-        const selectedIds = getSelectedIds();
+    const handleBulkDelete = useCallback(() => {
+        // Inline getSelectedIds logic to avoid dependency issues
+        const selectedIds = (() => {
+            switch (activeTab) {
+                case 'sites': return selectedSites;
+                case 'favorites': return selectedSites;
+                case 'categories': return selectedCategories;
+                case 'tags': return selectedTags;
+                default: return new Set();
+            }
+        })();
+
         if (selectedIds.size === 0) {
             showToast('No items selected', 'warning');
             return;
@@ -293,7 +310,7 @@ export default function Header({ onAddClick, onMenuClick }) {
         }
 
         setBulkDeleteModalOpen(true);
-    };
+    }, [activeTab, selectedSites, selectedCategories, selectedTags, sites, categories, tags, showToast]);
 
     const confirmBulkDelete = async () => {
         const selectedIds = getSelectedIds();
@@ -339,7 +356,7 @@ export default function Header({ onAddClick, onMenuClick }) {
         };
         window.addEventListener('bulkDeleteTriggered', handleBulkDeleteEvent);
         return () => window.removeEventListener('bulkDeleteTriggered', handleBulkDeleteEvent);
-    }, [activeTab, selectedSites, selectedCategories, selectedTags, showToast]);
+    }, [handleBulkDelete]);
 
     return (
         <>
@@ -381,6 +398,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                     />
                                 </svg>
                                 <input
+                                    ref={searchInputRef}
                                     type="text"
                                     placeholder={
                                         activeTab === 'sites'
@@ -393,6 +411,14 @@ export default function Header({ onAddClick, onMenuClick }) {
                                     }
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Escape') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setSearchQuery('');
+                                            e.target.blur();
+                                        }
+                                    }}
                                     className="w-full pl-10 pr-4 py-2 bg-app-bg-light border border-app-border rounded-lg text-app-text-primary text-sm placeholder-app-text-tertiary focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                 />
                                 {searchQuery && (
@@ -589,7 +615,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                     className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-800 transition-colors">
                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-sm font-medium overflow-hidden">
                                         {user?.avatarUrl ? (
-                                            <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                                            <Image src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" width={32} height={32} />
                                         ) : (
                                             user.email?.charAt(0).toUpperCase()
                                         )}

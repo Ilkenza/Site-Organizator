@@ -6,7 +6,7 @@ Quick reference for all keyboard shortcuts in Site Organizator.
 
 | Shortcut   | Action            | Description                          |
 | ---------- | ----------------- | ------------------------------------ |
-| `Ctrl + /` | Open Command Menu | Quick access to all commands         |
+| `Ctrl + K` | Open Command Menu | Quick access to all commands         |
 | `Esc`      | Close Modal/Menu  | Close any open modal or command menu |
 
 ---
@@ -15,13 +15,15 @@ Quick reference for all keyboard shortcuts in Site Organizator.
 
 ### Creating New Items
 
-Type these in the command menu or use shortcuts:
+Type these in the command menu or use context-aware shortcut:
 
-| Command        | Shortcut | Description         |
-| -------------- | -------- | ------------------- |
-| "new site"     | `N`      | Create new site     |
-| "new category" | `C`      | Create new category |
-| "new tag"      | `T`      | Create new tag      |
+| Command        | Shortcut | Description                                      |
+| -------------- | -------- | ------------------------------------------------ |
+| "new site"     | `N`      | Create new site (when in Sites or Favorites tab) |
+| "new category" | `N`      | Create new category (when in Categories tab)     |
+| "new tag"      | `N`      | Create new tag (when in Tags tab)                |
+
+**Note:** `N` is a context-aware shortcut that creates different items based on your active tab.
 
 ### Navigation
 
@@ -48,7 +50,13 @@ Type these in the command menu or use shortcuts:
 | `↓`           | Move selection down      |
 | `Enter`       | Execute selected command |
 | `Esc`         | Close command menu       |
+| `Arrow Left`  | Previous page            |
+| `Arrow Right` | Next page                |
+| `Home`        | First page               |
+| `End`         | Last page                |
 | Type anything | Filter commands          |
+
+**Note:** Arrow keys and Home/End work for both command navigation and page navigation.
 
 ---
 
@@ -129,7 +137,7 @@ Full list in `lib/categorySuggestions.js`
 
 ### Productivity Boosters
 
-- Use `Ctrl + /` frequently for quick actions
+- Use `Ctrl + K` frequently for quick actions
 - Recent sites in command menu = instant access
 - Smart suggestions = less manual categorization
 - Undo safety net = confident deletions
@@ -140,13 +148,11 @@ Full list in `lib/categorySuggestions.js`
 #### Quick Add Site
 
 ```
-1. Ctrl+/
-2. Type "new"
-3. Enter
-4. Paste URL
-5. Suggestions appear
-6. Click suggestion
-7. Done!
+1. Ctrl+K (or just press N in Sites tab)
+2. Paste URL
+3. Suggestions appear
+4. Click suggestion
+5. Done!
 ```
 
 #### Bulk Delete with Confidence
@@ -161,7 +167,7 @@ Full list in `lib/categorySuggestions.js`
 #### Navigate Fast
 
 ```
-1. Ctrl+/
+1. Ctrl+K
 2. Type "fav"
 3. Enter (goes to favorites)
 ```
@@ -217,7 +223,7 @@ If using the browser extension:
 
 ### Command Menu Not Opening
 
-- Check if `Ctrl + /` conflicts with other software
+- Check if `Ctrl + K` conflicts with other software
 - Try closing and reopening browser tab
 - Ensure JavaScript is enabled
 

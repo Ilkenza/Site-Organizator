@@ -1,15 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 
 export default function Pagination({ currentPage, totalPages, onPageChange }) {
     // Wrapper to scroll to top when changing pages
-    const handlePageChange = (page) => {
+    const handlePageChange = useCallback((page) => {
         // Use instant scroll before navigation so it completes before page re-renders
         window.scrollTo({ top: 0, behavior: 'instant' });
         // Also try scrolling the main content area if it exists
         const mainContent = document.querySelector('main') || document.querySelector('[role="main"]');
         if (mainContent) mainContent.scrollTop = 0;
         onPageChange(page);
-    };
+    }, [onPageChange]);
 
     // Keyboard navigation for pagination
     useEffect(() => {
@@ -42,7 +42,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [currentPage, totalPages, onPageChange]);
+    }, [currentPage, totalPages, handlePageChange]);
 
     if (totalPages <= 1) return null;
 

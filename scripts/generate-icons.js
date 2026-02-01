@@ -12,7 +12,6 @@ let sharp;
 try {
     sharp = require('sharp');
 } catch (e) {
-    console.log('Sharp not installed. Installing...');
     const { execSync } = require('child_process');
     execSync('npm install sharp', { stdio: 'inherit' });
     sharp = require('sharp');
@@ -23,7 +22,6 @@ const svgPath = path.join(__dirname, '../public/icons/logo.svg');
 const outputDir = path.join(__dirname, '../public/icons');
 
 async function generateIcons() {
-    console.log('Reading SVG from:', svgPath);
 
     const svgBuffer = fs.readFileSync(svgPath);
 
@@ -35,10 +33,8 @@ async function generateIcons() {
             .png()
             .toFile(outputPath);
 
-        console.log(`✓ Generated: icon-${size}x${size}.png`);
     }
 
-    console.log('\nAll icons generated successfully!');
 }
 
 generateIcons().catch(err => {

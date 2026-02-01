@@ -4,16 +4,26 @@ import Head from 'next/head';
 import { AuthProvider } from '../context/AuthContext';
 
 export default function App({ Component, pageProps }) {
+  // Suppress Google Favicon 404 warnings in console
+  useEffect(() => {
+    const originalError = console.error;
+    console.error = (...args) => {
+      // Filter out Google favicon 404 errors
+      if (args[0]?.includes?.('faviconV2') || args[0]?.includes?.('t1.gstatic.com')) {
+        return; // Silent ignore
+      }
+      originalError(...args);
+    };
+    return () => { console.error = originalError; };
+  }, []);
   // Register Service Worker for PWA
   useEffect(() => {
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
       navigator.serviceWorker
         .register('/sw.js')
-        .then((registration) => {
-          console.log('SW registered:', registration.scope);
+        .then((_registration) => {
         })
-        .catch((error) => {
-          console.log('SW registration failed:', error);
+        .catch((_error) => {
         });
     }
   }, []);

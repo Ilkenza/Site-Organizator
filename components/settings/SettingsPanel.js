@@ -21,7 +21,7 @@ export default function SettingsPanel() {
     const [nameMessage, setNameMessage] = useState(null);
 
     // Import/Export state
-    const [importFile, setImportFile] = useState(null);
+    const [_importFile, setImportFile] = useState(null);
     const [importPreview, setImportPreview] = useState(null);
     const [importMessage, setImportMessage] = useState(null);
     const [importLoading, setImportLoading] = useState(false);
@@ -37,8 +37,8 @@ export default function SettingsPanel() {
     const [ignoredLinks, setIgnoredLinks] = useState(new Set());
     const [showIgnored, setShowIgnored] = useState(false);
 
-    const getIgnoreKey = () => `link_ignored_${user?.id || 'anon'}`;
-    const loadIgnored = () => {
+    const getIgnoreKey = useCallback(() => `link_ignored_${user?.id || 'anon'}`, [user?.id]);
+    const loadIgnored = useCallback(() => {
         try {
             const raw = typeof window !== 'undefined' ? localStorage.getItem(getIgnoreKey()) : null;
             const arr = raw ? JSON.parse(raw) : [];
@@ -46,7 +46,7 @@ export default function SettingsPanel() {
         } catch (e) {
             setIgnoredLinks(new Set());
         }
-    };
+    }, [getIgnoreKey]);
     const saveIgnored = (set) => {
         try {
             if (typeof window !== 'undefined') localStorage.setItem(getIgnoreKey(), JSON.stringify(Array.from(set)));
@@ -65,7 +65,7 @@ export default function SettingsPanel() {
     // Reload ignored when opening settings or when user changes
     useEffect(() => {
         if (activeTab === 'settings') loadIgnored();
-    }, [activeTab, user?.id]);
+    }, [activeTab, loadIgnored]);
     const [passwordMessage, setPasswordMessage] = useState(null);
     const [passwordLoading, setPasswordLoading] = useState(false);
     const [passwordModalOpen, setPasswordModalOpen] = useState(false);
@@ -77,7 +77,7 @@ export default function SettingsPanel() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [mfaCodeForPassword, setMfaCodeForPassword] = useState('');
     const [needsMfaForPassword, setNeedsMfaForPassword] = useState(false);
-    const [passwordVerified, setPasswordVerified] = useState(false);
+    const [_passwordVerified, setPasswordVerified] = useState(false);
 
     // Email change state
     const [newEmail, setNewEmail] = useState('');
@@ -119,15 +119,13 @@ export default function SettingsPanel() {
     useEffect(() => {
         const loadProfileData = async () => {
             if (!user?.id) {
-                console.log('[SettingsPanel] Cannot load profile - missing user:', { userId: user?.id });
                 return;
             }
 
             try {
-                console.log('[SettingsPanel] Fetching profile via API for user:', user.id);
 
                 // Use our API endpoint instead of Supabase SDK (which can timeout)
-                // Use the activesupabase session to get a reliable access token
+                // Use the active supabase session to get a reliable access token
                 const { data: { session } } = await supabase.auth.getSession();
                 const token = session?.access_token;
                 const response = await fetch('/api/profile', {
@@ -139,7 +137,6 @@ export default function SettingsPanel() {
                 });
 
                 const result = await response.json();
-                console.log('[SettingsPanel] Profile fetch result:', result);
 
                 if (!result.success || !result.data) {
                     console.warn('[SettingsPanel] Profile fetch failed:', result.error);
@@ -147,7 +144,6 @@ export default function SettingsPanel() {
                 }
 
                 const profile = result.data;
-                console.log('[SettingsPanel] Setting avatar and name from profile');
                 if (profile.avatar_url) {
                     setAvatar(profile.avatar_url);
                 }
@@ -202,7 +198,7 @@ export default function SettingsPanel() {
         };
 
         loadSessionInfo();
-    }, [activeTab, supabase, user?.id]);
+    }, [activeTab, user?.id]);
 
     // Check MFA status on load
     useEffect(() => {
@@ -686,7 +682,7 @@ export default function SettingsPanel() {
                             setPasswordLoading(false);
                             return;
                         }
-                        const { data: verifyData, error: verifyError } = await supabase.auth.mfa.verify({
+                        const { data: _verifyData, error: verifyError } = await supabase.auth.mfa.verify({
                             factorId: totpFactor.id,
                             challengeId: challengeData.id,
                             code: mfaCodeForPassword
@@ -703,7 +699,6 @@ export default function SettingsPanel() {
                         setPasswordLoading(false);
                         return;
                     }
-                } else {
                 }
             } else {
                 // No MFA - verify current password by re-authenticating
@@ -863,19 +858,11 @@ export default function SettingsPanel() {
             return;
         }
 
-        console.log('File selected for import:', {
-            name: file.name,
-            size: file.size,
-            type: file.type
-        });
 
         try {
             const { parseImportFile } = await import('../../lib/exportImport.js');
             const data = await parseImportFile(file);
-            console.log('File parsed successfully:', {
-                sitesCount: data?.sites?.length || 0,
-                sites: data?.sites
-            });
+
 
             if (data?.sites?.length) {
                 setImportPreview(data);
@@ -898,11 +885,7 @@ export default function SettingsPanel() {
             return;
         }
 
-        console.log('Starting import:', {
-            sitesCount: importPreview.sites.length,
-            userId: user?.id,
-            sites: importPreview.sites
-        });
+
 
         setImportLoading(true);
         try {
@@ -1127,7 +1110,7 @@ export default function SettingsPanel() {
                     <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
                         <h2 className="text-lg font-semibold text-app-text-primary mb-2">Import Sites</h2>
                         <p className="text-sm text-app-text-secondary mb-4">
-                            Upload a previously exported file (JSON, CSV, or HTML) to restore or transfer sites. Categories and tags will be automatically created if they don't exist. Duplicate categories and tags are automatically detected and reused.
+                            Upload a previously exported file (JSON, CSV, or HTML) to restore or transfer sites. Categories and tags will be automatically created if they don&apos;t exist. Duplicate categories and tags are automatically detected and reused.
                         </p>
 
                         {/* File Input with Icon Button */}
@@ -1435,7 +1418,7 @@ export default function SettingsPanel() {
                                         <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
-                                        Other active sessions are not visible from the browser for security reasons. Use "Sign Out Others" to end all other sessions.
+                                        Other active sessions are not visible from the browser for security reasons. Use &ldquo;Sign Out Others&rdquo; to end all other sessions.
                                     </p>
                                 </div>
                             ) : (
@@ -1665,7 +1648,7 @@ export default function SettingsPanel() {
                     )}
 
                     <p className="text-xs text-app-text-tertiary">
-                        A verification link will be sent to your new email address. You'll need to confirm it before the change takes effect.
+                        A verification link will be sent to your new email address. You&apos;ll need to confirm it before the change takes effect.
                     </p>
 
                     <div className="flex gap-3">
@@ -1702,7 +1685,7 @@ export default function SettingsPanel() {
                             </div>
 
                             <p className="text-sm text-app-text-secondary">
-                                Your account is protected with an authenticator app. You'll need to enter a code from your app when signing in.
+                                Your account is protected with an authenticator app. You&apos;ll need to enter a code from your app when signing in.
                             </p>
 
                             {mfaMessage && (
@@ -1737,7 +1720,7 @@ export default function SettingsPanel() {
 
                             {mfaQrCode && (
                                 <div className="flex justify-center p-4 bg-white rounded-lg">
-                                    <img src={mfaQrCode} alt="2FA QR Code" className="w-48 h-48" />
+                                    <Image src={mfaQrCode} alt="2FA QR Code" width={192} height={192} unoptimized className="w-48 h-48" />
                                 </div>
                             )}
 
@@ -1794,7 +1777,7 @@ export default function SettingsPanel() {
                                 <h4 className="font-medium text-app-text-primary">To enable 2FA:</h4>
                                 <ol className="list-decimal list-inside text-sm text-app-text-secondary space-y-1">
                                     <li>Download an authenticator app (Google Authenticator, Authy, etc.)</li>
-                                    <li>Click "Set Up 2FA" below</li>
+                                    <li>Click &ldquo;Set Up 2FA&rdquo; below</li>
                                     <li>Scan the QR code with your app</li>
                                     <li>Enter the 6-digit code to verify</li>
                                 </ol>
@@ -1843,7 +1826,7 @@ export default function SettingsPanel() {
                     </div>
 
                     <p className="text-sm text-app-text-tertiary">
-                        Use this if you've logged in on a public computer or if you suspect unauthorized access to your account.
+                        Use this if you&apos;ve logged in on a public computer or if you suspect unauthorized access to your account.
                     </p>
 
                     <div className="flex gap-3">

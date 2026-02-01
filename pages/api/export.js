@@ -4,11 +4,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABAS
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
 
-console.log('🔐 Supabase config:', {
-    hasUrl: !!SUPABASE_URL,
-    hasServiceKey: !!SUPABASE_SERVICE_KEY,
-    hasAnonKey: !!SUPABASE_ANON_KEY
-});
+
 
 // Prefer service key for server-side requests (bypasses RLS if needed)
 const KEY = SUPABASE_SERVICE_KEY || SUPABASE_ANON_KEY;
@@ -92,7 +88,6 @@ const convertToHTML = (sites) => {
 };
 
 export default async function handler(req, res) {
-    console.log('🔍 Export API called - Method:', req.method);
 
     if (req.method !== 'GET') {
         console.error('❌ Wrong method:', req.method);
@@ -109,7 +104,6 @@ export default async function handler(req, res) {
         const userId = req.query.userId || req.headers['x-user-id'];
         const format = (req.query.format || 'json').toLowerCase();
 
-        console.log('📦 Export request - userId:', userId, 'format:', format);
 
         if (!userId) {
             console.error('❌ No userId provided');
@@ -117,7 +111,6 @@ export default async function handler(req, res) {
         }
 
         // Fetch sites
-        console.log('🔄 Fetching sites...');
         const { data: sites, error: sitesError } = await supabase
             .from('sites')
             .select('*')
@@ -127,10 +120,8 @@ export default async function handler(req, res) {
             console.error('❌ Sites error:', sitesError.message);
             throw sitesError;
         }
-        console.log('✅ Sites fetched:', sites?.length || 0);
 
         // Fetch categories (all categories used by this user's sites, regardless of user_id)
-        console.log('🔄 Fetching categories...');
         const { data: scTmp, error: scError } = await supabase
             .from('site_categories')
             .select('category_id')
@@ -142,7 +133,6 @@ export default async function handler(req, res) {
         }
 
         const categoryIds = [...new Set((scTmp || []).map(sc => sc.category_id).filter(Boolean))];
-        console.log(`  Found ${categoryIds.length} unique categories used by sites`);
 
         let categories = [];
         if (categoryIds.length > 0) {
@@ -151,13 +141,8 @@ export default async function handler(req, res) {
                 .select('*')
                 .in('id', categoryIds);
             if (!catErr) categories = cats || [];
-            console.log(`✅ Categories fetched: ${categories.length}`);
-        } else {
-            console.log('✅ Categories fetched: 0');
         }
-
         // Fetch tags (all tags used by this user's sites, regardless of user_id)
-        console.log('🔄 Fetching tags...');
         const { data: stTmp, error: stError } = await supabase
             .from('site_tags')
             .select('tag_id')
@@ -169,7 +154,6 @@ export default async function handler(req, res) {
         }
 
         const tagIds = [...new Set((stTmp || []).map(st => st.tag_id).filter(Boolean))];
-        console.log(`  Found ${tagIds.length} unique tags used by sites`);
 
         let tags = [];
         if (tagIds.length > 0) {
@@ -178,13 +162,9 @@ export default async function handler(req, res) {
                 .select('*')
                 .in('id', tagIds);
             if (!tagErr) tags = tgs || [];
-            console.log(`✅ Tags fetched: ${tags.length}`);
-        } else {
-            console.log('✅ Tags fetched: 0');
         }
 
         // Fetch site-category relationships (only for this user's sites)
-        console.log('🔄 Fetching site categories...');
         const scData = await supabase
             .from('site_categories')
             .select('site_id, category_id')
@@ -195,10 +175,8 @@ export default async function handler(req, res) {
             throw scData.error;
         }
         const siteCategories = scData.data || [];
-        console.log('✅ Site categories fetched:', siteCategories.length || 0);
 
         // Fetch site-tag relationships (only for this user's sites)
-        console.log('🔄 Fetching site tags...');
         const stData = await supabase
             .from('site_tags')
             .select('site_id, tag_id')
@@ -209,10 +187,8 @@ export default async function handler(req, res) {
             throw stData.error;
         }
         const siteTags = stData.data || [];
-        console.log('✅ Site tags fetched:', siteTags.length || 0);
 
         // Build enriched sites
-        console.log('🔨 Building enriched sites...');
         const enrichedSites = (sites || []).map(site => {
             const siteCats = (siteCategories || [])
                 .filter(sc => sc.site_id === site.id)
@@ -230,30 +206,24 @@ export default async function handler(req, res) {
                 tags_array: siteTgs
             };
         });
-        console.log('✅ Enriched sites built:', enrichedSites.length);
 
         const timestamp = new Date().toISOString().split('T')[0];
 
         // Return format based on request
         if (format === 'csv') {
-            console.log('📄 Converting to CSV...');
             const csv = convertToCSV(enrichedSites);
-            console.log('✅ CSV ready, bytes:', csv.length);
             res.setHeader('Content-Type', 'text/csv; charset=utf-8');
             res.setHeader('Content-Disposition', `attachment; filename="sites-export-${timestamp}.csv"`);
             return res.end(csv);
         }
 
         if (format === 'html') {
-            console.log('🌐 Converting to HTML...');
             const html = convertToHTML(enrichedSites);
-            console.log('✅ HTML ready, bytes:', html.length);
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
             res.setHeader('Content-Disposition', `attachment; filename="sites-export-${timestamp}.html"`);
             return res.end(html);
         }
         // Default to JSON
-        console.log('📋 Returning JSON...');
         const exportData = {
             version: '1.0',
             exportedAt: new Date().toISOString(),

@@ -10,26 +10,18 @@ export default function Login() {
     // Signing indicates we're processing the initial email/password sign-in (no spinner on the Sign In button)
     const [signing, setSigning] = useState(false);
 
-    // Helper: silently log a message and switch to the loading screen so the UI stays in loading state during redirect
-    // IMPORTANT: do NOT show a browser alert here — we only want the loading button visible.
-    const postAlertLoading = (msg) => {
-        try { console.log(msg); } catch (e) { }
-        try { setLoading(true); } catch (e) { }
-    };
-
     // Silent notice for user-facing messages where we DO NOT want to show a loading spinner
-    const postNotice = (msg) => { try { console.log(msg); } catch (e) { } };
 
     // Helper to complete login and redirect. If MFA is active, suppress the alert and keep the loading screen.
-    const completeLogin = ({ showAlert = false } = {}) => {
+    const _completeLogin = ({ showAlert = false } = {}) => {
         if (typeof window !== 'undefined') {
             if (window.__suppressAlertsDuringMfa) showAlert = false;
             window.__suppressAlertsDuringMfa = false;
         }
         if (showAlert) {
-            try { alert('Login successful — redirecting to dashboard'); } catch (e) { }
+            try { alert('Login successful — redirecting to dashboard'); } catch (e) { /* Suppress alert errors */ }
         }
-        try { setLoading(true); } catch (e) { }
+        try { setLoading(true); } catch (e) { /* Suppress state update errors during unmount */ }
         window.location.replace('/dashboard');
     };
 
@@ -39,11 +31,11 @@ export default function Login() {
         const originalAlert = window.alert;
         window.alert = (msg) => {
             if (window.__suppressAlertsDuringMfa) {
-                try { setLoading(true); } catch (e) { }
+                try { setLoading(true); } catch (e) { /* Suppress state update errors during unmount */ }
                 return;
             }
             originalAlert(msg);
-            try { setLoading(true); } catch (e) { }
+            try { setLoading(true); } catch (e) { /* Suppress state update errors during unmount */ }
         };
         return () => { window.alert = originalAlert; };
     }, [setLoading]);
@@ -52,7 +44,7 @@ export default function Login() {
     // MFA states
     const [mfaRequired, setMfaRequired] = useState(false);
     const [mfaWaiting, setMfaWaiting] = useState(false); // true while we wait for server to confirm factorId
-    const [mfaVerifying, setMfaVerifying] = useState(false); // true while MFA verify is in progress
+    const [_mfaVerifying, _setMfaVerifying] = useState(false); // true while MFA verify is in progress
     const [mfaCode, setMfaCode] = useState('');
     const [factorId, setFactorId] = useState(null);
     const [aal1Token, setAal1Token] = useState(null); // Store AAL1 token from sign-in for MFA verify
@@ -68,7 +60,6 @@ export default function Login() {
                 if (url && url.includes('/auth/v1/factors/') && url.includes('/verify')) {
                     const cloned = res.clone();
                     cloned.text().then(t => {
-                        console.log('DEBUG fetch verify response', { url, status: res.status, text: t });
                         try {
                             const payload = { time: Date.now(), url, status: res.status, text: t };
                             localStorage.setItem('debug.supabase.verify', JSON.stringify(payload));
@@ -108,12 +99,6 @@ export default function Login() {
 
     // Debug presence of Supabase config (do NOT log secrets)
     useEffect(() => {
-        console.log('Login: supabase configured?', {
-            hasSupabase: !!supabase,
-            NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-            NEXT_PUBLIC_SUPABASE_ANON_KEY: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        });
-
         // Check if user already has a valid session on page load
         try {
             const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
@@ -125,12 +110,10 @@ export default function Login() {
                     const isExpired = payload.exp * 1000 < Date.now();
                     if (!isExpired) {
                         if (payload.aal === 'aal2') {
-                            console.log('Valid AAL2 session found on login page load, redirecting to dashboard...', { aal: payload.aal });
                             window.location.replace('/dashboard');
                             return;
                         } else {
                             // Valid token but not AAL2 (e.g., AAL1) — restore MFA flow instead of redirecting
-                            console.log('Found valid non-AAL2 token on login page load; restoring MFA flow', { aal: payload.aal });
                             try {
                                 setAal1Token(parsed.access_token);
                                 setMfaRequired(true);
@@ -141,7 +124,6 @@ export default function Login() {
                                         // First, check if we have the factorId saved in localStorage from the original login
                                         const savedFactorId = localStorage.getItem('mfa_pending_factor');
                                         if (savedFactorId) {
-                                            console.log('Restored MFA flow: found saved factorId in localStorage:', savedFactorId);
                                             setFactorId(savedFactorId);
                                             return; // No need to query listFactors
                                         }
@@ -150,7 +132,6 @@ export default function Login() {
                                         // Ensure supabase client uses the stored AAL1 token so listFactors can be queried
                                         try {
                                             await supabase.auth.setSession({ access_token: parsed.access_token, refresh_token: parsed.refresh_token || '' });
-                                            console.log('Restored MFA flow: supabase session set with AAL1 token');
                                         } catch (setErr) {
                                             console.warn('Restored MFA flow: failed to set supabase session:', setErr);
                                         }
@@ -170,7 +151,6 @@ export default function Login() {
                                                     totpFactor = factorsData.totp.find(f => f.status === 'verified') || factorsData.totp[0];
                                                 }
                                                 if (totpFactor) {
-                                                    console.log('Restored MFA flow: found TOTP factor (attempt', attempt, ')', totpFactor.id, totpFactor.status);
                                                     setFactorId(totpFactor.id);
                                                     found = true;
                                                     break;
@@ -179,7 +159,6 @@ export default function Login() {
                                                 // Try any factor across types
                                                 const allFactors = Object.keys(factorsData || {}).flatMap(k => factorsData[k] || []);
                                                 if (allFactors.length) {
-                                                    console.log('Restored MFA flow: using first available factor (attempt', attempt, ')', allFactors[0].id, allFactors[0].factor_type || allFactors[0].type);
                                                     setFactorId(allFactors[0].id);
                                                     found = true;
                                                     break;
@@ -208,7 +187,6 @@ export default function Login() {
                         }
                     } else {
                         // Clear expired session
-                        console.log('Clearing expired session on login page load');
                         localStorage.removeItem(storageKey);
                     }
                 }
@@ -218,9 +196,6 @@ export default function Login() {
         }
     }, [supabase]);
 
-    // Timeout constants (increased for mobile/slow networks)
-    const MFA_CHECK_TIMEOUT = 20000; // 20 seconds
-    const MFA_VERIFY_TIMEOUT = 90000; // 90 seconds (mobile networks can be very slow)
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -237,13 +212,11 @@ export default function Login() {
                     const payload = JSON.parse(atob(parsed.access_token.split('.')[1]));
                     const isExpired = payload.exp * 1000 < Date.now();
                     if (!isExpired && payload.aal === 'aal2') {
-                        console.log('Already have valid AAL2 session, redirecting...');
                         window.location.replace('/dashboard');
                         return;
                     }
                     // Clear old/invalid session
                     if (isExpired) {
-                        console.log('Clearing expired session');
                         localStorage.removeItem(storageKey);
                     }
                 }
@@ -256,7 +229,6 @@ export default function Login() {
         setMfaWaiting(false);
         setFactorId(null);
         // Clear any pending MFA factor from localStorage when starting fresh login
-        try { localStorage.removeItem('mfa_pending_factor'); } catch (e) { }
 
         if (!supabase) {
             setError('Login is temporarily unavailable.');
@@ -265,8 +237,6 @@ export default function Login() {
         }
 
         try {
-            console.log('Sign in attempt for', email);
-
             // Create a timeout promise - increased for slow mobile networks
             const timeoutPromise = new Promise((_, reject) => {
                 setTimeout(() => reject(new Error('Connection timed out')), 45000);
@@ -291,8 +261,6 @@ export default function Login() {
                 throw error;
             }
 
-            console.log('SignIn result:', { hasSession: !!data?.session, hasUser: !!data?.user });
-
             // Check for MFA with timeout
             let factorsData = null;
             try {
@@ -309,8 +277,6 @@ export default function Login() {
             const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
 
             if (totpFactor) {
-                console.log('MFA required, showing MFA form');
-
                 // Save AAL1 token and mark as fresh login
                 const session = data?.session;
                 if (session?.access_token) {
@@ -322,7 +288,6 @@ export default function Login() {
                 // Persist factorId so page refresh can restore MFA flow
                 try {
                     localStorage.setItem('mfa_pending_factor', totpFactor.id);
-                    console.log('Saved MFA factor to localStorage:', totpFactor.id);
                 } catch (e) { console.warn('Failed to save MFA factor to localStorage:', e); }
                 setMfaRequired(true);
                 setSigning(false);
@@ -355,7 +320,6 @@ export default function Login() {
         }, 60000);
 
         try {
-            console.log('MFA verify starting, factorId:', factorId, 'supabase:', !!supabase, 'aal1Token:', !!aal1Token);
 
             // Validate inputs
             if (!supabase) {
@@ -377,7 +341,6 @@ export default function Login() {
                     if (storedTokens) {
                         const tokens = JSON.parse(storedTokens);
                         if (tokens?.refresh_token) {
-                            console.log('Restoring AAL1 session from page refresh...');
                             // Wrap setSession in a timeout to prevent hanging
                             const setSessionPromise = supabase.auth.setSession({
                                 access_token: aal1Token,
@@ -388,7 +351,6 @@ export default function Login() {
                             );
                             try {
                                 await Promise.race([setSessionPromise, setSessionTimeout]);
-                                console.log('AAL1 session restored successfully');
                             } catch (timeoutErr) {
                                 console.warn('setSession timed out, continuing anyway:', timeoutErr.message);
                             }
@@ -397,12 +359,9 @@ export default function Login() {
                 } catch (e) {
                     console.warn('Error restoring AAL1 session:', e);
                 }
-            } else if (isFreshLogin) {
-                console.log('Fresh login - SDK already has session, skipping setSession');
             }
 
             // Use challengeAndVerify which combines both steps in one call
-            console.log('Starting challengeAndVerify for factor:', factorId);
             let verifyData = null;
             let verifyError = null;
 
@@ -411,7 +370,6 @@ export default function Login() {
                     factorId: factorId,
                     code: mfaCode
                 });
-                console.log('challengeAndVerify promise created');
 
                 // Shorter timeout - if SDK hangs, we'll try to recover from intercepted fetch response
                 const verifyTimeout = new Promise((resolve) =>
@@ -430,7 +388,6 @@ export default function Login() {
                         try {
                             const parsed = JSON.parse(debugData.text);
                             if (parsed?.access_token && parsed?.refresh_token && parsed?.user) {
-                                console.log('Recovered session from intercepted fetch response!');
                                 verifyData = { session: parsed };
                             } else {
                                 throw new Error('Incomplete session in intercepted response');
@@ -448,7 +405,6 @@ export default function Login() {
                         verifyError = { message: 'Verification timed out. Please try again.' };
                     }
                 } else {
-                    console.log('challengeAndVerify result:', { hasData: !!result?.data, error: result?.error?.message });
                     if (result?.error) {
                         verifyError = result.error;
                     } else {
@@ -467,7 +423,7 @@ export default function Login() {
                                 try {
                                     const parsed = JSON.parse(debugData.text);
                                     if (parsed?.access_token && parsed?.refresh_token && parsed?.user) {
-                                        console.log('Recovered session from intercepted fetch response!');
+
                                         verifyData = { session: parsed };
                                     }
                                 } catch (e) { /* ignore */ }
@@ -484,7 +440,6 @@ export default function Login() {
                     try {
                         const parsed = JSON.parse(debugData.text);
                         if (parsed?.access_token && parsed?.refresh_token && parsed?.user) {
-                            console.log('Recovered session from intercepted fetch despite SDK error!');
                             verifyData = { session: parsed };
                         }
                     } catch (e) { /* ignore parse error */ }
@@ -513,15 +468,10 @@ export default function Login() {
                 return;
             }
 
-            console.log('MFA verification successful:', { hasSession: !!verifyData?.session });
 
             // Get session from the verify result
             const session = verifyData?.session;
-            console.log('Session check:', {
-                hasAccessToken: !!session?.access_token,
-                hasRefreshToken: !!session?.refresh_token,
-                hasUser: !!session?.user
-            });
+
             if (session?.access_token && session?.refresh_token && session?.user) {
                 clearTimeout(hardTimeout);
 
@@ -530,8 +480,6 @@ export default function Login() {
                 // Fetch profile data before storing to include avatar and displayName
                 let userWithProfile = session.user;
                 try {
-                    console.log('Fetching profile before redirect...');
-
                     // Use our API endpoint instead of Supabase SDK to avoid timeout issues
                     const profilePromise = fetch('/api/profile', {
                         method: 'GET',
@@ -550,7 +498,6 @@ export default function Login() {
                         console.warn('Profile fetch timed out, continuing without profile data');
                     } else if (profileResult?.success && profileResult?.data) {
                         const profile = profileResult.data;
-                        console.log('Profile fetched:', { hasAvatar: !!profile.avatar_url, hasName: !!profile.name });
                         userWithProfile = {
                             ...session.user,
                             avatarUrl: profile.avatar_url || null,
@@ -573,11 +520,9 @@ export default function Login() {
 
                 // Skip setSession - it hangs on this SDK version. Tokens are in localStorage,
                 // and dashboard/AuthContext will handle session restoration.
-                console.log('Skipping setSession (SDK hangs), tokens stored in localStorage');
 
-                // Clear MFA UI state so the form is not stuck
-                try { window.__mfaPending = false; } catch (e) { }
-                try { localStorage.removeItem('mfa_pending_factor'); } catch (e) { }
+
+
                 setMfaRequired(false);
                 setFactorId(null);
                 setAal1Token(null);
@@ -587,8 +532,6 @@ export default function Login() {
                 setLoading(false);
                 setSigning(false);
 
-                console.log('Tokens stored, redirecting to /dashboard...');
-                console.log('About to call window.location.replace');
                 try {
                     window.location.replace('/dashboard');
                 } catch (navErr) {
@@ -601,7 +544,6 @@ export default function Login() {
                     try { if (window.location.pathname !== '/dashboard') window.location.assign('/dashboard'); } catch (e) { /* ignore */ }
                 }, 300);
 
-                console.log('Navigation attempted; finalizing');
                 return;
             }
 
@@ -747,8 +689,7 @@ export default function Login() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        try { window.__mfaPending = false; } catch (e) { }
-                                        try { localStorage.removeItem('mfa_pending_factor'); } catch (e) { }
+
                                         setMfaRequired(false);
                                         setMfaCode('');
                                         setError('');

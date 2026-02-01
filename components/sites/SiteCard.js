@@ -73,6 +73,10 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                             type="checkbox"
                             checked={selectedSites.has(site.id)}
                             onChange={handleSelectSite}
+                            onMouseDown={(e) => {
+                                // Blur immediately after click to allow Delete key
+                                setTimeout(() => e.target.blur(), 0);
+                            }}
                             className="peer w-5 h-5 rounded border-2 border-app-border bg-app-bg-secondary cursor-pointer appearance-none checked:bg-app-accent checked:border-app-accent hover:border-app-accent/70 transition-all duration-200 mt-0.5"
                             title="Select site for bulk actions"
                         />

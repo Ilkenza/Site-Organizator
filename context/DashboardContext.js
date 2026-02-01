@@ -35,10 +35,6 @@ export function DashboardProvider({ children }) {
     const [selectedTags, setSelectedTags] = useState(new Set());
     const [multiSelectMode, setMultiSelectMode] = useState(false);
 
-    // Favorites and Pinned state
-    const [favoriteSites, setFavoriteSites] = useState(new Set());
-    const [pinnedSites, setPinnedSites] = useState(new Set());
-
     // Refs to prevent premature data clearing during auth transitions
     const hadUserRef = useRef(false);
     const clearDataTimeoutRef = useRef(null);
@@ -173,7 +169,6 @@ export function DashboardProvider({ children }) {
                                 if (parsed?.access_token && parsed?.expires_at) {
                                     const expiresAt = parsed.expires_at * 1000; // Convert to ms
                                     if (Date.now() < expiresAt) {
-                                        console.log('[DashboardContext] User is null but valid tokens found - NOT clearing data');
                                         return true;
                                     }
                                 }
@@ -190,7 +185,6 @@ export function DashboardProvider({ children }) {
             // Use debounce if we recently had a user (auth transition in progress)
             if (!hasValidTokens) {
                 const clearData = () => {
-                    console.log('[DashboardContext] No valid tokens found - clearing data');
                     setSites([]);
                     setCategories([]);
                     setTags([]);
@@ -200,7 +194,6 @@ export function DashboardProvider({ children }) {
 
                 // If we had a user recently, wait 500ms before clearing (gives time for auth to recover)
                 if (hadUserRef.current) {
-                    console.log('[DashboardContext] User became null but had user recently - waiting 500ms before clearing');
                     clearDataTimeoutRef.current = setTimeout(clearData, 500);
                 } else {
                     clearData();
@@ -223,27 +216,21 @@ export function DashboardProvider({ children }) {
         const channel = supabase
             .channel('dashboard-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'sites' }, () => {
-                console.log('Sites table changed, refreshing data...');
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
-                console.log('Categories table changed, refreshing data...');
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'tags' }, () => {
-                console.log('Tags table changed, refreshing data...');
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'site_categories' }, () => {
-                console.log('Site-categories relation changed, refreshing data...');
                 fetchData();
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'site_tags' }, () => {
-                console.log('Site-tags relation changed, refreshing data...');
                 fetchData();
             })
-            .subscribe((status) => {
-                console.log('Realtime subscription status:', status);
+            .subscribe((_status) => {
             });
 
         return () => {
@@ -296,7 +283,6 @@ export function DashboardProvider({ children }) {
             });
             const updated = response?.data || response;
 
-            // Zamijeni kompletan site sa updated verzijom (sa svim kategorijama/tagovima)
             // Update local cache with server value, and then ensure authoritative data is fetched (fixes relation persistence mismatches)
             setSites(prev => prev.map(s => s.id === id ? updated : s));
             try {
@@ -345,9 +331,7 @@ export function DashboardProvider({ children }) {
 
     const deleteSite = useCallback(async (id) => {
         try {
-            console.log('Deleting site with id:', id);
-            const response = await fetchAPI(`/sites/${id}`, { method: 'DELETE' });
-            console.log('Delete response:', response);
+            const _response = await fetchAPI(`/sites/${id}`, { method: 'DELETE' });
             setSites(prev => prev.filter(s => s.id !== id));
             setStats(prev => ({ ...prev, sites: prev.sites - 1 }));
             showToast('✓ Site deleted successfully', 'success');
@@ -643,9 +627,7 @@ export function DashboardProvider({ children }) {
         setMultiSelectMode,
 
         // Favorites and Pinned
-        favoriteSites,
         toggleFavorite,
-        pinnedSites,
         togglePinned,
 
         // Actions
