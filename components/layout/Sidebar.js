@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 
 export default function Sidebar({ isOpen = false, onClose }) {
+    const router = useRouter();
     const {
         stats,
         categories,
@@ -13,8 +15,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
         activeTab,
         setActiveTab,
         sites,
-        searchQuery,
-        setSearchQuery,
+        selectedSites,
+        setSelectedSites,
         sortBy,
         setSortBy,
         sortOrder,
@@ -161,6 +163,23 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                 <button
                                     key={tab.id}
                                     onClick={() => {
+                                        // Reset pagination to page 1 when switching tabs
+                                        router.push({
+                                            pathname: router.pathname,
+                                            query: { page: 1 }
+                                        }, undefined, { shallow: true });
+
+                                        // Filter selectedSites when switching to favorites tab
+                                        if (tab.id === 'favorites' && selectedSites.size > 0) {
+                                            const favoriteSiteIds = new Set(
+                                                Array.from(selectedSites).filter(siteId => {
+                                                    const site = sites.find(s => s.id === siteId);
+                                                    return site && site.is_favorite;
+                                                })
+                                            );
+                                            setSelectedSites(favoriteSiteIds);
+                                        }
+
                                         setActiveTab(tab.id);
                                         setSelectedCategory(null);
                                         setSelectedTag(null);
@@ -225,6 +244,62 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                     backgroundColor: sortBy === option.value ? '#243A5E' : '#1A2E52',
                                                     color: sortBy === option.value ? '#6CBBFB' : '#A0B4D0',
                                                     borderColor: sortBy === option.value ? '#3A4E6F' : '#2A3E5F'
+                                                }}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Sort By for Categories */}
+                            {activeTab === 'categories' && (
+                                <div className="mb-4">
+                                    <label className="block text-[10px] sm:text-xs font-semibold text-gray-400 mb-1.5 sm:mb-2">
+                                        Sort by
+                                    </label>
+                                    <div className="flex gap-1.5 sm:gap-2">
+                                        {[
+                                            { label: 'Name', value: 'name' },
+                                            { label: 'Created', value: 'created_at' }
+                                        ].map(option => (
+                                            <button
+                                                key={option.value}
+                                                onClick={() => setSortByCategories(option.value)}
+                                                className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium transition-colors border"
+                                                style={{
+                                                    backgroundColor: sortByCategories === option.value ? '#243A5E' : '#1A2E52',
+                                                    color: sortByCategories === option.value ? '#6CBBFB' : '#A0B4D0',
+                                                    borderColor: sortByCategories === option.value ? '#3A4E6F' : '#2A3E5F'
+                                                }}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Sort By for Tags */}
+                            {activeTab === 'tags' && (
+                                <div className="mb-4">
+                                    <label className="block text-[10px] sm:text-xs font-semibold text-gray-400 mb-1.5 sm:mb-2">
+                                        Sort by
+                                    </label>
+                                    <div className="flex gap-1.5 sm:gap-2">
+                                        {[
+                                            { label: 'Name', value: 'name' },
+                                            { label: 'Created', value: 'created_at' }
+                                        ].map(option => (
+                                            <button
+                                                key={option.value}
+                                                onClick={() => setSortByTags(option.value)}
+                                                className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium transition-colors border"
+                                                style={{
+                                                    backgroundColor: sortByTags === option.value ? '#243A5E' : '#1A2E52',
+                                                    color: sortByTags === option.value ? '#6CBBFB' : '#A0B4D0',
+                                                    borderColor: sortByTags === option.value ? '#3A4E6F' : '#2A3E5F'
                                                 }}
                                             >
                                                 {option.label}
@@ -329,10 +404,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         <button
                                             key={cat.id}
                                             onClick={() => setSelectedCategory(cat.id)}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
                       ${selectedCategory === cat.id
-                                                    ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm'
-                                                    : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent'
+                                                    ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm backdrop-blur-sm'
+                                                    : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
                                                 }`}
                                         >
                                             <span
@@ -341,8 +416,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                             />
                                             <span className="truncate flex-1">{cat.name}</span>
                                             <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedCategory === cat.id
-                                                    ? 'bg-app-accent/30 text-app-accent'
-                                                    : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
+                                                ? 'bg-app-accent/30 text-app-accent'
+                                                : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
                                                 }`}>
                                                 {siteCount}
                                             </span>
@@ -388,20 +463,20 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 <button
                                                     key={tag.id}
                                                     onClick={() => setSelectedTag(selectedTag === tag.id ? null : tag.id)}
-                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group
+                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
                       ${selectedTag === tag.id
-                                                            ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm'
-                                                            : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent'
+                                                            ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm backdrop-blur-sm'
+                                                            : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
                                                         }`}
                                                 >
                                                     <span
-                                                        className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0"
+                                                        className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 transition-transform group-hover:scale-110"
                                                         style={{ backgroundColor: tag.color || '#5B8DEE' }}
                                                     />
                                                     <span className="truncate flex-1">#{tag.name}</span>
                                                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedTag === tag.id
-                                                            ? 'bg-app-accent/30 text-app-accent'
-                                                            : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
+                                                        ? 'bg-app-accent/30 text-app-accent'
+                                                        : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
                                                         }`}>
                                                         {siteCount}
                                                     </span>

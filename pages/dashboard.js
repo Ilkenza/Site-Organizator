@@ -4,6 +4,7 @@ import { DashboardProvider, useDashboard } from '../context/DashboardContext';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
+import MobileToolbar from '../components/layout/MobileToolbar';
 import SitesList from '../components/sites/SitesList';
 import FavoritesList from '../components/sites/FavoritesList';
 import SiteModal from '../components/sites/SiteModal';
@@ -14,6 +15,8 @@ import TagModal from '../components/tags/TagModal';
 import SettingsPanel from '../components/settings/SettingsPanel';
 import { ConfirmModal } from '../components/ui/Modal';
 import Toast from '../components/ui/Toast';
+import CommandMenu from '../components/ui/CommandMenu';
+import UndoToast from '../components/ui/UndoToast';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -52,7 +55,21 @@ function DashboardContent() {
     deleteTag,
     toast,
     selectedCategory,
-    selectedTag
+    selectedTag,
+    multiSelectMode,
+    setMultiSelectMode,
+    sites,
+    categories,
+    tags,
+    selectedSites,
+    setSelectedSites,
+    selectedCategories,
+    setSelectedCategories,
+    selectedTags,
+    setSelectedTags,
+    setSites,
+    setCategories,
+    setTags
   } = useDashboard();
 
   // Modal states
@@ -63,6 +80,8 @@ function DashboardContent() {
   const [editingSite, setEditingSite] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [editingTag, setEditingTag] = useState(null);
+  const [commandMenuOpen, setCommandMenuOpen] = useState(false);
+  const [undoToast, setUndoToast] = useState(null);
 
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, type: null, item: null });
@@ -81,6 +100,81 @@ function DashboardContent() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Keyboard shortcuts - Command menu (Ctrl+/)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Just N key - opens appropriate modal based on active tab
+      if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        // Only if not typing in input/textarea
+        const activeElement = document.activeElement;
+        if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+
+          if (activeTab === 'sites' || activeTab === 'favorites') {
+            setEditingSite(null);
+            setSiteModalOpen(true);
+          } else if (activeTab === 'categories') {
+            setEditingCategory(null);
+            setCategoryModalOpen(true);
+          } else if (activeTab === 'tags') {
+            setEditingTag(null);
+            setTagModalOpen(true);
+          }
+          // Do nothing in settings tab
+        }
+      }
+
+      // Command menu toggle
+      if (e.ctrlKey && e.key === '/') {
+        e.preventDefault();
+        setCommandMenuOpen(prev => !prev);
+      }
+      // Search (Ctrl+K)
+      if (e.ctrlKey && e.key === 'k') {
+        e.preventDefault();
+        // Focus main search input in Header
+        const headerSearch = document.querySelector('input[placeholder*="Search sites"], input[placeholder*="Search categories"], input[placeholder*="Search tags"]');
+        if (headerSearch) {
+          headerSearch.focus();
+          headerSearch.select?.();
+        }
+      }
+      // Multi-select mode (M)
+      if (e.key === 'm' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const activeElement = document.activeElement;
+        if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          setMultiSelectMode(prev => !prev);
+        }
+      }
+      // Select all (Ctrl+A) in multi-select mode
+      if (e.ctrlKey && e.key === 'a' && multiSelectMode) {
+        e.preventDefault();
+        if (activeTab === 'sites' || activeTab === 'favorites') {
+          const allSiteIds = new Set(sites.map(s => s.id));
+          setSelectedSites(allSiteIds);
+        } else if (activeTab === 'categories') {
+          const allCategoryIds = new Set(categories.map(c => c.id));
+          setSelectedCategories(allCategoryIds);
+        } else if (activeTab === 'tags') {
+          const allTagIds = new Set(tags.map(t => t.id));
+          setSelectedTags(allTagIds);
+        }
+      }
+      // Deselect all (Ctrl+D)
+      if (e.ctrlKey && e.key === 'd') {
+        e.preventDefault();
+        setSelectedSites(new Set());
+        setSelectedCategories(new Set());
+        setSelectedTags(new Set());
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [multiSelectMode, activeTab, sites, categories, tags]);
+
+
 
   // Handle add button click
   const handleAddClick = () => {
@@ -126,26 +220,119 @@ function DashboardContent() {
     setTagModalOpen(true);
   };
 
-  // Confirm delete
+  // Confirm delete with undo support
   const handleConfirmDelete = async () => {
     setDeleting(true);
+    // Deep clone the entire item with all nested arrays and properties
+    const deletedItem = JSON.parse(JSON.stringify(deleteConfirm.item));
+    const deletedType = deleteConfirm.type;
+    const deletedId = deleteConfirm.item.id;
+
     try {
-      switch (deleteConfirm.type) {
+      // Remove from UI immediately (optimistic update)
+      // Item stays in Supabase until timer expires or toast is closed
+      switch (deletedType) {
         case 'site':
-          await deleteSite(deleteConfirm.item.id);
+          setSites(prev => prev.filter(s => s.id !== deletedId));
           break;
         case 'category':
-          await deleteCategory(deleteConfirm.item.id);
+          setCategories(prev => prev.filter(c => c.id !== deletedId));
           break;
         case 'tag':
-          await deleteTag(deleteConfirm.item.id);
+          setTags(prev => prev.filter(t => t.id !== deletedId));
           break;
       }
+
+      // Set up timeout for actual Supabase deletion (after 5 seconds)
+      let deleteTimeout = setTimeout(async () => {
+        try {
+          switch (deletedType) {
+            case 'site':
+              await deleteSite(deletedId);
+              break;
+            case 'category':
+              await deleteCategory(deletedId);
+              break;
+            case 'tag':
+              await deleteTag(deletedId);
+              break;
+          }
+        } catch (err) {
+          console.error('Failed to delete from database:', err);
+          await fetchData();
+        }
+      }, 5000);
+
+      // Show undo toast
+      setUndoToast({
+        message: `${deletedType.charAt(0).toUpperCase() + deletedType.slice(1)} deleted`,
+        onUndo: async () => {
+          // Cancel the deletion timeout and restore item
+          clearTimeout(deleteTimeout);
+          // Item is still in Supabase, just restore to UI
+          switch (deletedType) {
+            case 'site':
+              setSites(prev => [...prev, deletedItem].sort((a, b) => a.name.localeCompare(b.name)));
+              break;
+            case 'category':
+              setCategories(prev => [...prev, deletedItem].sort((a, b) => a.name.localeCompare(b.name)));
+              break;
+            case 'tag':
+              setTags(prev => [...prev, deletedItem].sort((a, b) => a.name.localeCompare(b.name)));
+              break;
+          }
+          setUndoToast(null);
+        },
+        onClose: async () => {
+          // User manually closed toast - delete from Supabase immediately
+          clearTimeout(deleteTimeout);
+          try {
+            switch (deletedType) {
+              case 'site':
+                await deleteSite(deletedId);
+                break;
+              case 'category':
+                await deleteCategory(deletedId);
+                break;
+              case 'tag':
+                await deleteTag(deletedId);
+                break;
+            }
+          } catch (err) {
+            console.error('Failed to delete from database:', err);
+            await fetchData();
+          }
+        }
+      });
+
       setDeleteConfirm({ open: false, type: null, item: null });
     } catch (err) {
       alert('Failed to delete: ' + err.message);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  // Command menu action handler
+  const handleCommandMenuAction = (action) => {
+    switch (action) {
+      case 'new-site':
+        setEditingSite(null);
+        setSiteModalOpen(true);
+        setCommandMenuOpen(false);
+        break;
+      case 'new-category':
+        setEditingCategory(null);
+        setCategoryModalOpen(true);
+        setCommandMenuOpen(false);
+        break;
+      case 'new-tag':
+        setEditingTag(null);
+        setTagModalOpen(true);
+        setCommandMenuOpen(false);
+        break;
+      default:
+        break;
     }
   };
 
@@ -188,6 +375,9 @@ function DashboardContent() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <Header onAddClick={handleAddClick} onMenuClick={() => setSidebarOpen(true)} />
+
+        {/* Mobile Toolbar - Search and Add button on mobile only */}
+        <MobileToolbar onAddClick={handleAddClick} />
 
         {/* Content area */}
         <main className="flex-1 overflow-y-auto">
@@ -248,6 +438,22 @@ function DashboardContent() {
         confirmText="Delete"
         loading={deleting}
       />
+
+      {/* Command Menu */}
+      <CommandMenu
+        isOpen={commandMenuOpen}
+        onClose={() => setCommandMenuOpen(false)}
+        onAction={handleCommandMenuAction}
+      />
+
+      {/* Undo Toast */}
+      {undoToast && (
+        <UndoToast
+          message={undoToast.message}
+          onUndo={undoToast.onUndo}
+          onClose={() => setUndoToast(null)}
+        />
+      )}
     </div>
   );
 }

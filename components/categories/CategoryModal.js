@@ -104,6 +104,16 @@ export default function CategoryModal({ isOpen, onClose, category = null }) {
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g., Development Tools"
                     autoFocus
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // Focus na prvi color button
+                            const colorButtons = document.querySelectorAll('button[data-color]');
+                            if (colorButtons.length > 0) {
+                                colorButtons[0].focus();
+                            }
+                        }
+                    }}
                 />
 
                 <div className="space-y-2">
@@ -113,7 +123,15 @@ export default function CategoryModal({ isOpen, onClose, category = null }) {
                             <button
                                 key={color}
                                 type="button"
+                                data-color={color}
                                 onClick={() => setFormData(prev => ({ ...prev, color }))}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        setFormData(prev => ({ ...prev, color }));
+                                        handleSubmit(e);
+                                    }
+                                }}
                                 className={`w-8 h-8 rounded-full transition-transform hover:scale-110 
                   ${formData.color === color ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900' : ''}`}
                                 style={{ backgroundColor: color }}

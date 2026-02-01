@@ -3,6 +3,7 @@ import { useDashboard } from '../../context/DashboardContext';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input, { Textarea, Select } from '../ui/Input';
+import { suggestCategories } from '../../lib/categorySuggestions';
 
 export default function SiteModal({ isOpen, onClose, site = null, defaultFavorite = false, defaultCategoryId = null, defaultTagId = null }) {
     const { categories, tags, addSite, updateSite, failedRelationUpdates, retrySiteRelations } = useDashboard();
@@ -20,6 +21,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
     const [error, setError] = useState(null);
     const [categorySearch, setCategorySearch] = useState('');
     const [tagSearch, setTagSearch] = useState('');
+    const [suggestedCategories, setSuggestedCategories] = useState([]);
     const [retryingRelations, setRetryingRelations] = useState(false);
 
     // Reset form when modal opens/closes or site changes
@@ -62,6 +64,24 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
             setTagSearch('');
         }
     }, [isOpen, site]);
+
+    // Auto-suggest categories based on URL
+    useEffect(() => {
+        if (formData.url && formData.url.trim()) {
+            const { categoryIds, suggestions } = suggestCategories(
+                formData.url,
+                formData.name,
+                categories
+            );
+
+            if (categoryIds.length > 0 && !site) {
+                // Only auto-apply suggestions for new sites
+                setSuggestedCategories(suggestions);
+            }
+        } else {
+            setSuggestedCategories([]);
+        }
+    }, [formData.url, formData.name, categories, site]);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -202,6 +222,13 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                     onChange={handleChange}
                     placeholder="e.g., GitHub"
                     autoFocus
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const urlInput = document.querySelector('input[name="url"]');
+                            urlInput?.focus();
+                        }
+                    }}
                 />
 
                 <Input
@@ -211,6 +238,17 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                     value={formData.url}
                     onChange={handleChange}
                     placeholder="https://github.com"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // Focus na prvi pricing dugme (Fully Free)
+                            const pricingButtons = document.querySelectorAll('button[type="button"]');
+                            const fullyFreeButton = Array.from(pricingButtons).find(btn => btn.textContent.includes('✓'));
+                            if (fullyFreeButton) {
+                                fullyFreeButton.focus();
+                            }
+                        }
+                    }}
                 />
 
                 {/* Pricing Model */}
@@ -222,11 +260,23 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                             { value: 'freemium', label: 'Freemium', icon: '◐', bgSelected: 'bg-blue-600', ring: 'ring-blue-400', bgHover: 'hover:bg-blue-900/30' },
                             { value: 'free_trial', label: 'Free Trial', icon: '⏱', bgSelected: 'bg-amber-600', ring: 'ring-amber-400', bgHover: 'hover:bg-amber-900/30' },
                             { value: 'paid', label: 'Paid', icon: '$', bgSelected: 'bg-rose-600', ring: 'ring-rose-400', bgHover: 'hover:bg-rose-900/30' }
-                        ].map(option => (
+                        ].map((option, index) => (
                             <button
                                 key={option.value}
                                 type="button"
+                                data-pricing={option.value}
                                 onClick={() => setFormData(prev => ({ ...prev, pricing: option.value }))}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        setFormData(prev => ({ ...prev, pricing: option.value }));
+                                        // Prebaci focus na favorite button
+                                        const favoriteButton = document.querySelector('button[data-favorite]');
+                                        if (favoriteButton) {
+                                            favoriteButton.focus();
+                                        }
+                                    }
+                                }}
                                 className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all border-2 ${formData.pricing === option.value
                                     ? `${option.bgSelected} text-white ${option.ring} ring-2 border-transparent shadow-lg`
                                     : `bg-app-bg-secondary/50 text-app-text-secondary border-app-border/50 ${option.bgHover}`
@@ -244,7 +294,19 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                     <label className="block text-sm font-medium text-app-text-primary">Favorites</label>
                     <button
                         type="button"
+                        data-favorite="toggle"
                         onClick={() => setFormData(prev => ({ ...prev, is_favorite: !prev.is_favorite }))}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                setFormData(prev => ({ ...prev, is_favorite: !prev.is_favorite }));
+                                // Prebaci focus direktno na prvi category button (ne na search)
+                                const categoryButtons = document.querySelectorAll('button[data-category-id]');
+                                if (categoryButtons.length > 0) {
+                                    categoryButtons[0].focus();
+                                }
+                            }
+                        }}
                         className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg font-medium transition-all border-2 ${formData.is_favorite
                             ? 'bg-gradient-to-r from-yellow-600/20 to-amber-600/20 text-yellow-400 border-yellow-500/40 shadow-lg shadow-yellow-900/20'
                             : 'bg-app-bg-light text-app-text-secondary border-app-border hover:border-app-border hover:bg-app-bg-lighter/30'
@@ -262,6 +324,31 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 {/* Categories */}
                 {categories.length > 0 && (
                     <div className="space-y-1.5">
+                        {/* Suggested categories */}
+                        {suggestedCategories.length > 0 && (
+                            <div className="flex items-center gap-2 flex-wrap mb-2 p-2 bg-app-accent/5 border border-app-accent/20 rounded-lg">
+                                <svg className="w-4 h-4 text-app-accent flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                </svg>
+                                <span className="text-xs text-app-text-secondary">
+                                    Suggested:
+                                </span>
+                                {suggestedCategories.map(suggestion => {
+                                    const matchedCategory = categories.find(c => c.name.toLowerCase() === suggestion.toLowerCase());
+                                    if (!matchedCategory) return null;
+                                    return (
+                                        <button
+                                            key={matchedCategory.id}
+                                            type="button"
+                                            onClick={() => handleCategoryToggle(matchedCategory.id)}
+                                            className="px-2 py-1 text-xs bg-app-accent/10 hover:bg-app-accent/20 text-app-accent border border-app-accent/30 rounded-md transition-colors"
+                                        >
+                                            + {matchedCategory.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
                         <div className="flex items-center justify-between gap-2">
                             <label className="block text-sm font-medium text-app-text-primary">
                                 Categories *
@@ -275,6 +362,16 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                 onChange={(e) => setCategorySearch(e.target.value)}
                                 placeholder="Search..."
                                 className="px-2 py-1 text-xs bg-app-bg-secondary border border-app-border rounded text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-1 focus:ring-app-accent w-28"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const tagSearchInputs = document.querySelectorAll('input[placeholder="Search..."]');
+                                        const tagSearchInput = tagSearchInputs[1];
+                                        if (tagSearchInput) {
+                                            tagSearchInput.focus();
+                                        }
+                                    }
+                                }}
                             />
                         </div>
                         <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
@@ -295,6 +392,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                     <button
                                         key={cat.id}
                                         type="button"
+                                        data-category-id={cat.id}
                                         onClick={() => handleCategoryToggle(cat.id)}
                                         className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 border ${formData.categoryIds.includes(cat.id)
                                             ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-900/30'
@@ -328,8 +426,12 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                 value={tagSearch}
                                 onChange={(e) => setTagSearch(e.target.value)}
                                 placeholder="Search..."
-                                className="px-2 py-1 text-xs bg-app-bg-secondary border border-app-border rounded text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-1 focus:ring-purple-500 w-28"
-                            />
+                                className="px-2 py-1 text-xs bg-app-bg-secondary border border-app-border rounded text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-1 focus:ring-purple-500 w-28" onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleSubmit(e);
+                                    }
+                                }} />
                         </div>
                         <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                             {(() => {

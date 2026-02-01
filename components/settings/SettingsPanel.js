@@ -127,7 +127,7 @@ export default function SettingsPanel() {
                 console.log('[SettingsPanel] Fetching profile via API for user:', user.id);
 
                 // Use our API endpoint instead of Supabase SDK (which can timeout)
-                // Use the active Supabase session to get a reliable access token
+                // Use the activesupabase session to get a reliable access token
                 const { data: { session } } = await supabase.auth.getSession();
                 const token = session?.access_token;
                 const response = await fetch('/api/profile', {
@@ -924,87 +924,160 @@ export default function SettingsPanel() {
     };
 
     return (
-        <div className="p-3 sm:p-6">
-            <div>
-                {/* Profile Section */}
-                <div className="bg-app-bg-light border border-app-border rounded-lg p-6 mb-6">
-                    <h2 className="text-lg font-semibold text-app-text-primary mb-4">Profile</h2>
+        <>
+            <div className="p-3 sm:p-6">
+                <div>
+                    {/* Profile Section */}
+                    <div className="bg-app-bg-light border border-app-border rounded-lg p-6 mb-6">
+                        <h2 className="text-lg font-semibold text-app-text-primary mb-4">Profile</h2>
 
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="relative">
-                            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-2xl font-medium overflow-hidden">
-                                {typeof avatar === 'string' && avatar ? (
-                                    <Image
-                                        src={avatar}
-                                        alt="Avatar preview"
-                                        width={64}
-                                        height={64}
-                                        className="rounded-full object-cover"
-                                        unoptimized={avatar.startsWith('data:') || avatar.startsWith('blob:') || avatar.startsWith('http')}
+                        <div className="flex items-center gap-4 mb-6">
+                            <div className="relative">
+                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white text-2xl font-medium overflow-hidden">
+                                    {typeof avatar === 'string' && avatar ? (
+                                        <Image
+                                            src={avatar}
+                                            alt="Avatar preview"
+                                            width={64}
+                                            height={64}
+                                            className="rounded-full object-cover"
+                                            unoptimized={avatar.startsWith('data:') || avatar.startsWith('blob:') || avatar.startsWith('http')}
+                                        />
+                                    ) : (
+                                        user?.email?.charAt(0).toUpperCase()
+                                    )}
+                                </div>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleAvatarChange}
+                                    className="hidden"
+                                    id="avatar-input"
+                                />
+                                <label
+                                    htmlFor="avatar-input"
+                                    className="absolute bottom-0 right-0 bg-app-primary hover:bg-app-primary-hover rounded-full p-2 cursor-pointer transition-colors"
+                                >
+                                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </label>
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm text-app-text-secondary">Your account</p>
+                            </div>
+                        </div>
+
+                        {/* Avatar message */}
+                        {avatarMessage && (
+                            <div
+                                className={`mb-4 p-3 rounded-lg text-sm ${avatarMessage.type === 'success'
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : avatarMessage.type === 'error'
+                                        ? 'bg-red-500/20 text-red-400'
+                                        : 'bg-blue-500/20 text-blue-400'
+                                    }`}
+                            >
+                                {avatarMessage.text}
+                            </div>
+                        )}
+
+                        {/* Show save button when file is selected */}
+                        {avatarFile && (
+                            <div className="mb-4 p-3 bg-app-bg-primary rounded-lg border border-app-border">
+                                <p className="text-sm text-app-text-secondary mb-3">Image selected - click Save to upload</p>
+                                <button
+                                    onClick={handleSaveAvatar}
+                                    disabled={uploadingAvatar}
+                                    className="px-4 py-2 bg-app-primary hover:bg-app-primary-hover text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
+                                >
+                                    {uploadingAvatar ? 'Uploading...' : 'Save Avatar'}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Email section */}
+                        <div className="mb-4 pb-4 border-b border-app-border">
+                            <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2">
+                                <div className="min-w-0">
+                                    <p className="text-sm text-app-text-secondary">Email</p>
+                                    <p className="text-app-text-primary font-medium truncate">{user?.email}</p>
+                                </div>
+                                <button
+                                    onClick={() => setEmailModalOpen(true)}
+                                    className="w-full xs:w-auto px-3 py-1.5 xs:py-1 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors text-sm text-center"
+                                >
+                                    Change
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Name section */}
+                        <div className="mb-4 pb-4 border-b border-app-border">
+                            {editingName ? (
+                                <div>
+                                    <label className="block text-sm text-app-text-secondary mb-2">Display Name</label>
+                                    <input
+                                        type="text"
+                                        value={displayName}
+                                        onChange={(e) => setDisplayName(e.target.value)}
+                                        placeholder="Enter your name"
+                                        className="w-full px-3 py-2 bg-app-bg-secondary border border-app-border rounded-lg text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-2 focus:ring-app-accent mb-2"
                                     />
-                                ) : (
-                                    user?.email?.charAt(0).toUpperCase()
-                                )}
-                            </div>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleAvatarChange}
-                                className="hidden"
-                                id="avatar-input"
-                            />
-                            <label
-                                htmlFor="avatar-input"
-                                className="absolute bottom-0 right-0 bg-app-primary hover:bg-app-primary-hover rounded-full p-2 cursor-pointer transition-colors"
-                            >
-                                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                            </label>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleSaveName}
+                                            disabled={savingName || !displayName.trim()}
+                                            className="px-3 py-1 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover disabled:opacity-50 transition-colors text-sm"
+                                        >
+                                            {savingName ? 'Saving...' : 'Save'}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setEditingName(false);
+                                                setDisplayName(user?.displayName || '');
+                                                setNameMessage(null);
+                                            }}
+                                            className="px-3 py-1 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors text-sm"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                    {nameMessage && (
+                                        <div
+                                            className={`mt-2 p-2 rounded text-sm ${nameMessage.type === 'success'
+                                                ? 'bg-green-500/20 text-green-400'
+                                                : 'bg-red-500/20 text-red-400'
+                                                }`}
+                                        >
+                                            {nameMessage.text}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2">
+                                    <div>
+                                        <p className="text-sm text-app-text-secondary">Display Name</p>
+                                        <p className="text-app-text-primary font-medium">{displayName || 'Not set'}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setEditingName(true)}
+                                        className="w-full xs:w-auto px-3 py-1.5 xs:py-1 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors text-sm text-center"
+                                    >
+                                        Edit
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                        <div className="flex-1">
-                            <p className="text-sm text-app-text-secondary">Your account</p>
-                        </div>
-                    </div>
-
-                    {/* Avatar message */}
-                    {avatarMessage && (
-                        <div
-                            className={`mb-4 p-3 rounded-lg text-sm ${avatarMessage.type === 'success'
-                                ? 'bg-green-500/20 text-green-400'
-                                : avatarMessage.type === 'error'
-                                    ? 'bg-red-500/20 text-red-400'
-                                    : 'bg-blue-500/20 text-blue-400'
-                                }`}
-                        >
-                            {avatarMessage.text}
-                        </div>
-                    )}
-
-                    {/* Show save button when file is selected */}
-                    {avatarFile && (
-                        <div className="mb-4 p-3 bg-app-bg-primary rounded-lg border border-app-border">
-                            <p className="text-sm text-app-text-secondary mb-3">Image selected - click Save to upload</p>
-                            <button
-                                onClick={handleSaveAvatar}
-                                disabled={uploadingAvatar}
-                                className="px-4 py-2 bg-app-primary hover:bg-app-primary-hover text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
-                            >
-                                {uploadingAvatar ? 'Uploading...' : 'Save Avatar'}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Email section */}
-                    <div className="mb-4 pb-4 border-b border-app-border">
+                        {/* Password section */}
                         <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2">
-                            <div className="min-w-0">
-                                <p className="text-sm text-app-text-secondary">Email</p>
-                                <p className="text-app-text-primary font-medium truncate">{user?.email}</p>
+                            <div>
+                                <p className="text-sm text-app-text-secondary">Password</p>
+                                <p className="text-app-text-primary font-medium">••••••••</p>
                             </div>
                             <button
-                                onClick={() => setEmailModalOpen(true)}
+                                onClick={() => setPasswordModalOpen(true)}
                                 className="w-full xs:w-auto px-3 py-1.5 xs:py-1 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors text-sm text-center"
                             >
                                 Change
@@ -1012,271 +1085,238 @@ export default function SettingsPanel() {
                         </div>
                     </div>
 
-                    {/* Name section */}
-                    <div className="mb-4 pb-4 border-b border-app-border">
-                        {editingName ? (
-                            <div>
-                                <label className="block text-sm text-app-text-secondary mb-2">Display Name</label>
+                    {/* Export Section */}
+                    <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
+                        <h2 className="text-lg font-semibold text-app-text-primary mb-2">Export Sites</h2>
+                        <p className="text-sm text-app-text-secondary mb-4">
+                            Download all your sites in your preferred format.
+                        </p>
+
+                        <div className="flex flex-col xs:flex-row flex-wrap gap-2 xs:gap-3">
+                            <button
+                                onClick={() => handleExport('json')}
+                                className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                JSON
+                            </button>
+                            <button
+                                onClick={() => handleExport('csv')}
+                                className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7 20H5a2 2 0 01-2-2V9a2 2 0 012-2h6a2 2 0 012 2v10a2 2 0 01-2 2z" />
+                                </svg>
+                                CSV
+                            </button>
+                            <button
+                                onClick={() => handleExport('html')}
+                                className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20v-6m4 6v-6m5-10H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V4a2 2 0 00-2-2z" />
+                                </svg>
+                                HTML
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Import Section */}
+                    <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
+                        <h2 className="text-lg font-semibold text-app-text-primary mb-2">Import Sites</h2>
+                        <p className="text-sm text-app-text-secondary mb-4">
+                            Upload a previously exported file (JSON, CSV, or HTML) to restore or transfer sites. Categories and tags will be automatically created if they don't exist. Duplicate categories and tags are automatically detected and reused.
+                        </p>
+
+                        {/* File Input with Icon Button */}
+                        {!importPreview ? (
+                            <div className="mb-4">
                                 <input
-                                    type="text"
-                                    value={displayName}
-                                    onChange={(e) => setDisplayName(e.target.value)}
-                                    placeholder="Enter your name"
-                                    className="w-full px-3 py-2 bg-app-bg-secondary border border-app-border rounded-lg text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-2 focus:ring-app-accent mb-2"
+                                    type="file"
+                                    accept=".json,.csv,.html"
+                                    onChange={(e) => {
+                                        handleFileSelect(e.target.files?.[0]);
+                                    }}
+                                    className="hidden"
+                                    id="import-file-input"
                                 />
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={handleSaveName}
-                                        disabled={savingName || !displayName.trim()}
-                                        className="px-3 py-1 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover disabled:opacity-50 transition-colors text-sm"
-                                    >
-                                        {savingName ? 'Saving...' : 'Save'}
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setEditingName(false);
-                                            setDisplayName(user?.displayName || '');
-                                            setNameMessage(null);
-                                        }}
-                                        className="px-3 py-1 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors text-sm"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                                {nameMessage && (
-                                    <div
-                                        className={`mt-2 p-2 rounded text-sm ${nameMessage.type === 'success'
-                                            ? 'bg-green-500/20 text-green-400'
-                                            : 'bg-red-500/20 text-red-400'
-                                            }`}
-                                    >
-                                        {nameMessage.text}
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2">
-                                <div>
-                                    <p className="text-sm text-app-text-secondary">Display Name</p>
-                                    <p className="text-app-text-primary font-medium">{displayName || 'Not set'}</p>
-                                </div>
-                                <button
-                                    onClick={() => setEditingName(true)}
-                                    className="w-full xs:w-auto px-3 py-1.5 xs:py-1 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors text-sm text-center"
+                                <label
+                                    htmlFor="import-file-input"
+                                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] cursor-pointer transition-all duration-200 font-semibold text-base"
                                 >
-                                    Edit
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                                    </svg>
+                                    <span>Import Sites</span>
+                                </label>
+                                <p className="text-xs text-app-text-tertiary mt-2">Supported formats: JSON, CSV, HTML</p>
+                            </div>
+                        ) : null}
+
+                        {/* Preview */}
+                        {importPreview && (
+                            <div className="mb-4 p-3 bg-app-bg-primary rounded-lg border border-app-border">
+                                <p className="text-sm text-app-text-secondary mb-3">
+                                    <strong>{importPreview.sites?.length || 0}</strong> site{importPreview.sites?.length !== 1 ? 's' : ''} ready to import
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        setImportFile(null);
+                                        setImportPreview(null);
+                                        setImportMessage(null);
+                                    }}
+                                    className="text-sm text-app-accent hover:underline"
+                                >
+                                    Choose different file
                                 </button>
                             </div>
                         )}
-                    </div>
-                    {/* Password section */}
-                    <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2">
-                        <div>
-                            <p className="text-sm text-app-text-secondary">Password</p>
-                            <p className="text-app-text-primary font-medium">••••••••</p>
-                        </div>
-                        <button
-                            onClick={() => setPasswordModalOpen(true)}
-                            className="w-full xs:w-auto px-3 py-1.5 xs:py-1 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors text-sm text-center"
-                        >
-                            Change
-                        </button>
-                    </div>
-                </div>
 
-                {/* Export Section */}
-                <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
-                    <h2 className="text-lg font-semibold text-app-text-primary mb-2">Export Sites</h2>
-                    <p className="text-sm text-app-text-secondary mb-4">
-                        Download all your sites in your preferred format.
-                    </p>
-
-                    <div className="flex flex-col xs:flex-row flex-wrap gap-2 xs:gap-3">
-                        <button
-                            onClick={() => handleExport('json')}
-                            className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            JSON
-                        </button>
-                        <button
-                            onClick={() => handleExport('csv')}
-                            className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7 20H5a2 2 0 01-2-2V9a2 2 0 012-2h6a2 2 0 012 2v10a2 2 0 01-2 2z" />
-                            </svg>
-                            CSV
-                        </button>
-                        <button
-                            onClick={() => handleExport('html')}
-                            className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20v-6m4 6v-6m5-10H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V4a2 2 0 00-2-2z" />
-                            </svg>
-                            HTML
-                        </button>
-                    </div>
-                </div>
-
-                {/* Import Section */}
-                <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
-                    <h2 className="text-lg font-semibold text-app-text-primary mb-2">Import Sites</h2>
-                    <p className="text-sm text-app-text-secondary mb-4">
-                        Upload a previously exported file (JSON, CSV, or HTML) to restore or transfer sites. Categories and tags will be automatically created if they don't exist. Duplicate categories and tags are automatically detected and reused.
-                    </p>
-
-                    {/* File Input with Icon Button */}
-                    {!importPreview ? (
-                        <div className="mb-4">
-                            <input
-                                type="file"
-                                accept=".json,.csv,.html"
-                                onChange={(e) => {
-                                    handleFileSelect(e.target.files?.[0]);
-                                }}
-                                className="hidden"
-                                id="import-file-input"
-                            />
-                            <label
-                                htmlFor="import-file-input"
-                                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] cursor-pointer transition-all duration-200 font-semibold text-base"
+                        {/* Message */}
+                        {importMessage && (
+                            <div
+                                className={`mb-4 p-3 rounded-lg text-sm ${importMessage.type === 'success'
+                                    ? 'bg-green-500/20 text-green-400'
+                                    : importMessage.type === 'error'
+                                        ? 'bg-red-500/20 text-red-400'
+                                        : 'bg-blue-500/20 text-blue-400'
+                                    }`}
                             >
-                                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-                                </svg>
-                                <span>Import Sites</span>
-                            </label>
-                            <p className="text-xs text-app-text-tertiary mt-2">Supported formats: JSON, CSV, HTML</p>
-                        </div>
-                    ) : null}
+                                {importMessage.text}
+                            </div>
+                        )}
 
-                    {/* Preview */}
-                    {importPreview && (
-                        <div className="mb-4 p-3 bg-app-bg-primary rounded-lg border border-app-border">
-                            <p className="text-sm text-app-text-secondary mb-3">
-                                <strong>{importPreview.sites?.length || 0}</strong> site{importPreview.sites?.length !== 1 ? 's' : ''} ready to import
-                            </p>
+                        {/* Import Button */}
+                        {importPreview && (
                             <button
                                 onClick={() => {
-                                    setImportFile(null);
-                                    setImportPreview(null);
-                                    setImportMessage(null);
+                                    handleImport();
                                 }}
-                                className="text-sm text-app-accent hover:underline"
+                                disabled={importLoading}
+                                className="flex items-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] disabled:opacity-50 font-medium transition-colors"
                             >
-                                Choose different file
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                {importLoading ? 'Importing...' : 'Import Sites'}
                             </button>
-                        </div>
-                    )}
-
-                    {/* Message */}
-                    {importMessage && (
-                        <div
-                            className={`mb-4 p-3 rounded-lg text-sm ${importMessage.type === 'success'
-                                ? 'bg-green-500/20 text-green-400'
-                                : importMessage.type === 'error'
-                                    ? 'bg-red-500/20 text-red-400'
-                                    : 'bg-blue-500/20 text-blue-400'
-                                }`}
-                        >
-                            {importMessage.text}
-                        </div>
-                    )}
-
-                    {/* Import Button */}
-                    {importPreview && (
-                        <button
-                            onClick={() => {
-                                handleImport();
-                            }}
-                            disabled={importLoading}
-                            className="flex items-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] disabled:opacity-50 font-medium transition-colors"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                            {importLoading ? 'Importing...' : 'Import Sites'}
-                        </button>
-                    )}
-                </div>
-
-                {/* Statistics Section */}
-                <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
-                    <div className="flex items-center justify-between mb-2">
-                        <h2 className="text-lg font-semibold text-app-text-primary flex items-center gap-2">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3v18h18" />
-                            </svg>
-                            Statistics
-                        </h2>
-                        <button
-                            onClick={async (e) => { e.preventDefault(); await fetchStats(); }}
-                            title="Refresh statistics"
-                            className="p-2 rounded-lg bg-app-bg-secondary hover:bg-app-bg-light text-app-text-secondary transition-colors"
-                        >
-                            {loadingStats ? (
-                                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                            ) : (
-                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 12h3m0 0a7 7 0 101.94-4.94L8 12" /></svg>
-                            )}
-                        </button>
-                    </div>
-                    <p className="text-sm text-app-text-secondary mb-4">Overview of your content and link health.</p>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                        <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
-                            <div className="text-xs text-app-text-secondary">Sites</div>
-                            <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.sites}</div>
-                        </div>
-                        <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
-                            <div className="text-xs text-app-text-secondary">Categories</div>
-                            <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.categories}</div>
-                        </div>
-                        <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
-                            <div className="text-xs text-app-text-secondary">Tags</div>
-                            <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.tags}</div>
-                        </div>
+                        )}
                     </div>
 
-
-
-                    <div className="border-t border-app-border pt-3">
-                        <div className="flex items-center gap-3">
+                    {/* Statistics Section */}
+                    <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
+                        <div className="flex items-center justify-between mb-2">
+                            <h2 className="text-lg font-semibold text-app-text-primary flex items-center gap-2">
+                                <svg className="w-5 h-5 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                                Statistics
+                            </h2>
                             <button
-                                onClick={async () => await runLinkCheck()}
-                                disabled={checkingLinks}
-                                className="px-4 py-2 bg-[#1E4976] border text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] disabled:opacity-50"
+                                onClick={async (e) => { e.preventDefault(); await fetchStats(); }}
+                                title="Refresh statistics"
+                                className="p-2 rounded-lg bg-app-bg-secondary hover:bg-app-bg-light text-app-text-secondary transition-colors"
                             >
-                                {checkingLinks ? 'Checking...' : 'Run Link Health Check'}
+                                {loadingStats ? (
+                                    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                ) : (
+                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 12h3m0 0a7 7 0 101.94-4.94L8 12" /></svg>
+                                )}
                             </button>
+                        </div>
+                        <p className="text-sm text-app-text-secondary mb-4">Overview of your content and link health.</p>
 
-                            {linkCheckResult && (
-                                <div className="text-sm text-app-text-secondary">
-                                    {linkCheckResult.total} checked — {linkCheckResult.brokenCount} broken
-                                    {typeof displayedBroken !== 'undefined' && (
-                                        <> — showing {displayedBroken.length}{showIgnored ? ' (including ignored)' : ''}</>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                            <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
+                                <div className="text-xs text-app-text-secondary">Sites</div>
+                                <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.sites}</div>
+                            </div>
+                            <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
+                                <div className="text-xs text-app-text-secondary">Categories</div>
+                                <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.categories}</div>
+                            </div>
+                            <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
+                                <div className="text-xs text-app-text-secondary">Tags</div>
+                                <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.tags}</div>
+                            </div>
+                        </div>
+
+
+
+                        <div className="border-t border-app-border pt-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3">
+                                <h3 className="text-sm font-semibold text-app-text-primary flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Health Check
+                                </h3>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" className="w-4 h-4 accent-app-accent" checked={showIgnored} onChange={(e) => setShowIgnored(e.target.checked)} />
+                                    <span className="text-xs text-app-text-secondary">Show ignored links</span>
+                                </label>
+                            </div>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={async () => await runLinkCheck()}
+                                    disabled={checkingLinks}
+                                    className="w-full px-4 py-2.5 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF] rounded-lg disabled:opacity-50 transition-all font-medium flex items-center justify-center gap-2"
+                                >
+                                    {checkingLinks ? (
+                                        <>
+                                            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <circle cx="12" cy="12" r="10" strokeWidth="2" strokeLinecap="round" strokeDasharray="32" strokeDashoffset="32">
+                                                    <animate attributeName="stroke-dashoffset" values="32;0" dur="1s" repeatCount="indefinite" />
+                                                </circle>
+                                            </svg>
+                                            Checking...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                            </svg>
+                                            Check Links
+                                        </>
                                     )}
-                                </div>
-                            )}
+                                </button>
 
-                            {linkCheckError && (
-                                <div className="text-sm text-red-400">Error: {String(linkCheckError)}</div>
-                            )}
+                                {linkCheckResult && (
+                                    <div className="text-sm text-app-text-secondary bg-app-bg-secondary rounded-lg p-3 border border-app-border">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span className="font-medium">
+                                                {linkCheckResult.total} checked · <span className={linkCheckResult.brokenCount > 0 ? 'text-red-400 font-semibold' : 'text-green-400'}>{linkCheckResult.brokenCount} broken</span>
+                                            </span>
+                                        </div>
+                                        {typeof displayedBroken !== 'undefined' && (
+                                            <div className="text-xs text-app-text-tertiary ml-6">
+                                                Showing {displayedBroken.length}{showIgnored ? ' (including ignored)' : ''}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
-                            <label className="ml-auto flex items-center gap-2 text-sm">
-                                <input type="checkbox" className="w-4 h-4" checked={showIgnored} onChange={(e) => setShowIgnored(e.target.checked)} />
-                                <span className="text-xs text-app-text-secondary">Show ignored</span>
-                            </label>
+                                {linkCheckError && (
+                                    <div className="text-sm text-red-400 bg-red-900/20 border border-red-700/30 rounded-lg p-3 flex items-center gap-2">
+                                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span>Error: {String(linkCheckError)}</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {displayedBroken && displayedBroken.length > 0 && (
-                            <div className="mt-3 bg-app-bg-light border border-app-border rounded-lg p-3 max-h-52 overflow-auto space-y-2">
+                            <div className="mt-3 bg-app-bg-light border border-app-border rounded-lg p-3 max-h-52 overflow-auto space-y-2 ">
                                 {displayedBroken.slice(0, 200).map(b => (
-                                    <div key={b.id || b.url} className={`flex items-center justify-between py-1 ${ignoredLinks.has(b.id) ? 'opacity-60' : ''}`}>
+                                    <div key={b.id || b.url} className={`flex items-center justify-between py-1  flex-col gap-3
+                                    ${ignoredLinks.has(b.id) ? 'opacity-60' : ''}`}>
                                         <div className="text-sm">
                                             <div className="font-medium text-app-text-primary">{b.name}</div>
                                             <div className="text-xs text-app-text-tertiary">{b.url} — {b.status} {ignoredLinks.has(b.id) && <span className="ml-2 text-yellow-400">Ignored</span>}</div>
@@ -1383,7 +1423,7 @@ export default function SettingsPanel() {
                                         <div className="flex-1">
                                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                                                 <p className="text-app-text-primary font-medium text-sm sm:text-base">{sessionInfo.browser} on {sessionInfo.os}</p>
-                                                <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full w-fit\">This device</span>
+                                                <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full w-fit">This device</span>
                                             </div>
                                             <p className="text-xs text-app-text-tertiary mt-1">
                                                 Last sign in: {sessionInfo.createdAt ? new Date(sessionInfo.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Unknown'}
@@ -1428,7 +1468,6 @@ export default function SettingsPanel() {
                 </div>
             </div>
 
-            {/* Password Change Modal */}
             <Modal isOpen={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} title="Change Password">
                 <div className="space-y-4 mb-6">
                     <p className="text-sm text-app-text-secondary">
@@ -1833,6 +1872,6 @@ export default function SettingsPanel() {
                     </div>
                 </div>
             </Modal>
-        </div >
+        </>
     );
 }

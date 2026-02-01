@@ -3,6 +3,7 @@ import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../ui/Button';
 import { ConfirmModal } from '../ui/Modal';
+import ServerStatus from '../ui/ServerStatus';
 
 export default function Header({ onAddClick, onMenuClick }) {
     const { user: authUser, signOut, supabase } = useAuth();
@@ -193,7 +194,14 @@ export default function Header({ onAddClick, onMenuClick }) {
                 const getSelectedCount = () => {
                     switch (activeTab) {
                         case 'sites': return selectedSites.size;
-                        case 'favorites': return selectedSites.size;
+                        case 'favorites': {
+                            let count = 0;
+                            for (const siteId of selectedSites) {
+                                const site = sites.find(s => s.id === siteId);
+                                if (site && site.is_favorite) count++;
+                            }
+                            return count;
+                        }
                         case 'categories': return selectedCategories.size;
                         case 'tags': return selectedTags.size;
                         default: return 0;
@@ -354,9 +362,9 @@ export default function Header({ onAddClick, onMenuClick }) {
                         </h2>
                     </div>
 
-                    {/* Search - hidden on settings tab */}
+                    {/* Search - hidden on settings tab and mobile */}
                     {activeTab !== 'settings' && (
-                        <div className="flex-1 min-w-0 max-w-xs sm:max-w-md">
+                        <div className="flex-1 min-w-0 max-w-xs sm:max-w-md hidden md:block">
                             <div className="relative">
                                 {/* SVG search icon */}
                                 <svg
@@ -438,7 +446,14 @@ export default function Header({ onAddClick, onMenuClick }) {
                             const getSelectedCount = () => {
                                 switch (activeTab) {
                                     case 'sites': return selectedSites.size;
-                                    case 'favorites': return selectedSites.size;
+                                    case 'favorites': {
+                                        let count = 0;
+                                        for (const siteId of selectedSites) {
+                                            const site = sites.find(s => s.id === siteId);
+                                            if (site && site.is_favorite) count++;
+                                        }
+                                        return count;
+                                    }
                                     case 'categories': return selectedCategories.size;
                                     case 'tags': return selectedTags.size;
                                     default: return 0;
@@ -491,7 +506,14 @@ export default function Header({ onAddClick, onMenuClick }) {
                             const getSelectedCount = () => {
                                 switch (activeTab) {
                                     case 'sites': return selectedSites.size;
-                                    case 'favorites': return selectedSites.size;
+                                    case 'favorites': {
+                                        let count = 0;
+                                        for (const siteId of selectedSites) {
+                                            const site = sites.find(s => s.id === siteId);
+                                            if (site && site.is_favorite) count++;
+                                        }
+                                        return count;
+                                    }
                                     case 'categories': return selectedCategories.size;
                                     case 'tags': return selectedTags.size;
                                     default: return 0;
@@ -546,15 +568,18 @@ export default function Header({ onAddClick, onMenuClick }) {
                             );
                         })()}
 
-                        {/* Add button - hidden on settings tab */}
+                        {/* Add button - hidden on settings tab and mobile */}
                         {activeTab !== 'settings' && (
-                            <Button onClick={onAddClick} variant="primary" size="sm" className="whitespace-nowrap">
+                            <Button onClick={onAddClick} variant="primary" size="sm" className="whitespace-nowrap hidden md:inline-flex">
                                 <svg className="w-4 h-4 sm:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                 </svg>
                                 <span className="hidden sm:inline">{getAddButtonText()}</span>
                             </Button>
                         )}
+
+                        {/* Server Status */}
+                        <ServerStatus />
 
                         {/* User menu */}
                         {user && (
