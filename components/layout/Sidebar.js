@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 
@@ -37,45 +37,33 @@ export default function Sidebar({ isOpen = false, onClose }) {
     // Count favorite sites
     const favoriteCount = sites.filter(s => s.is_favorite).length;
 
-    // Calculate filtered site count for display (all sites)
-    const getFilteredSiteCount = () => {
-        if (!selectedCategory && !selectedTag) return null;
+    // Calculate filtered counts with memoization
+    const { filteredSiteCount, filteredFavoriteCount } = useMemo(() => {
+        if (!selectedCategory && !selectedTag) {
+            return { filteredSiteCount: null, filteredFavoriteCount: null };
+        }
+
+        // Filter all sites
         let filtered = sites;
         if (selectedCategory) {
-            // Sites use categories_array (join table), not category_id
             filtered = filtered.filter(s =>
                 s.categories_array?.some(cat => cat?.id === selectedCategory)
             );
         }
         if (selectedTag) {
-            // Sites use tags_array (array of tag objects), not site_tags
             filtered = filtered.filter(s =>
                 s.tags_array?.some(tag => tag?.id === selectedTag)
             );
         }
-        return filtered.length;
-    };
-    const filteredSiteCount = getFilteredSiteCount();
 
-    // Calculate filtered favorite site count for display
-    const getFilteredFavoriteCount = () => {
-        if (!selectedCategory && !selectedTag) return null;
-        let filtered = sites.filter(s => s.is_favorite);
-        if (selectedCategory) {
-            filtered = filtered.filter(s => {
-                const siteCategories = s.categories_array || s.categories || s.site_categories?.map(sc => sc.category) || [];
-                return siteCategories.some(cat => cat?.id === selectedCategory);
-            });
-        }
-        if (selectedTag) {
-            filtered = filtered.filter(s => {
-                const siteTags = s.tags_array || s.tags || s.site_tags?.map(st => st.tag) || [];
-                return siteTags.some(tag => tag?.id === selectedTag);
-            });
-        }
-        return filtered.length;
-    };
-    const filteredFavoriteCount = getFilteredFavoriteCount();
+        // Filter favorites only
+        const favFiltered = filtered.filter(s => s.is_favorite);
+
+        return {
+            filteredSiteCount: filtered.length,
+            filteredFavoriteCount: favFiltered.length
+        };
+    }, [sites, selectedCategory, selectedTag]);
 
     return (
         <>
