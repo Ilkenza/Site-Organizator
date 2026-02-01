@@ -10,10 +10,10 @@ export default function CategoriesList({ onEdit }) {
         deleteCategory,
         updateCategory,
         loading,
-        sortByCategories,
-        setSortByCategories,
-        sortOrderCategories,
-        setSortOrderCategories,
+        sortByCategories: _sortByCategories,
+        setSortByCategories: _setSortByCategories,
+        sortOrderCategories: _sortOrderCategories,
+        setSortOrderCategories: _setSortOrderCategories,
         searchQuery,
         multiSelectMode,
         selectedCategories,
@@ -22,7 +22,7 @@ export default function CategoriesList({ onEdit }) {
     const [deletingId, setDeletingId] = useState(null);
     const [categoryToDelete, setCategoryToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
-    const [checkAnimations, setCheckAnimations] = useState(new Set());
+    const [_checkAnimations, setCheckAnimations] = useState(new Set());
     const [editingId, setEditingId] = useState(null);
 
     const filteredCategories = useMemo(() => {
@@ -39,7 +39,6 @@ export default function CategoriesList({ onEdit }) {
             newSelected.delete(categoryId);
         } else {
             newSelected.add(categoryId);
-            // Trigger check animation
             setCheckAnimations(prev => new Set(prev).add(categoryId));
             setTimeout(() => {
                 setCheckAnimations(prev => {
@@ -144,8 +143,7 @@ export default function CategoriesList({ onEdit }) {
 
             {/* Categories Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filteredCategories.map((category, index) => {
-                    // Count sites using this category
+                {filteredCategories.map((category, _index) => {
                     const siteCount = sites.filter(site =>
                         site.categories_array?.some(c => c?.id === category.id)
                     ).length;
@@ -166,6 +164,10 @@ export default function CategoriesList({ onEdit }) {
                                                 type="checkbox"
                                                 checked={selectedCategories.has(category.id)}
                                                 onChange={(e) => handleSelectCategory(e, category.id)}
+                                                onMouseDown={(e) => {
+                                                    // Blur immediately after click to allow Delete key
+                                                    setTimeout(() => e.target.blur(), 0);
+                                                }}
                                                 className="peer w-5 h-5 rounded border-2 border-app-border bg-app-bg-secondary cursor-pointer appearance-none checked:bg-app-accent checked:border-app-accent hover:border-app-accent/70 transition-all duration-200 flex-shrink-0"
                                                 title="Select category for bulk actions"
                                                 aria-label={`Select ${category.name}`}
@@ -190,9 +192,15 @@ export default function CategoriesList({ onEdit }) {
                                             />
                                         ) : (
                                             <h3
-                                                className="font-semibold text-app-text-primary truncate cursor-text hover:text-app-accent transition-colors border border-transparent px-1 py-0 leading-tight"
+                                                className="font-semibold text-app-text-primary truncate cursor-text hover:text-app-accent transition-colors border border-transparent px-1 py-0 leading-tight active:bg-app-accent/10 sm:active:bg-transparent"
                                                 onDoubleClick={() => setEditingId(category.id)}
-                                                title="Double-click to edit name"
+                                                onClick={(_e) => {
+                                                    // Single click on mobile to edit (if not in multi-select)
+                                                    if (!multiSelectMode && window.innerWidth < 640) {
+                                                        setEditingId(category.id);
+                                                    }
+                                                }}
+                                                title={window.innerWidth < 640 ? "Tap to edit name" : "Double-click to edit name"}
                                             >
                                                 {category.name}
                                             </h3>
@@ -271,7 +279,7 @@ export default function CategoriesList({ onEdit }) {
                                 Cannot Delete Category
                             </h2>
                             <p className="text-app-text-secondary mb-4">
-                                The category <strong>"{usageWarning.name}"</strong> is used on <strong>{usageWarning.count}</strong> site{usageWarning.count !== 1 ? 's' : ''}:
+                                The category <strong>&quot;{usageWarning.name}&quot;</strong> is used on <strong>{usageWarning.count}</strong> site{usageWarning.count !== 1 ? 's' : ''}:
                             </p>
                             <div className="bg-app-bg-light rounded p-3 mb-4 max-h-40 overflow-y-auto">
                                 {usageWarning.sites?.map(site => (

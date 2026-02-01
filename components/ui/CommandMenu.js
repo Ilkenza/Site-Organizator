@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 
 export default function CommandMenu({ isOpen, onClose, onAction }) {
-    const { sites, categories, tags, setActiveTab, setSearchQuery } = useDashboard();
+    const { sites, setActiveTab } = useDashboard();
     const [search, setSearch] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
     const inputRef = useRef(null);
@@ -20,7 +20,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             id: 'new-category',
             label: 'Create Category',
             icon: '📁',
-            shortcut: 'C',
+            shortcut: 'N',
             action: () => onAction('new-category'),
             category: 'Actions'
         },
@@ -28,7 +28,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             id: 'new-tag',
             label: 'Create Tag',
             icon: '🏷️',
-            shortcut: 'T',
+            shortcut: 'N',
             action: () => onAction('new-tag'),
             category: 'Actions'
         },
@@ -125,18 +125,55 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             id: 'shortcuts-save',
             label: 'Save (Enter)',
             icon: '✓',
-            subtitle: 'Confirm changes',
+            subtitle: 'Confirm changes in modals',
             shortcut: 'Enter',
             action: () => { },
             category: 'Keyboard Shortcuts'
         },
         {
-            id: 'shortcuts-tip',
-            label: 'Quick Shortcuts',
-            icon: '⌨️',
-            subtitle: 'Type command or use hotkeys N, C, T',
+            id: 'shortcuts-delete',
+            label: 'Delete Selected (Del/Backspace)',
+            icon: '🗑️',
+            subtitle: 'Step 1: Press M to enable multi-select → Step 2: Click checkboxes → Step 3: Press Delete',
+            shortcut: 'Del',
             action: () => { },
-            category: 'Help'
+            category: 'Keyboard Shortcuts'
+        },
+        {
+            id: 'shortcuts-prev-page',
+            label: 'Previous Page (←)',
+            icon: '⬅️',
+            subtitle: 'Navigate to previous page',
+            shortcut: '←',
+            action: () => { },
+            category: 'Keyboard Shortcuts'
+        },
+        {
+            id: 'shortcuts-next-page',
+            label: 'Next Page (→)',
+            icon: '➡️',
+            subtitle: 'Navigate to next page',
+            shortcut: '→',
+            action: () => { },
+            category: 'Keyboard Shortcuts'
+        },
+        {
+            id: 'shortcuts-first-page',
+            label: 'First Page (Home)',
+            icon: '⏮️',
+            subtitle: 'Jump to first page',
+            shortcut: 'Home',
+            action: () => { },
+            category: 'Keyboard Shortcuts'
+        },
+        {
+            id: 'shortcuts-last-page',
+            label: 'Last Page (End)',
+            icon: '⏭️',
+            subtitle: 'Jump to last page',
+            shortcut: 'End',
+            action: () => { },
+            category: 'Keyboard Shortcuts'
         }
     ];
 
@@ -187,6 +224,12 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 setSelectedIndex(i => Math.max(i - 1, 0));
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                setSelectedIndex(0);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                setSelectedIndex(filteredCommands.length - 1);
             } else if (e.key === 'Enter') {
                 e.preventDefault();
                 filteredCommands[selectedIndex]?.action();
@@ -197,7 +240,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, selectedIndex, filteredCommands]);
+    }, [isOpen, selectedIndex, filteredCommands, onClose]);
 
     if (!isOpen) return null;
 
@@ -273,67 +316,69 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
                 </div>
 
                 {/* Footer */}
-                <div className="px-4 py-3 border-t border-app-border bg-app-bg-card/50 space-y-2">
-                    {/* Navigation Shortcuts */}
-                    <div className="flex items-center justify-between text-xs text-app-text-muted">
-                        <div className="flex items-center gap-4">
-                            <span className="flex items-center gap-1">
-                                <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">↑</kbd>
-                                <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">↓</kbd>
-                                Navigate
-                            </span>
-                            <span className="flex items-center gap-1">
-                                <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">↵</kbd>
-                                Select
-                            </span>
-                            <span className="flex items-center gap-1">
-                                <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">Esc</kbd>
-                                Close
-                            </span>
+                <div className="px-4 py-3 border-t border-app-border bg-app-bg-card/50">
+                    <div className="space-y-2 text-xs text-app-text-tertiary">
+                        {/* Row 1: Navigation & Actions */}
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">↑</kbd>
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">↓</kbd>
+                                    Navigate
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">↵</kbd>
+                                    Select
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">Esc</kbd>
+                                    Close
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">N</kbd>
+                                    New
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">Ctrl+K</kbd>
+                                    Search
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">M</kbd>
+                                    Multi-Select
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">Del</kbd>
+                                    Delete
+                                </span>
+                            </div>
                         </div>
-                        <span className="flex items-center gap-1">
-                            <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">Ctrl</kbd>
-                            <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">/</kbd>
-                            Toggle
-                        </span>
-                    </div>
-
-                    {/* Global Shortcuts */}
-                    <div className="flex items-center justify-between text-xs text-app-text-tertiary">
-                        <div className="flex items-center gap-3">
-                            <span className="flex items-center gap-1">
-                                <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded text-[10px]">Ctrl+K</kbd>
-                                Search
-                            </span>
-                            <span className="flex items-center gap-1">
-                                <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded text-[10px]">N</kbd>
-                                New Site
-                            </span>
-                            <span className="flex items-center gap-1">
-                                <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded text-[10px]">M</kbd>
-                                Multi-Select
-                            </span>
+                        {/* Row 2: Page Navigation & Selection */}
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">←</kbd>
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">→</kbd>
+                                    Prev/Next
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">Home</kbd>
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">End</kbd>
+                                    First/Last
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">Ctrl+A</kbd>
+                                    Select All
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded">Ctrl+D</kbd>
+                                    Deselect
+                                </span>
+                            </div>
                         </div>
-                    </div>
-
-                    {/* Multi-Select Shortcuts */}
-                    <div className="flex items-center gap-3 text-xs text-app-text-tertiary">
-                        <span className="flex items-center gap-1">
-                            <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded text-[10px]">Ctrl+A</kbd>
-                            Select All
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded text-[10px]">Ctrl+D</kbd>
-                            Deselect
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded text-[10px]">Enter</kbd>
-                            Save
-                        </span>
-                        <span className="flex items-center gap-1">
-                            <kbd className="px-1.5 py-0.5 bg-app-bg-card border border-app-border rounded text-[10px]">Esc</kbd>
-                            Cancel
-                        </span>
                     </div>
                 </div>
             </div>

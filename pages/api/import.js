@@ -13,7 +13,6 @@ export const config = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
-  console.log('🚀 IMPORT API STARTED');
 
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -35,7 +34,6 @@ export default async function handler(req, res) {
   const options = payload.options || { createMissing: true };
   const chunkSize = payload.chunkSize && Number.isFinite(Number(payload.chunkSize)) ? Math.max(50, Number(payload.chunkSize)) : 200;
 
-  console.log(`📥 Import request - Rows: ${rows.length}, UserId: ${userId}, CreateMissing: ${options.createMissing}`);
 
   if (!rows.length) return res.status(400).json({ success: false, error: 'No rows provided' });
   if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
@@ -50,7 +48,6 @@ export default async function handler(req, res) {
   // caching lookups inside import
   const catNameToObj = new Map(); // name -> {id,name}
   const tagNameToObj = new Map();
-  const urlToSite = new Map(); // url -> site obj
 
   const report = { created: [], attached: [], skipped: [], errors: [] };
 
@@ -82,39 +79,31 @@ export default async function handler(req, res) {
   async function ensureCategoryByName(name) {
     const key = (name || '').toLowerCase();
     if (catNameToObj.has(key)) {
-      console.log(`    📍 Category "${name}" found in cache`);
       return catNameToObj.get(key);
     }
     if (!options.createMissing) {
-      console.log(`    ⚠️ createMissing is false, skipping category: ${name}`);
       return null;
     }
     // try insert
     try {
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories`;
-      console.log(`    🔄 Creating category: ${name}`);
       const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ name: name, color: '#6CBBFB', user_id: userId }) });
       const txt = await r.text();
       if (r.ok) {
         const j = JSON.parse(txt);
         if (Array.isArray(j) && j.length > 0) {
-          console.log(`    ✅ Category created: ${j[0].name} (id: ${j[0].id})`);
           catNameToObj.set(key, j[0]);
           return j[0];
         }
-      } else {
-        console.log(`    ❌ Category POST failed: ${r.status} - ${txt}`);
       }
       // if not ok, try to lookup (maybe created concurrently)
       const lookup = await fetchJson(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
       if (lookup.ok && Array.isArray(lookup.json) && lookup.json.length > 0) {
-        console.log(`    ✅ Category found after failed POST: ${lookup.json[0].name}`);
         catNameToObj.set(key, lookup.json[0]);
         return lookup.json[0];
       }
       return null;
     } catch (e) {
-      console.log(`    💥 Category error: ${e.message}`);
       return null;
     }
   }
@@ -122,37 +111,29 @@ export default async function handler(req, res) {
   async function ensureTagByName(name) {
     const key = (name || '').toLowerCase();
     if (tagNameToObj.has(key)) {
-      console.log(`    📍 Tag "${name}" found in cache`);
       return tagNameToObj.get(key);
     }
     if (!options.createMissing) {
-      console.log(`    ⚠️ createMissing is false, skipping tag: ${name}`);
       return null;
     }
     try {
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags`;
-      console.log(`    🔄 Creating tag: ${name}`);
       const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ name: name, color: '#D98BAC', user_id: userId }) });
       const txt = await r.text();
       if (r.ok) {
         const j = JSON.parse(txt);
         if (Array.isArray(j) && j.length > 0) {
-          console.log(`    ✅ Tag created: ${j[0].name} (id: ${j[0].id})`);
           tagNameToObj.set(key, j[0]);
           return j[0];
         }
-      } else {
-        console.log(`    ❌ Tag POST failed: ${r.status} - ${txt}`);
       }
       const lookup = await fetchJson(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
       if (lookup.ok && Array.isArray(lookup.json) && lookup.json.length > 0) {
-        console.log(`    ✅ Tag found after failed POST: ${lookup.json[0].name}`);
         tagNameToObj.set(key, lookup.json[0]);
         return lookup.json[0];
       }
       return null;
     } catch (e) {
-      console.log(`    💥 Tag error: ${e.message}`);
       return null;
     }
   }
@@ -161,9 +142,6 @@ export default async function handler(req, res) {
   async function lookupSitesByUrls(urls) {
     const uniq = Array.from(new Set(urls.map(u => (u || '').trim()))).filter(Boolean);
     if (uniq.length === 0) return {};
-    const enc = uniq.map(u => encodeURIComponent(u)).join(',');
-    // Supabase REST expects eq.<value> typically, but we can query multiple eqs? Better fetch all and filter locally by url=eq.x multiple requests is expensive.
-    // We'll perform multiple GETs with OR; but simpler: fetch all where url=in.("a","b")
     const inList = uniq.map(u => `"${u}"`).join(',');
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?select=*&url=in.(${inList})`;
     const r = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
@@ -188,39 +166,22 @@ export default async function handler(req, res) {
   // Attach relations in batch
   async function attachSiteCategories(rows) {
     if (!rows || rows.length === 0) {
-      console.log('  ✅ No site_categories to attach');
       return;
     }
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-    console.log(`  🔄 Attaching ${rows.length} site_categories...`);
     // rows: { site_id, category_id }
-    const r = await fetch(url, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
-    if (r.ok) {
-      console.log(`  ✅ Successfully attached ${rows.length} site_categories`);
-    } else {
-      const errText = await r.text();
-      console.log(`  ❌ site_categories attachment failed: ${r.status} - ${errText}`);
-    }
+    await fetch(url, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
   }
   async function attachSiteTags(rows) {
     if (!rows || rows.length === 0) {
-      console.log('  ✅ No site_tags to attach');
       return;
     }
     const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
-    console.log(`  🔄 Attaching ${rows.length} site_tags...`);
-    const r = await fetch(url, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
-    if (r.ok) {
-      console.log(`  ✅ Successfully attached ${rows.length} site_tags`);
-    } else {
-      const errText = await r.text();
-      console.log(`  ❌ site_tags attachment failed: ${r.status} - ${errText}`);
-    }
+    await fetch(url, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
   }
 
   try {
     await preloadCategoriesAndTags();
-    console.log(`✅ Preload complete - Categories in cache: ${catNameToObj.size}, Tags in cache: ${tagNameToObj.size}`);
 
     // process in chunks
     for (let i = 0; i < rows.length; i += chunkSize) {
@@ -237,18 +198,7 @@ export default async function handler(req, res) {
         created_at: r.created_at || r.createdAt || null
       }));
 
-      console.log(`🔍 Chunk ${Math.floor(i / chunkSize) + 1}: Processing ${normRows.length} rows`);
-      if (normRows.length > 0) {
-        console.log('📊 First row:', {
-          name: normRows[0].name,
-          url: normRows[0].url,
-          categories: normRows[0].categories,
-          tags: normRows[0].tags
-        }); console.log('  Raw input:', {
-          category: chunk[0].category,
-          tag: chunk[0].tag
-        });
-      }
+
 
       // lookup existing sites by URL
       const urls = normRows.map(r => r.url).filter(Boolean);
@@ -256,7 +206,6 @@ export default async function handler(req, res) {
 
       // prepare lists for creation
       const toCreateSites = [];
-      const perRowOutput = [];
 
       for (const nr of normRows) {
         if (!nr.url) { report.errors.push({ row: nr._origIndex, error: 'Missing URL' }); continue; }
@@ -268,24 +217,16 @@ export default async function handler(req, res) {
         // ensure categories/tags exist
         const cats = [];
         for (const cname of nr.categories) {
-          console.log(`  🏷️ Processing category: "${cname}"`);
           const c = await ensureCategoryByName(cname);
           if (c) {
-            console.log(`    ✅ Category found/created: ${c.name} (id: ${c.id})`);
             cats.push(c);
-          } else {
-            console.log(`    ⚠️ Category failed: ${cname}`);
           }
         }
         const tags = [];
         for (const tname of nr.tags) {
-          console.log(`  🏷️ Processing tag: "${tname}"`);
           const t = await ensureTagByName(tname);
           if (t) {
-            console.log(`    ✅ Tag found/created: ${t.name} (id: ${t.id})`);
             tags.push(t);
-          } else {
-            console.log(`    ⚠️ Tag failed: ${tname}`);
           }
         }
 
@@ -324,31 +265,17 @@ export default async function handler(req, res) {
         const site = createdSites[k];
         const ctx = toCreateSites[k];
         if (!site || !site.id) {
-          console.log(`  ⚠️ Site ${k} missing ID, skipping relations`);
           continue;
         }
-        console.log(`  🔗 Attaching relations for site ${site.name} (${site.id})`);
         // categories
-        const catCount = (ctx.cats || []).length;
         (ctx.cats || []).forEach(c => scRows.push({ site_id: site.id, category_id: c.id }));
         // tags
-        const tagCount = (ctx.tags || []).length;
         (ctx.tags || []).forEach(t => stRows.push({ site_id: site.id, tag_id: t.id }));
-        if (catCount > 0 || tagCount > 0) {
-          console.log(`    📦 Added ${catCount} categories, ${tagCount} tags`);
-        } else {
-          console.log(`    📦 No categories or tags for this site`);
-        }
         report.created.push({ row: ctx.nr._origIndex, site });
       }
 
-      console.log(`📌 Total relations to attach - Categories: ${scRows.length}, Tags: ${stRows.length}`);
-      try { await attachSiteCategories(scRows); } catch (e) {
-        console.log(`❌ attachSiteCategories error: ${e.message}`);
-      }
-      try { await attachSiteTags(stRows); } catch (e) {
-        console.log(`❌ attachSiteTags error: ${e.message}`);
-      }
+      try { await attachSiteCategories(scRows); } catch (e) { console.error('attachSiteCategories error:', e); }
+      try { await attachSiteTags(stRows); } catch (e) { console.error('attachSiteTags error:', e); }
 
     }
 

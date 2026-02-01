@@ -107,7 +107,6 @@ export default function CategoryModal({ isOpen, onClose, category = null }) {
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                             e.preventDefault();
-                            // Focus na prvi color button
                             const colorButtons = document.querySelectorAll('button[data-color]');
                             if (colorButtons.length > 0) {
                                 colorButtons[0].focus();

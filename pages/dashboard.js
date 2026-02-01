@@ -48,7 +48,7 @@ function DashboardContent() {
   const {
     activeTab,
     fetchData,
-    loading,
+    _loading,
     error,
     deleteSite,
     deleteCategory,
@@ -61,11 +61,11 @@ function DashboardContent() {
     sites,
     categories,
     tags,
-    selectedSites,
+    selectedSites: _selectedSites,
     setSelectedSites,
-    selectedCategories,
+    selectedCategories: _selectedCategories,
     setSelectedCategories,
-    selectedTags,
+    selectedTags: _selectedTags,
     setSelectedTags,
     setSites,
     setCategories,
@@ -172,7 +172,7 @@ function DashboardContent() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [multiSelectMode, activeTab, sites, categories, tags]);
+  }, [multiSelectMode, activeTab, sites, categories, tags, setMultiSelectMode, setSelectedSites, setSelectedCategories, setSelectedTags]);
 
 
 
@@ -506,13 +506,11 @@ export default function Dashboard() {
       if (storedTokens) {
         const tokens = JSON.parse(storedTokens);
         if (tokens?.access_token && tokens?.user) {
-          console.log('[Dashboard] Immediate token check: FOUND valid tokens');
           setHasTokens(true);
 
           // Try to set session immediately and verify MFA/AAL. If MFA is required but AAL<2, redirect to login.
           (async () => {
             try {
-              console.log('[Dashboard] Attempting setSession (immediate) with localStorage tokens...');
 
               // Wrap setSession in a timeout to prevent indefinite blocking
               const SET_SESSION_TIMEOUT = 3000;
@@ -525,17 +523,14 @@ export default function Dashboard() {
               );
 
               await Promise.race([setSessionPromise, timeoutPromise]);
-              console.log('[Dashboard] Immediate setSession completed');
 
               try {
                 const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-                console.log('[Dashboard] AAL status after immediate setSession:', aalData);
 
                 if (aalData?.currentLevel !== 'aal2') {
                   try {
                     const { data: factors } = await supabase.auth.mfa.listFactors();
                     const hasFactors = Array.isArray(factors) && factors.length > 0;
-                    console.log('[Dashboard] MFA factors found:', hasFactors);
                     if (hasFactors) {
                       console.warn('[Dashboard] Account requires MFA but current level is not AAL2 — redirecting to /login');
                       if (isMounted) setAuthChecked(true);
@@ -555,7 +550,6 @@ export default function Dashboard() {
               console.warn('[Dashboard] Immediate setSession failed:', e?.message || e);
               // If it's a timeout, don't clear tokens - just let AuthContext handle it
               if (e?.message === 'setSession timeout') {
-                console.log('[Dashboard] setSession timed out, letting AuthContext handle session');
                 if (isMounted) setAuthChecked(true);
                 return;
               }
@@ -571,7 +565,6 @@ export default function Dashboard() {
           return;
         }
       }
-      console.log('[Dashboard] Immediate token check: NO valid tokens found');
     } catch (e) {
       console.warn('[Dashboard] Error in immediate token check:', e);
     }
@@ -596,7 +589,6 @@ export default function Dashboard() {
           const tokens = JSON.parse(storedTokens);
           // Check if tokens have user and access_token (valid session)
           if (tokens?.access_token && tokens?.user) {
-            console.log('[Dashboard] Found valid tokens in localStorage');
             return true;
           }
         }
@@ -626,21 +618,17 @@ export default function Dashboard() {
           // CRITICAL: Check localStorage FIRST before redirecting
           // After MFA login, tokens are in localStorage but SDK may not have processed them yet
           if (hasLocalStorageTokens()) {
-            console.log('[Dashboard] Tokens exist in localStorage, waiting for AuthContext to process...');
             // Don't redirect - tokens exist, just wait for AuthContext to catch up
             // Try to help by calling getSession which may trigger onAuthStateChange
             try {
               const { data } = await supabase.auth.getSession();
-              if (data?.session) {
-                console.log('[Dashboard] Session recovered via getSession');
-              } else {
+              if (!data?.session) {
                 // Try setSession with localStorage tokens as a fallback
                 try {
                   const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
                   const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
                   const tokens = JSON.parse(localStorage.getItem(storageKey));
                   if (tokens?.access_token && tokens?.refresh_token) {
-                    console.log('[Dashboard] Attempting setSession with localStorage tokens...');
                     await supabase.auth.setSession({
                       access_token: tokens.access_token,
                       refresh_token: tokens.refresh_token
@@ -650,13 +638,11 @@ export default function Dashboard() {
                     // and the current authenticator assurance level is not 'aal2', redirect to /login
                     try {
                       const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-                      console.log('[Dashboard] AAL status after setSession:', aalData);
 
                       if (aalData?.currentLevel !== 'aal2') {
                         try {
                           const { data: factors } = await supabase.auth.mfa.listFactors();
                           const hasFactors = Array.isArray(factors) && factors.length > 0;
-                          console.log('[Dashboard] MFA factors found:', hasFactors);
                           if (hasFactors) {
                             console.warn('[Dashboard] Account requires MFA but current level is not AAL2 — redirecting to /login');
                             if (isMounted) setAuthChecked(true);
@@ -689,11 +675,9 @@ export default function Dashboard() {
             if (!data?.session) {
               // Double-check localStorage one more time (race condition)
               if (hasLocalStorageTokens()) {
-                console.log('[Dashboard] Late localStorage token found, not redirecting');
                 if (isMounted) setAuthChecked(true);
                 return;
               }
-              console.log('No session found after final check, redirecting to login');
               if (isMounted) setAuthChecked(true); // Set before redirect
               window.location.href = '/login';
               return;
@@ -703,7 +687,6 @@ export default function Dashboard() {
             console.warn('Final session check failed:', e);
             // Even on error, check localStorage before redirecting
             if (hasLocalStorageTokens()) {
-              console.log('[Dashboard] localStorage tokens exist despite SDK error, not redirecting');
               if (isMounted) setAuthChecked(true);
               return;
             }
@@ -759,7 +742,6 @@ export default function Dashboard() {
   // - we are still checking auth and user is not set (previous behavior)
   // - or token is present but AAL < 2 (prevent dashboard flash during immediate navigation)
   if ((immediateAalBlock && !user) || (!authChecked && !user && !hasTokens)) {
-    console.log('[Dashboard] Showing loading: immediateAalBlock=', immediateAalBlock, ', authChecked=', authChecked, ', user=', !!user, ', hasTokens=', hasTokens);
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: '#6CBBFB' }}></div>
@@ -769,13 +751,11 @@ export default function Dashboard() {
 
   // If no user and no tokens, redirect to login
   if (!user && !hasTokens) {
-    console.log('[Dashboard] No user and no tokens, returning null (will redirect)');
     return null;
   }
 
   // At this point, either we have user OR hasTokens is true
   // Render the dashboard - AuthContext will populate user when ready
-  console.log('[Dashboard] Rendering dashboard: user=', !!user, ', hasTokens=', hasTokens);
 
   return (
     <>

@@ -21,11 +21,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     try {
       const body = req.body || {};
-      console.log('[Sites API POST] === START ===');
-      console.log('[Sites API POST] REL_KEY is service role:', REL_KEY !== SUPABASE_ANON_KEY);
-      console.log('[Sites API POST] Received body keys:', Object.keys(body));
-      console.log('[Sites API POST] category_ids:', body.category_ids);
-      console.log('[Sites API POST] tag_ids:', body.tag_ids);
+
 
       // Basic validation
       if (!body.name || !body.url || !body.pricing) return res.status(400).json({ success: false, error: 'Missing required fields: name, url, pricing' });
@@ -111,7 +107,6 @@ export default async function handler(req, res) {
           const stUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
           const payload = body.tag_ids.map(tag_id => ({ site_id: newSite.id, tag_id }));
           const stRes = await fetch(stUrl, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(payload) });
-          console.log('[Sites API POST] site_tags insert result:', stRes.status, stRes.ok);
           if (!stRes.ok) {
             const errText = await stRes.text();
             console.error('site_tags insert failed', stRes.status, errText);
@@ -130,7 +125,6 @@ export default async function handler(req, res) {
           const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
           const toInsert = categoryIds.map(category_id => ({ site_id: newSite.id, category_id }));
           const scRes = await fetch(scUrl, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(toInsert) });
-          console.log('[Sites API POST] site_categories insert result:', scRes.status, scRes.ok);
           if (!scRes.ok) {
             const errText = await scRes.text();
             console.error('site_categories insert failed', scRes.status, errText);
@@ -181,7 +175,6 @@ export default async function handler(req, res) {
             completeSite.tags_array = completeSite.tags_array.map(st => st.tag).filter(Boolean);
           }
 
-          console.log('Complete site after creation:', completeSite);
           return res.status(201).json({ success: true, data: completeSite, warnings: warnings.length ? warnings : undefined });
         } else {
           console.warn('Failed to refetch complete site, returning basic data');

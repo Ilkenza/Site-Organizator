@@ -39,7 +39,6 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                     .map(t => typeof t === 'object' && t?.id ? t.id : null)
                     .filter(Boolean);
 
-                console.log('[SiteModal] Editing site:', site.id, { siteCategories, siteTags, categoryIds, tagIds });
 
                 setFormData({
                     name: site.name || '',
@@ -123,13 +122,13 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 throw new Error('URL is required');
             }
             if (formData.categoryIds.length === 0) {
-                throw new Error('Trebam minimum 1 kategoriju');
+                throw new Error('Minimum 1 category is required');
             }
             if (formData.tagIds.length === 0) {
-                throw new Error('Trebam minimum 1 tag');
+                throw new Error('Minimum 1 tag is required');
             }
             if (!formData.pricing) {
-                throw new Error('Trebam pricing model');
+                throw new Error('Pricing model is required');
             }
 
             // Normalize URL
@@ -241,7 +240,6 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                             e.preventDefault();
-                            // Focus na prvi pricing dugme (Fully Free)
                             const pricingButtons = document.querySelectorAll('button[type="button"]');
                             const fullyFreeButton = Array.from(pricingButtons).find(btn => btn.textContent.includes('✓'));
                             if (fullyFreeButton) {
@@ -270,7 +268,6 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                     if (e.key === 'Enter') {
                                         e.preventDefault();
                                         setFormData(prev => ({ ...prev, pricing: option.value }));
-                                        // Prebaci focus na favorite button
                                         const favoriteButton = document.querySelector('button[data-favorite]');
                                         if (favoriteButton) {
                                             favoriteButton.focus();
@@ -300,7 +297,6 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                             if (e.key === 'Enter') {
                                 e.preventDefault();
                                 setFormData(prev => ({ ...prev, is_favorite: !prev.is_favorite }));
-                                // Prebaci focus direktno na prvi category button (ne na search)
                                 const categoryButtons = document.querySelectorAll('button[data-category-id]');
                                 if (categoryButtons.length > 0) {
                                     categoryButtons[0].focus();

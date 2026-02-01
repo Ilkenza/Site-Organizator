@@ -9,12 +9,6 @@ export default async function handler(req, res) {
   const authHeader = req.headers.authorization;
   const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-  console.log('[Tags API] Auth check:', {
-    hasUserToken: !!userToken,
-    tokenPreview: userToken ? userToken.substring(0, 20) + '...' : 'none',
-    hasAnonKey: !!SUPABASE_ANON_KEY,
-    hasServiceKey: !!SERVICE_ROLE_KEY
-  });
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
@@ -26,7 +20,6 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     // POST requires user authentication - can't create tags without valid user token
     if (!userToken) {
-      console.log('[Tags API] POST rejected - no user token');
       return res.status(401).json({ success: false, error: 'Authentication required to create tags' });
     }
 
@@ -42,7 +35,6 @@ export default async function handler(req, res) {
         }
       }
 
-      console.log('[Tags API] Creating tag with user token:', filteredBody);
 
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags`;
       const r = await fetch(url, {
@@ -58,7 +50,6 @@ export default async function handler(req, res) {
       });
 
       const text = await r.text();
-      console.log('[Tags API] POST response:', r.status, text.substring(0, 200));
 
       if (!r.ok) {
         // Handle duplicate name: return existing tag if present
@@ -66,7 +57,6 @@ export default async function handler(req, res) {
           const bodyName = (body && body.name) ? body.name : null;
           // Check for duplicate error by code 23505 or text pattern
           if (bodyName && (/duplicate|unique|violat|23505/i.test(text))) {
-            console.log('[Tags API] Duplicate detected, looking up existing tag:', bodyName);
             const lookupUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=*&name=eq.${encodeURIComponent(bodyName)}`;
             // Use service role key to bypass RLS for lookup
             const lookupToken = SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
@@ -77,10 +67,8 @@ export default async function handler(req, res) {
                 Accept: 'application/json'
               }
             });
-            console.log('[Tags API] Lookup response status:', lookupRes.status);
             if (lookupRes.ok) {
               const rows = await lookupRes.json();
-              console.log('[Tags API] Lookup found rows:', rows?.length);
               if (rows && rows.length > 0) return res.status(200).json({ success: true, data: rows[0] });
             }
           }

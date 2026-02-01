@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 export default function UndoToast({ message, onUndo, onClose, duration = 5000 }) {
     const [timeLeft, setTimeLeft] = useState(duration);
     const [isVisible, setIsVisible] = useState(true);
+
+    const handleClose = useCallback(() => {
+        setIsVisible(false);
+        setTimeout(() => onClose?.(), 300);
+    }, [onClose]);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -17,12 +22,7 @@ export default function UndoToast({ message, onUndo, onClose, duration = 5000 })
         }, 100);
 
         return () => clearInterval(interval);
-    }, []);
-
-    const handleClose = () => {
-        setIsVisible(false);
-        setTimeout(() => onClose?.(), 300);
-    };
+    }, [handleClose]);
 
     const handleUndo = () => {
         onUndo?.();
