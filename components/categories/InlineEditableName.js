@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-export default function InlineEditableName({ value, onSave, onCancel, className = '' }) {
+export default function InlineEditableName({ value, onSave, onCancel }) {
     const [editValue, setEditValue] = useState(value);
     const inputRef = useRef(null);
 
@@ -41,7 +41,7 @@ export default function InlineEditableName({ value, onSave, onCancel, className 
             onChange={(e) => setEditValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onBlur={handleBlur}
-            className={`block font-semibold text-app-text-primary bg-app-bg-card px-2 py-1 sm:px-1 sm:py-0 w-full border border-app-border focus:border-app-accent rounded-md focus:outline-none focus:ring-2 focus:ring-app-accent leading-tight m-0 h-auto align-baseline text-sm sm:text-base ${className}`}
+            className="block font-semibold text-app-text-primary bg-app-bg-card px-1 py-0 w-full border border-app-border focus:border-app-accent rounded-md focus:outline-none focus:ring-2 focus:ring-app-accent leading-tight m-0 h-auto align-baseline"
             onClick={(e) => e.stopPropagation()}
         />
     );

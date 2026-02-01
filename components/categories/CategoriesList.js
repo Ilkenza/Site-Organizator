@@ -10,10 +10,6 @@ export default function CategoriesList({ onEdit }) {
         deleteCategory,
         updateCategory,
         loading,
-        sortByCategories: _sortByCategories,
-        setSortByCategories: _setSortByCategories,
-        sortOrderCategories: _sortOrderCategories,
-        setSortOrderCategories: _setSortOrderCategories,
         searchQuery,
         multiSelectMode,
         selectedCategories,
@@ -22,13 +18,12 @@ export default function CategoriesList({ onEdit }) {
     const [deletingId, setDeletingId] = useState(null);
     const [categoryToDelete, setCategoryToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
-    const [_checkAnimations, setCheckAnimations] = useState(new Set());
     const [editingId, setEditingId] = useState(null);
 
     const filteredCategories = useMemo(() => {
         if (!searchQuery.trim()) return categories;
         return categories.filter(cat =>
-            cat.name.toLowerCase().includes(searchQuery.toLowerCase())
+            cat?.name?.toLowerCase().includes(searchQuery.toLowerCase())
         );
     }, [categories, searchQuery]);
 
@@ -39,14 +34,6 @@ export default function CategoriesList({ onEdit }) {
             newSelected.delete(categoryId);
         } else {
             newSelected.add(categoryId);
-            setCheckAnimations(prev => new Set(prev).add(categoryId));
-            setTimeout(() => {
-                setCheckAnimations(prev => {
-                    const next = new Set(prev);
-                    next.delete(categoryId);
-                    return next;
-                });
-            }, 300);
         }
         setSelectedCategories(newSelected);
     };
@@ -143,7 +130,7 @@ export default function CategoriesList({ onEdit }) {
 
             {/* Categories Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filteredCategories.map((category, _index) => {
+                {filteredCategories.map((category) => {
                     const siteCount = sites.filter(site =>
                         site.categories_array?.some(c => c?.id === category.id)
                     ).length;
@@ -188,19 +175,18 @@ export default function CategoriesList({ onEdit }) {
                                                 value={category.name}
                                                 onSave={(newName) => handleInlineSave(category.id, newName)}
                                                 onCancel={() => setEditingId(null)}
-                                                className=""
                                             />
                                         ) : (
                                             <h3
-                                                className="font-semibold text-app-text-primary truncate cursor-text hover:text-app-accent transition-colors border border-transparent px-1 py-0 leading-tight active:bg-app-accent/10 sm:active:bg-transparent"
+                                                className="font-semibold text-app-text-primary truncate cursor-pointer hover:text-app-accent transition-colors active:bg-app-accent/10 sm:active:bg-transparent"
                                                 onDoubleClick={() => setEditingId(category.id)}
-                                                onClick={(_e) => {
-                                                    // Single click on mobile to edit (if not in multi-select)
+                                                onClick={() => {
+                                                    // Mobile: open modal; Desktop: requires double-click for inline edit
                                                     if (!multiSelectMode && window.innerWidth < 640) {
-                                                        setEditingId(category.id);
+                                                        onEdit(category);
                                                     }
                                                 }}
-                                                title={window.innerWidth < 640 ? "Tap to edit name" : "Double-click to edit name"}
+                                                title={window.innerWidth < 640 ? "Tap to edit" : "Double-click for inline edit"}
                                             >
                                                 {category.name}
                                             </h3>

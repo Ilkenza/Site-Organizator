@@ -14,7 +14,7 @@ export default function TagsList({ onEdit }) {
     const filteredTags = useMemo(() => {
         if (!searchQuery.trim()) return tags;
         return tags.filter(tag =>
-            tag.name.toLowerCase().includes(searchQuery.toLowerCase())
+            tag?.name?.toLowerCase().includes(searchQuery.toLowerCase())
         );
     }, [tags, searchQuery]);
 
@@ -188,13 +188,18 @@ export default function TagsList({ onEdit }) {
                                                     value={tag.name}
                                                     onSave={(newName) => handleInlineSave(tag.id, newName)}
                                                     onCancel={() => setEditingId(null)}
-                                                    className=""
                                                 />
                                             ) : (
                                                 <h3
-                                                    className="font-semibold text-app-text-primary truncate cursor-text hover:text-app-accent transition-colors border border-transparent px-1 py-0 leading-tight"
+                                                    className="font-semibold text-app-text-primary truncate cursor-pointer hover:text-app-accent transition-colors active:bg-app-accent/10 sm:active:bg-transparent"
                                                     onDoubleClick={() => setEditingId(tag.id)}
-                                                    title="Double-click to edit name"
+                                                    onClick={() => {
+                                                        // Mobile: open modal; Desktop: requires double-click for inline edit
+                                                        if (!multiSelectMode && window.innerWidth < 640) {
+                                                            onEdit(tag);
+                                                        }
+                                                    }}
+                                                    title={window.innerWidth < 640 ? "Tap to edit" : "Double-click for inline edit"}
                                                 >
                                                     {tag.name}
                                                 </h3>
