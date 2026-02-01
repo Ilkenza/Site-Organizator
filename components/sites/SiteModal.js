@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
-import Input, { Textarea, Select } from '../ui/Input';
+import Input from '../ui/Input';
 import { suggestCategories } from '../../lib/categorySuggestions';
 
 export default function SiteModal({ isOpen, onClose, site = null, defaultFavorite = false, defaultCategoryId = null, defaultTagId = null }) {
@@ -63,7 +63,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
             setCategorySearch('');
             setTagSearch('');
         }
-    }, [isOpen, site]);
+    }, [isOpen, site, defaultCategoryId, defaultFavorite, defaultTagId]);
 
     // Auto-suggest categories based on URL
     useEffect(() => {
@@ -260,7 +260,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                             { value: 'freemium', label: 'Freemium', icon: '◐', bgSelected: 'bg-blue-600', ring: 'ring-blue-400', bgHover: 'hover:bg-blue-900/30' },
                             { value: 'free_trial', label: 'Free Trial', icon: '⏱', bgSelected: 'bg-amber-600', ring: 'ring-amber-400', bgHover: 'hover:bg-amber-900/30' },
                             { value: 'paid', label: 'Paid', icon: '$', bgSelected: 'bg-rose-600', ring: 'ring-rose-400', bgHover: 'hover:bg-rose-900/30' }
-                        ].map((option, index) => (
+                        ].map((option) => (
                             <button
                                 key={option.value}
                                 type="button"

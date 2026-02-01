@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Image from 'next/image';
 import Badge from '../ui/Badge';
 import InlineEditableName from '../categories/InlineEditableName';
 import { useDashboard } from '../../context/DashboardContext';
@@ -84,11 +85,14 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                 {/* Favicon - larger and centered on mobile */}
                 <div className="flex-shrink-0 w-14 h-14 sm:w-10 sm:h-10 rounded-xl sm:rounded-lg bg-app-bg-card flex items-center justify-center overflow-hidden transition-colors duration-200 group-hover:bg-app-accent/10">
                     {site.url && !imageError ? (
-                        <img
+                        <Image
                             src={getFaviconUrl(site.url)}
                             alt=""
+                            width={32}
+                            height={32}
                             className="w-8 h-8 sm:w-6 sm:h-6 transition-transform"
                             onError={() => setImageError(true)}
+                            unoptimized
                         />
                     ) : (
                         <svg className="w-5 h-5 text-app-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
