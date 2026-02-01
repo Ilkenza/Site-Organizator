@@ -1,6 +1,6 @@
-export default function Pagination({ currentPage, totalPages, onPageChange }) {
-    if (totalPages <= 1) return null;
+import { useEffect } from 'react';
 
+export default function Pagination({ currentPage, totalPages, onPageChange }) {
     // Wrapper to scroll to top when changing pages
     const handlePageChange = (page) => {
         // Use instant scroll before navigation so it completes before page re-renders
@@ -10,6 +10,41 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
         if (mainContent) mainContent.scrollTop = 0;
         onPageChange(page);
     };
+
+    // Keyboard navigation for pagination
+    useEffect(() => {
+
+        const handleKeyDown = (e) => {
+            // Ignore if user is typing in an input/textarea
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // Arrow Left - Previous page
+            if (e.key === 'ArrowLeft' && currentPage > 1) {
+                e.preventDefault();
+                handlePageChange(currentPage - 1);
+            }
+            // Arrow Right - Next page
+            else if (e.key === 'ArrowRight' && currentPage < totalPages) {
+                e.preventDefault();
+                handlePageChange(currentPage + 1);
+            }
+            // Home - First page
+            else if (e.key === 'Home' && currentPage !== 1) {
+                e.preventDefault();
+                handlePageChange(1);
+            }
+            // End - Last page
+            else if (e.key === 'End' && currentPage !== totalPages) {
+                e.preventDefault();
+                handlePageChange(totalPages);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [currentPage, totalPages, onPageChange]);
+
+    if (totalPages <= 1) return null;
 
     const pages = [];
     const maxVisiblePages = 5;

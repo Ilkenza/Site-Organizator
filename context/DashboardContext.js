@@ -598,8 +598,11 @@ export function DashboardProvider({ children }) {
     const value = {
         // Data
         sites,
+        setSites,
         categories: filteredCategories,
+        setCategories,
         tags: filteredTags,
+        setTags,
         stats,
         loading,
         error,
@@ -658,8 +661,7 @@ export function DashboardProvider({ children }) {
         deleteTag,
         // Failed relation updates map and retry helper
         failedRelationUpdates,
-        retrySiteRelations,
-        sites
+        retrySiteRelations
     };
 
     return (

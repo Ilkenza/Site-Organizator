@@ -85,8 +85,16 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g., tutorial"
-                    autoFocus
-                />
+                    autoFocus onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // Focus na prvi color button
+                            const colorButtons = document.querySelectorAll('button[data-tag-color]');
+                            if (colorButtons.length > 0) {
+                                colorButtons[0].focus();
+                            }
+                        }
+                    }} />
 
                 {/* Color Picker */}
                 <div className="space-y-2">
@@ -96,10 +104,18 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
                             <button
                                 key={c.hex}
                                 type="button"
+                                data-tag-color={c.hex}
                                 onClick={() => setColor(c.hex)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        setColor(c.hex);
+                                        handleSubmit(e);
+                                    }
+                                }}
                                 className={`w-10 h-10 rounded-full transition-all ${color === c.hex
-                                        ? 'ring-2 ring-white ring-offset-2 ring-offset-app-bg-primary scale-110'
-                                        : 'hover:scale-105'
+                                    ? 'ring-2 ring-white ring-offset-2 ring-offset-app-bg-primary scale-110'
+                                    : 'hover:scale-105'
                                     }`}
                                 style={{ backgroundColor: c.hex }}
                                 title={c.name}

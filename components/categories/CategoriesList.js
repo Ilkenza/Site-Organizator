@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import { ConfirmModal } from '../ui/Modal';
+import InlineEditableName from './InlineEditableName';
 
 export default function CategoriesList({ onEdit }) {
     const {
         categories,
         sites,
         deleteCategory,
+        updateCategory,
         loading,
         sortByCategories,
         setSortByCategories,
@@ -20,6 +22,8 @@ export default function CategoriesList({ onEdit }) {
     const [deletingId, setDeletingId] = useState(null);
     const [categoryToDelete, setCategoryToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
+    const [checkAnimations, setCheckAnimations] = useState(new Set());
+    const [editingId, setEditingId] = useState(null);
 
     const filteredCategories = useMemo(() => {
         if (!searchQuery.trim()) return categories;
@@ -35,8 +39,30 @@ export default function CategoriesList({ onEdit }) {
             newSelected.delete(categoryId);
         } else {
             newSelected.add(categoryId);
+            // Trigger check animation
+            setCheckAnimations(prev => new Set(prev).add(categoryId));
+            setTimeout(() => {
+                setCheckAnimations(prev => {
+                    const next = new Set(prev);
+                    next.delete(categoryId);
+                    return next;
+                });
+            }, 300);
         }
         setSelectedCategories(newSelected);
+    };
+
+    const handleInlineSave = async (categoryId, newName) => {
+        try {
+            const category = categories.find(c => c.id === categoryId);
+            if (!category) return;
+
+            await updateCategory(categoryId, { name: newName, color: category.color });
+            setEditingId(null);
+        } catch (err) {
+            alert('Failed to update category: ' + err.message);
+            setEditingId(null);
+        }
     };
 
     const handleDeleteClick = (category) => {
@@ -74,19 +100,21 @@ export default function CategoriesList({ onEdit }) {
     if (loading) {
         return (
             <div className="p-3 sm:p-6">
-                <div className="mb-6">
-                    <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-                        <div className="h-10 bg-app-bg-light/30 rounded-lg animate-pulse flex-1 min-w-[200px]" />
-                        <div className="h-10 bg-app-bg-light/30 rounded-lg animate-pulse w-20" />
-                    </div>
-                </div>
-                <div className="space-y-3">
-                    {[...Array(5)].map((_, i) => (
-                        <div key={i} className="bg-app-bg-light/20 border border-app-border rounded-lg p-4 animate-pulse">
-                            <div className="flex items-center gap-3">
-                                <div className="w-4 h-4 bg-app-bg-light rounded-full" />
-                                <div className="h-5 bg-app-bg-light rounded w-1/3" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    {[...Array(6)].map((_, i) => (
+                        <div
+                            key={i}
+                            className="bg-app-bg-light border border-app-border rounded-lg p-4 animate-pulse"
+                            style={{ animationDelay: `${i * 50}ms` }}
+                        >
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-4 h-4 bg-app-bg-card rounded-full" />
+                                <div className="flex-1">
+                                    <div className="h-4 bg-app-bg-card rounded w-32 mb-2" />
+                                    <div className="h-3 bg-app-bg-card rounded w-20" />
+                                </div>
                             </div>
+                            <div className="h-3 bg-app-bg-card rounded w-24" />
                         </div>
                     ))}
                 </div>
@@ -96,14 +124,17 @@ export default function CategoriesList({ onEdit }) {
 
     if (filteredCategories.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-16 px-4">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-app-bg-light flex items-center justify-center mb-4">
-                    <svg className="w-8 h-8 sm:w-10 sm:h-10 text-app-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex flex-col items-center justify-center py-16 px-4 animate-fadeIn">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-app-accent/20 to-app-accent/5 flex items-center justify-center mb-4 animate-bounce-slow">
+                    <svg className="w-8 h-8 sm:w-10 sm:h-10 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                     </svg>
                 </div>
                 <h3 className="text-lg sm:text-xl font-semibold text-app-text-primary mb-2">No categories yet</h3>
-                <p className="text-app-text-secondary text-center">Create your first category to organize your sites.</p>
+                <p className="text-app-text-secondary text-center mb-6">Create your first category to organize your sites.</p>
+                <div className="text-xs text-app-text-muted bg-app-bg-light px-4 py-2 rounded-lg border border-app-border">
+                    💡 Tip: Use categories like Work, Personal, Education
+                </div>
             </div>
         );
     }
@@ -113,7 +144,7 @@ export default function CategoriesList({ onEdit }) {
 
             {/* Categories Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filteredCategories.map(category => {
+                {filteredCategories.map((category, index) => {
                     // Count sites using this category
                     const siteCount = sites.filter(site =>
                         site.categories_array?.some(c => c?.id === category.id)
@@ -122,7 +153,7 @@ export default function CategoriesList({ onEdit }) {
                     return (
                         <div
                             key={category.id}
-                            className={`bg-app-bg-light border rounded-lg p-4 transition-colors ${selectedCategories.has(category.id)
+                            className={`group bg-app-bg-light border rounded-lg p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-app-accent/10 animate-fadeIn ${selectedCategories.has(category.id)
                                 ? 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
                                 : 'border-app-border hover:border-app-accent/50'
                                 }`}
@@ -130,21 +161,42 @@ export default function CategoriesList({ onEdit }) {
                             <div className="flex items-start justify-between gap-3 mb-3">
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
                                     {multiSelectMode && (
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedCategories.has(category.id)}
-                                            onChange={(e) => handleSelectCategory(e, category.id)}
-                                            className="w-4 h-4 rounded-full border-2 border-app-accent/50 bg-app-bg-card cursor-pointer accent-app-accent flex-shrink-0"
-                                            title="Select category for bulk actions"
-                                        />
+                                        <div className="relative flex-shrink-0">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedCategories.has(category.id)}
+                                                onChange={(e) => handleSelectCategory(e, category.id)}
+                                                className="peer w-5 h-5 rounded border-2 border-app-border bg-app-bg-secondary cursor-pointer appearance-none checked:bg-app-accent checked:border-app-accent hover:border-app-accent/70 transition-all duration-200 flex-shrink-0"
+                                                title="Select category for bulk actions"
+                                                aria-label={`Select ${category.name}`}
+                                            />
+                                            <svg className="absolute top-0.5 left-0.5 w-4 h-4 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
                                     )}
                                     <div
-                                        className="w-4 h-4 rounded-full flex-shrink-0"
-                                        style={{ backgroundColor: category.color || '#6CBBFB' }}
+                                        className="w-4 h-4 rounded-full flex-shrink-0 transition-transform group-hover:scale-110 group-hover:shadow-md"
+                                        style={{ backgroundColor: category.color || '#6CBBFB', boxShadow: `0 0 8px ${category.color || '#6CBBFB'}40` }}
                                         title={category.color}
                                     />
                                     <div className="min-w-0 flex-1">
-                                        <h3 className="font-semibold text-app-text-primary truncate">{category.name}</h3>
+                                        {editingId === category.id ? (
+                                            <InlineEditableName
+                                                value={category.name}
+                                                onSave={(newName) => handleInlineSave(category.id, newName)}
+                                                onCancel={() => setEditingId(null)}
+                                                className=""
+                                            />
+                                        ) : (
+                                            <h3
+                                                className="font-semibold text-app-text-primary truncate cursor-text hover:text-app-accent transition-colors border border-transparent px-1 py-0 leading-tight"
+                                                onDoubleClick={() => setEditingId(category.id)}
+                                                title="Double-click to edit name"
+                                            >
+                                                {category.name}
+                                            </h3>
+                                        )}
                                         <p className="text-xs text-app-text-secondary">
                                             {category.created_at ? new Date(category.created_at).toLocaleDateString() : 'N/A'}
                                         </p>
@@ -154,8 +206,9 @@ export default function CategoriesList({ onEdit }) {
                                     <button
                                         onClick={() => onEdit(category)}
                                         disabled={deletingId === category.id}
-                                        className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-bg-hover rounded-lg transition-colors disabled:opacity-50"
-                                        title="Edit"
+                                        className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-accent/10 rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-app-accent focus:ring-offset-2 focus:ring-offset-app-bg-light"
+                                        title="Edit category"
+                                        aria-label="Edit category"
                                     >
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -164,8 +217,9 @@ export default function CategoriesList({ onEdit }) {
                                     <button
                                         onClick={() => handleDeleteClick(category)}
                                         disabled={deletingId === category.id}
-                                        className="p-1.5 text-app-text-secondary hover:text-btn-danger hover:bg-app-bg-light rounded-lg transition-colors disabled:opacity-50"
-                                        title="Delete"
+                                        className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-app-bg-light"
+                                        title="Delete category"
+                                        aria-label="Delete category"
                                     >
                                         {deletingId === category.id ? (
                                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
