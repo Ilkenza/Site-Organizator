@@ -5,11 +5,14 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 
-// 3 vibrant tag colors (different from category colors)
+// 6 soft tag colors (different from category colors)
 const TAG_COLORS = [
-    { hex: '#5B8DEE', name: 'Ocean Blue' },
-    { hex: '#4CAF7D', name: 'Emerald Green' },
-    { hex: '#E57399', name: 'Rose Pink' },
+    { hex: '#7B9FD3', name: 'Ocean Blue' },
+    { hex: '#6EAF8D', name: 'Emerald Green' },
+    { hex: '#D8899E', name: 'Rose Pink' },
+    { hex: '#A788C9', name: 'Purple' },
+    { hex: '#D4A574', name: 'Orange' },
+    { hex: '#85C5CE', name: 'Cyan' },
 ];
 
 export default function TagModal({ isOpen, onClose, tag = null }) {
@@ -40,7 +43,11 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
                 throw new Error('Tag name is required');
             }
 
-            const payload = { name: name.trim(), color, user_id: user?.id };
+            if (!user?.id) {
+                throw new Error('You must be logged in to create tags');
+            }
+
+            const payload = { name: name.trim(), color, user_id: user.id };
 
             if (isEditing) {
                 await updateTag(tag.id, payload);

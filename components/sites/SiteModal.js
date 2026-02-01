@@ -330,7 +330,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                     Suggested:
                                 </span>
                                 {suggestedCategories.map(suggestion => {
-                                    const matchedCategory = categories.find(c => c.name.toLowerCase() === suggestion.toLowerCase());
+                                    const matchedCategory = categories.find(c => c?.name?.toLowerCase() === suggestion.toLowerCase());
                                     if (!matchedCategory) return null;
                                     return (
                                         <button
@@ -346,11 +346,15 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                             </div>
                         )}
                         <div className="flex items-center justify-between gap-2">
-                            <label className="block text-sm font-medium text-app-text-primary">
-                                Categories *
-                                {formData.categoryIds.length > 0 && (
-                                    <span className="ml-2 text-xs text-app-accent">({formData.categoryIds.length} selected)</span>
-                                )}
+                            <label className="block text-sm font-medium text-app-text-primary flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                </svg>
+                                <span>Categories *
+                                    {formData.categoryIds.length > 0 && (
+                                        <span className="ml-2 text-xs text-app-accent">({formData.categoryIds.length} selected)</span>
+                                    )}
+                                </span>
                             </label>
                             <input
                                 type="text"
@@ -373,7 +377,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                         <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                             {(() => {
                                 const filtered = categories
-                                    .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
+                                    .filter(cat => cat?.name?.toLowerCase().includes(categorySearch.toLowerCase()))
                                     .sort((a, b) => {
                                         const aSelected = formData.categoryIds.includes(a.id);
                                         const bSelected = formData.categoryIds.includes(b.id);
@@ -411,11 +415,15 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 {tags.length > 0 && (
                     <div className="space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
-                            <label className="block text-sm font-medium text-app-text-primary">
-                                Tags *
-                                {formData.tagIds.length > 0 && (
-                                    <span className="ml-2 text-xs text-purple-400">({formData.tagIds.length} selected)</span>
-                                )}
+                            <label className="block text-sm font-medium text-app-text-primary flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                </svg>
+                                <span>Tags *
+                                    {formData.tagIds.length > 0 && (
+                                        <span className="ml-2 text-xs text-purple-400">({formData.tagIds.length} selected)</span>
+                                    )}
+                                </span>
                             </label>
                             <input
                                 type="text"
@@ -432,7 +440,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                         <div className="bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                             {(() => {
                                 const filtered = tags
-                                    .filter(tag => tag.name.toLowerCase().includes(tagSearch.toLowerCase()))
+                                    .filter(tag => tag?.name?.toLowerCase().includes(tagSearch.toLowerCase()))
                                     .sort((a, b) => {
                                         const aSelected = formData.tagIds.includes(a.id);
                                         const bSelected = formData.tagIds.includes(b.id);
@@ -453,7 +461,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                             : 'bg-app-bg-secondary/50 text-app-text-secondary border-transparent hover:bg-app-bg-lighter hover:border-app-border'
                                             }`}
                                     >
-                                        #{tag.name}
+                                        {tag.name}
                                     </button>
                                 ));
                             })()}

@@ -54,10 +54,14 @@ export default function CategoryModal({ isOpen, onClose, category = null }) {
                 throw new Error('Category name is required');
             }
 
+            if (!user?.id) {
+                throw new Error('You must be logged in to create categories');
+            }
+
             const payload = {
                 name: formData.name.trim(),
                 color: formData.color,
-                user_id: user?.id
+                user_id: user.id
             };
 
             if (isEditing) {

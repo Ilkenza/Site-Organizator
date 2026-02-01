@@ -68,18 +68,6 @@ export default function Header({ onAddClick, onMenuClick }) {
         activeTab,
         searchQuery,
         setSearchQuery,
-        sortBy: _sortBy,
-        setSortBy: _setSortBy,
-        sortOrder: _sortOrder,
-        setSortOrder: _setSortOrder,
-        sortByCategories: _sortByCategories,
-        setSortByCategories: _setSortByCategories,
-        sortOrderCategories: _sortOrderCategories,
-        setSortOrderCategories: _setSortOrderCategories,
-        sortByTags: _sortByTags,
-        setSortByTags: _setSortByTags,
-        sortOrderTags: _sortOrderTags,
-        setSortOrderTags: _setSortOrderTags,
         sites,
         filteredSites,
         categories,
@@ -223,7 +211,7 @@ export default function Header({ onAddClick, onMenuClick }) {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [multiSelectMode, activeTab, setMultiSelectMode, setSelectedSites, setSelectedCategories, setSelectedTags, filteredSites, categories, tags, onAddClick, selectedSites, selectedCategories.size, selectedTags.size, sites]);
+    }, [multiSelectMode, activeTab, setMultiSelectMode, setSelectedSites, setSelectedCategories, setSelectedTags, filteredSites, categories, tags, onAddClick, selectedSites, selectedCategories, selectedTags, sites]);
 
     const getHeaderTitle = () => {
         switch (activeTab) {

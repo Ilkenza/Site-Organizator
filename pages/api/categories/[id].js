@@ -16,6 +16,19 @@ export default async function handler(req, res) {
     if (!userToken) return res.status(401).json({ success: false, error: 'Authentication required' });
     try {
       const body = req.body || {};
+
+      // Auto-fix null user_id: extract user ID from token and ensure it's set
+      if (userToken && !body.user_id) {
+        try {
+          const payload = JSON.parse(atob(userToken.split('.')[1]));
+          if (payload.sub) {
+            body.user_id = payload.sub;
+          }
+        } catch (e) {
+          console.warn('Failed to extract user_id from token:', e);
+        }
+      }
+
       const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?id=eq.${id}`;
       const r = await fetch(url, { method: 'PATCH', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(body) });
       if (!r.ok) {
