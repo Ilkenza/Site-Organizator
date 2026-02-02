@@ -2,11 +2,12 @@
 
 A modern, full-featured web application for organizing and managing your favorite websites with advanced categorization, tagging, and keyboard-driven navigation.
 
-![Next.js](https://img.shields.io/badge/Next.js-13-black?logo=next.js)
-![React](https://img.shields.io/badge/React-18+-61dafb?logo=react)
+![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)
+![React](https://img.shields.io/badge/React-18.2-61dafb?logo=react)
 ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ecf8e?logo=supabase)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38bdf8?logo=tailwindcss)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4.7-38bdf8?logo=tailwindcss)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Node](https://img.shields.io/badge/Node.js-20+-339933?logo=node.js)
 
 ## ✨ Features
 
@@ -58,9 +59,9 @@ A modern, full-featured web application for organizing and managing your favorit
 
 | Technology                               | Version | Purpose                           |
 | ---------------------------------------- | ------- | --------------------------------- |
-| [Next.js](https://nextjs.org/)           | 13      | React framework with Pages Router |
-| [React](https://react.dev/)              | 18+     | UI library with hooks             |
-| [Tailwind CSS](https://tailwindcss.com/) | 3       | Utility-first styling             |
+| [Next.js](https://nextjs.org/)           | 14.2    | React framework with Pages Router |
+| [React](https://react.dev/)              | 18.2    | UI library with hooks             |
+| [Tailwind CSS](https://tailwindcss.com/) | 3.4.7   | Utility-first styling             |
 
 ### Backend
 
@@ -81,8 +82,8 @@ A modern, full-featured web application for organizing and managing your favorit
 
 ### Prerequisites
 
-- **Node.js** 18 or higher
-- **npm** or **yarn**
+- **Node.js** 20 or higher ([Download](https://nodejs.org/))
+- **npm** 10+ or **yarn**
 - **Supabase account** ([create one free](https://supabase.com))
 
 ### Step-by-Step Setup
@@ -90,7 +91,7 @@ A modern, full-featured web application for organizing and managing your favorit
 #### 1. Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/site-organizator.git
+git clone https://github.com/ilkeroguz/site-organizator.git
 cd site-organizator
 ```
 
@@ -582,7 +583,7 @@ colors: {
    git init
    git add .
    git commit -m "Initial commit"
-   git remote add origin https://github.com/yourusername/site-organizator.git
+   git remote add origin https://github.com/ilkeroguz/site-organizator.git
    git push -u origin main
    ```
 
@@ -796,11 +797,21 @@ This project is licensed under the **MIT License**.
 
 ### Support
 
-For bugs or feature requests, please [open an issue](https://github.com/yourusername/site-organizator/issues).
+For bugs or feature requests, please [open an issue](https://github.com/ilkeroguz/site-organizator/issues).
+
+---
+
+---
+
+## 📊 Metadata
+
+**Version**: 2.0.0  
+**Last Updated**: February 2, 2026  
+**Status**: Active Development  
+**License**: MIT  
+**Author**: [@ilkeroguz](https://github.com/ilkeroguz)  
+**Repository**: [github.com/ilkeroguz/site-organizator](https://github.com/ilkeroguz/site-organizator)
 
 ---
 
 **Made with ❤️ using Next.js, React, and Supabase**
-
-**Version**: 1.0.0  
-**Last Updated**: January 2025

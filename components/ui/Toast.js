@@ -12,14 +12,19 @@ export default function Toast({ message, type = 'info', duration = 3000, onClose
         return () => clearTimeout(timer);
     }, [duration, onClose]);
 
+    const handleClose = () => {
+        setIsVisible(false);
+        onClose?.();
+    };
+
     if (!isVisible) return null;
 
     const bgColor = {
-        success: 'bg-emerald-600',
-        error: 'bg-red-600',
-        warning: 'bg-amber-600',
-        info: 'bg-blue-600'
-    }[type] || 'bg-blue-600';
+        success: 'bg-success-bg',
+        error: 'bg-btn-danger',
+        warning: 'bg-app-accent',
+        info: 'bg-app-accent'
+    }[type] || 'bg-app-accent';
 
     const Icon = {
         success: () => (
@@ -46,25 +51,19 @@ export default function Toast({ message, type = 'info', duration = 3000, onClose
 
     return (
         <div
-            className={`fixed bottom-4 right-4 ${bgColor} text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 z-50 animate-slide-in max-w-xs`}
+            className={`fixed bottom-4 right-4 ${bgColor} text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 z-50 max-w-xs animate-slideUp`}
         >
             <Icon />
             <span className="text-sm font-medium flex-1">{message}</span>
-            <style jsx>{`
-                @keyframes slide-in {
-                    from {
-                        transform: translateX(400px);
-                        opacity: 0;
-                    }
-                    to {
-                        transform: translateX(0);
-                        opacity: 1;
-                    }
-                }
-                .animate-slide-in {
-                    animation: slide-in 0.3s ease-out;
-                }
-            `}</style>
+            <button
+                onClick={handleClose}
+                className="p-1 hover:bg-white/10 rounded transition-colors flex-shrink-0"
+                aria-label="Close"
+            >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
         </div>
     );
 }

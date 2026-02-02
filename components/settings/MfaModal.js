@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Modal from '../ui/Modal';
-import { supabase } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
-export default function MfaModal({ isOpen, onClose, user, mfaEnabled, mfaFactorId: initialMfaFactorId, onMfaChange }) {
+export default function MfaModal({ isOpen, onClose, mfaEnabled, mfaFactorId: initialMfaFactorId, onMfaChange }) {
     const [mfaLoading, setMfaLoading] = useState(false);
     const [mfaQrCode, setMfaQrCode] = useState(null);
     const [mfaSecret, setMfaSecret] = useState(null);
@@ -137,6 +137,14 @@ export default function MfaModal({ isOpen, onClose, user, mfaEnabled, mfaFactorI
         onClose();
     };
 
+    const resetScanningStep = () => {
+        setMfaStep('initial');
+        setMfaQrCode(null);
+        setMfaSecret(null);
+        setMfaVerifyCode('');
+        setMfaMessage(null);
+    };
+
     return (
         <Modal isOpen={isOpen} onClose={handleClose} title="Two-Factor Authentication">
             <div className="space-y-4">
@@ -203,8 +211,14 @@ export default function MfaModal({ isOpen, onClose, user, mfaEnabled, mfaFactorI
                                 type="text"
                                 value={mfaVerifyCode}
                                 onChange={(e) => setMfaVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && mfaVerifyCode.length === 6 && !mfaLoading) {
+                                        handleVerifyMfa();
+                                    }
+                                }}
                                 placeholder="000000"
                                 maxLength={6}
+                                autoFocus
                                 className="w-full px-4 py-3 bg-app-bg-secondary border border-app-border rounded-lg text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-2 focus:ring-app-accent text-center text-2xl tracking-widest font-mono"
                             />
                         </div>
@@ -218,7 +232,7 @@ export default function MfaModal({ isOpen, onClose, user, mfaEnabled, mfaFactorI
 
                         <div className="flex gap-3">
                             <button
-                                onClick={() => { setMfaStep('initial'); setMfaQrCode(null); setMfaSecret(null); setMfaVerifyCode(''); setMfaMessage(null); }}
+                                onClick={resetScanningStep}
                                 className="flex-1 px-4 py-2 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors"
                             >
                                 Back

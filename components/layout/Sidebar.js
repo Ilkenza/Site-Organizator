@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { useDashboard } from '../../context/DashboardContext';
 
 export default function Sidebar({ isOpen = false, onClose }) {
@@ -36,6 +37,11 @@ export default function Sidebar({ isOpen = false, onClose }) {
 
     // Count favorite sites
     const favoriteCount = sites.filter(s => s.is_favorite).length;
+
+    // Logo always goes to Sites page
+    const buildDashboardUrl = () => {
+        return '/dashboard/sites';
+    };
 
     // Calculate filtered counts with memoization
     const { filteredSiteCount, filteredFavoriteCount } = useMemo(() => {
@@ -88,14 +94,14 @@ export default function Sidebar({ isOpen = false, onClose }) {
             >
                 {/* Logo */}
                 <div className="p-3 sm:p-4 border-b border-app-border flex items-center justify-between">
-                    <h1 className="text-lg sm:text-xl font-bold text-app-text-primary flex items-center gap-2 sm:gap-3">
+                    <Link href={buildDashboardUrl()} className="text-lg sm:text-xl font-bold text-app-text-primary flex items-center gap-2 sm:gap-3 hover:text-app-accent transition-colors">
                         <span className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-app-accent to-[#4A9FE8] flex items-center justify-center shadow-lg shadow-app-accent/20">
                             <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                             </svg>
                         </span>
                         Site Organizer
-                    </h1>
+                    </Link>
                     {/* Mobile Close Button */}
                     <button
                         onClick={onClose}
@@ -151,11 +157,12 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                 <button
                                     key={tab.id}
                                     onClick={() => {
-                                        // Reset pagination to page 1 when switching tabs
-                                        router.push({
-                                            pathname: router.pathname,
-                                            query: { page: 1 }
-                                        }, undefined, { shallow: true });
+                                        // Build URL based on tab
+                                        const url = tab.id === 'settings' || tab.id === 'favorites'
+                                            ? `/dashboard/${tab.id}`
+                                            : `/dashboard/${tab.id}?page=1`;
+
+                                        router.push(url, undefined, { shallow: true });
 
                                         // Filter selectedSites when switching to favorites tab
                                         if (tab.id === 'favorites' && selectedSites.size > 0) {
@@ -229,9 +236,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 onClick={() => setSortBy(option.value)}
                                                 className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium transition-colors border"
                                                 style={{
-                                                    backgroundColor: sortBy === option.value ? '#243A5E' : '#1A2E52',
-                                                    color: sortBy === option.value ? '#6CBBFB' : '#A0B4D0',
-                                                    borderColor: sortBy === option.value ? '#3A4E6F' : '#2A3E5F'
+                                                    backgroundColor: sortBy === option.value ? '#2A5A8A' : '#1A2E4A',
+                                                    color: sortBy === option.value ? '#8DD0FF' : '#4A7CA8',
+                                                    borderColor: sortBy === option.value ? '#3A6A9A' : '#243654',
+                                                    fontWeight: sortBy === option.value ? '600' : '500'
                                                 }}
                                             >
                                                 {option.label}
@@ -257,9 +265,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 onClick={() => setSortByCategories(option.value)}
                                                 className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium transition-colors border"
                                                 style={{
-                                                    backgroundColor: sortByCategories === option.value ? '#243A5E' : '#1A2E52',
-                                                    color: sortByCategories === option.value ? '#6CBBFB' : '#A0B4D0',
-                                                    borderColor: sortByCategories === option.value ? '#3A4E6F' : '#2A3E5F'
+                                                    backgroundColor: sortByCategories === option.value ? '#2A5A8A' : '#1A2E4A',
+                                                    color: sortByCategories === option.value ? '#8DD0FF' : '#4A7CA8',
+                                                    borderColor: sortByCategories === option.value ? '#3A6A9A' : '#243654',
+                                                    fontWeight: sortByCategories === option.value ? '600' : '500'
                                                 }}
                                             >
                                                 {option.label}
@@ -285,9 +294,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 onClick={() => setSortByTags(option.value)}
                                                 className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium transition-colors border"
                                                 style={{
-                                                    backgroundColor: sortByTags === option.value ? '#243A5E' : '#1A2E52',
-                                                    color: sortByTags === option.value ? '#6CBBFB' : '#A0B4D0',
-                                                    borderColor: sortByTags === option.value ? '#3A4E6F' : '#2A3E5F'
+                                                    backgroundColor: sortByTags === option.value ? '#2A5A8A' : '#1A2E4A',
+                                                    color: sortByTags === option.value ? '#8DD0FF' : '#4A7CA8',
+                                                    borderColor: sortByTags === option.value ? '#3A6A9A' : '#243654',
+                                                    fontWeight: sortByTags === option.value ? '600' : '500'
                                                 }}
                                             >
                                                 {option.label}
@@ -330,9 +340,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 onClick={handleClick}
                                                 className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-medium transition-colors border"
                                                 style={{
-                                                    backgroundColor: currentSortOrder === option.value ? '#243A5E' : '#1A2E52',
-                                                    color: currentSortOrder === option.value ? '#6CBBFB' : '#A0B4D0',
-                                                    borderColor: currentSortOrder === option.value ? '#3A4E6F' : '#2A3E5F'
+                                                    backgroundColor: currentSortOrder === option.value ? '#2A5A8A' : '#1A2E4A',
+                                                    color: currentSortOrder === option.value ? '#8DD0FF' : '#4A7CA8',
+                                                    borderColor: currentSortOrder === option.value ? '#3A6A9A' : '#243654',
+                                                    fontWeight: currentSortOrder === option.value ? '600' : '500'
                                                 }}
                                             >
                                                 {option.label}

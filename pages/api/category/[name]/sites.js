@@ -1,144 +1,259 @@
+/**
+ * API route to get all sites in a category by category name
+ * Handles fallback lookups (quoted, unquoted, ilike) and enriches with relations
+ */
+
+// Constants
+const HTTP_STATUS = {
+  OK: 200,
+  INTERNAL_SERVER_ERROR: 500,
+  BAD_GATEWAY: 502,
+};
+
+const ERROR_MESSAGES = {
+  ENV_MISSING: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment',
+  UPSTREAM_ERROR: 'Upstream REST error',
+};
+
+const LOOKUP_TYPES = {
+  QUOTED: 'quoted',
+  UNQUOTED: 'unquoted',
+  ILIKE: 'ilike',
+};
+
+/**
+ * Build Supabase REST API headers
+ * @param {string} anonKey - Supabase anon key
+ * @param {string} authToken - Auth token
+ * @returns {Object} Headers object
+ */
+function buildHeaders(anonKey, authToken) {
+  return {
+    apikey: anonKey,
+    Authorization: `Bearer ${authToken}`,
+    Accept: 'application/json',
+  };
+}
+
+/**
+ * Fetch and parse JSON response
+ * @param {string} url - URL to fetch
+ * @param {Object} headers - Headers object
+ * @returns {Promise<Object>} Parsed JSON or null
+ */
+async function fetchJson(url, headers) {
+  try {
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      return null;
+    }
+    const text = await response.text();
+    return JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Try to find category by name using different lookup strategies
+ * @param {string} baseUrl - Supabase base URL
+ * @param {string} name - Category name
+ * @param {Object} headers - Request headers
+ * @returns {Promise<Object>} Result with categories and tried lookups
+ */
+async function findCategoryByName(baseUrl, name, headers) {
+  const tried = [];
+  let cats = null;
+
+  // 1. Try quoted name (most reliable for special characters)
+  const quotedName = `"${name}"`;
+  const quotedUrl = `${baseUrl}/rest/v1/categories?select=id&name=eq.${encodeURIComponent(quotedName)}`;
+  cats = await fetchJson(quotedUrl, headers);
+  tried.push({ type: LOOKUP_TYPES.QUOTED, url: quotedUrl, rows: cats?.length || 0 });
+  if (cats && cats.length > 0) return { cats, tried };
+
+  // 2. Try unquoted
+  const unquotedUrl = `${baseUrl}/rest/v1/categories?select=id&name=eq.${encodeURIComponent(name)}`;
+  cats = await fetchJson(unquotedUrl, headers);
+  tried.push({ type: LOOKUP_TYPES.UNQUOTED, url: unquotedUrl, rows: cats?.length || 0 });
+  if (cats && cats.length > 0) return { cats, tried };
+
+  // 3. Try case-insensitive ilike
+  const ilikeUrl = `${baseUrl}/rest/v1/categories?select=id&name=ilike.${encodeURIComponent(name)}`;
+  cats = await fetchJson(ilikeUrl, headers);
+  tried.push({ type: LOOKUP_TYPES.ILIKE, url: ilikeUrl, rows: cats?.length || 0 });
+
+  return { cats, tried };
+}
+
+/**
+ * Enrich sites with categories and tags arrays
+ * @param {Array} sites - Sites to enrich
+ * @param {string} baseUrl - Supabase base URL
+ * @param {Object} headers - Request headers
+ * @returns {Promise<Object>} Enriched sites with debug info
+ */
+async function enrichSitesWithRelations(sites, baseUrl, headers) {
+  if (!sites || sites.length === 0) {
+    return { enriched: sites, debug: {} };
+  }
+
+  const siteIds = sites.map(s => s.id);
+  const encodedInList = encodeURIComponent(siteIds.map(id => `"${id}"`).join(','));
+
+  // Fetch site_categories with embedded categories
+  const scUrl = `${baseUrl}/rest/v1/site_categories?select=*,category:categories(*)&site_id=in.(${encodedInList})`;
+  const siteCategories = await fetchJson(scUrl, headers) || [];
+
+  // Fetch site_tags with embedded tags
+  const stUrl = `${baseUrl}/rest/v1/site_tags?select=*,tag:tags(*)&site_id=in.(${encodedInList})`;
+  const siteTags = await fetchJson(stUrl, headers) || [];
+
+  // Build maps
+  const categoriesBySite = new Map();
+  siteCategories.forEach(sc => {
+    const arr = categoriesBySite.get(sc.site_id) || [];
+    if (sc.category) arr.push(sc.category);
+    categoriesBySite.set(sc.site_id, arr);
+  });
+
+  const tagsBySite = new Map();
+  siteTags.forEach(st => {
+    const arr = tagsBySite.get(st.site_id) || [];
+    if (st.tag) arr.push(st.tag);
+    tagsBySite.set(st.site_id, arr);
+  });
+
+  // Enrich sites
+  const enriched = sites.map(site => {
+    const catsFromLinks = categoriesBySite.get(site.id) || [];
+    const tagsFromLinks = tagsBySite.get(site.id) || [];
+
+    const rawCats = site.categories_array || site.categories || catsFromLinks;
+    const normalizedCats = (Array.isArray(rawCats) ? rawCats : [])
+      .map(c => typeof c === 'string' ? { name: c } : c);
+
+    const rawTags = site.tags_array || site.tags || tagsFromLinks;
+    const normalizedTags = (Array.isArray(rawTags) ? rawTags : [])
+      .map(t => typeof t === 'string' ? { name: t } : t);
+
+    return {
+      ...site,
+      categories_array: normalizedCats,
+      tags_array: normalizedTags,
+    };
+  });
+
+  return {
+    enriched,
+    debug: {
+      siteCategoriesCount: siteCategories.length,
+      siteTagsCount: siteTags.length,
+      siteIds,
+      sitesCount: enriched.length,
+    },
+  };
+}
+
 export default async function handler(req, res) {
   const { name } = req.query;
   const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Extract user's JWT token from Authorization header (sent by fetchAPI)
+  // Extract user's JWT token from Authorization header
   const authHeader = req.headers.authorization;
   const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      error: ERROR_MESSAGES.ENV_MISSING,
+    });
+  }
 
-  // Use user's token for RLS, fallback to anon key for public reads
-  const KEY = userToken || SUPABASE_ANON_KEY;
+  // Use user's token for RLS, fallback to anon key
+  const authToken = userToken || SUPABASE_ANON_KEY;
+  const baseUrl = SUPABASE_URL.replace(/\/$/, '');
+  const headers = buildHeaders(SUPABASE_ANON_KEY, authToken);
 
   try {
-    // Find category id by name (use quoted value to avoid REST filter parsing issues)
-    const quotedName = '"' + name + '"';
-    const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id&name=eq.${encodeURIComponent(quotedName)}`;
-    const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
-    if (!catRes.ok) return res.status(502).json({ success: false, error: 'Upstream REST error', details: await catRes.text(), requestedName: name, catUrl });
-    let cats = await catRes.json();
+    // Find category by name
+    const { cats, tried } = await findCategoryByName(baseUrl, name, headers);
 
-    // If no category was found, try safe fallbacks (unquoted eq, and case-insensitive ilike) and return diagnostics
+    // If no category found, return empty with diagnostics
     if (!cats || cats.length === 0) {
-      const tried = [{ type: 'quoted', url: catUrl, rows: Array.isArray(cats) ? cats.length : (cats ? (cats.length || null) : 0) }];
-      try {
-        const unqUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id&name=eq.${encodeURIComponent(name)}`;
-        const unqRes = await fetch(unqUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
-        let unqRows = null;
-        try { unqRows = unqRes.ok ? await unqRes.json() : null; } catch (e) { unqRows = null; }
-        tried.push({ type: 'unquoted', url: unqUrl, ok: unqRes.ok, rows: unqRows ? unqRows.length : null });
-        if (unqRows && unqRows.length > 0) cats = unqRows;
-      } catch (e) { tried.push({ type: 'unquoted', error: String(e) }); }
-
-      if (!cats || cats.length === 0) {
-        try {
-          // ilike may be more forgiving for case or hidden chars
-          const ilikeUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id&name=ilike.${encodeURIComponent(name)}`;
-          const ilikeRes = await fetch(ilikeUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
-          let ilikeRows = null;
-          try { ilikeRows = ilikeRes.ok ? await ilikeRes.json() : null; } catch (e) { ilikeRows = null; }
-          tried.push({ type: 'ilike', url: ilikeUrl, ok: ilikeRes.ok, rows: ilikeRows ? ilikeRows.length : null });
-          if (ilikeRows && ilikeRows.length > 0) cats = ilikeRows;
-        } catch (e) { tried.push({ type: 'ilike', error: String(e) }); }
-      }
-
-      if (!cats || cats.length === 0) return res.status(200).json({ success: true, data: [], requestedName: name, catUrl, tried });
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        data: [],
+        requestedName: name,
+        tried,
+      });
     }
 
     const categoryId = cats[0].id;
 
-    // Get site_ids from site_categories
-    const scUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?select=site_id&category_id=eq.${categoryId}`;
-    const scRes = await fetch(scUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
-    if (!scRes.ok) return res.status(502).json({ success: false, error: 'Upstream REST error', details: await scRes.text() });
-    const scRows = await scRes.json();
+    // Get site IDs from site_categories junction table
+    const scUrl = `${baseUrl}/rest/v1/site_categories?select=site_id&category_id=eq.${categoryId}`;
+    const scResponse = await fetch(scUrl, { headers });
+
+    if (!scResponse.ok) {
+      return res.status(HTTP_STATUS.BAD_GATEWAY).json({
+        success: false,
+        error: ERROR_MESSAGES.UPSTREAM_ERROR,
+        details: await scResponse.text(),
+      });
+    }
+
+    const scRows = await scResponse.json();
     const siteIds = scRows.map(r => r.site_id);
-    if (!siteIds || siteIds.length === 0) return res.status(200).json({ success: true, data: [] });
 
-    // Quote ids only when necessary (strings/uuids); leave numeric ids unquoted to match Supabase typing
-    const inList = siteIds.map(id => {
-      const s = String(id);
-      return /^[0-9]+$/.test(s) ? s : `"${s}"`;
-    }).join(',');
-    const sitesUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=in.(${inList})&select=*`;
-    const sitesRes = await fetch(sitesUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
-    if (!sitesRes.ok) return res.status(502).json({ success: false, error: 'Upstream REST error', details: await sitesRes.text() });
-    const sites = await sitesRes.json();
-
-    if (!sites || (Array.isArray(sites) && sites.length === 0)) {
-      return res.status(200).json({ success: true, data: [], requestedName: name, category: cats[0] || null, siteIds, siteCategories: scRows, siteCategoriesCount: scRows.length, sitesUrl });
+    if (!siteIds || siteIds.length === 0) {
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        data: [],
+        category: cats[0],
+      });
     }
 
-    // Enrich sites with categories_array and tags_array (server-side)
-    try {
-      const siteIdsList = sites.map(s => s.id);
-      const rawInList = siteIdsList.map(id => `"${id}"`).join(',');
-      const encodedInList = encodeURIComponent(rawInList);
+    // Fetch sites
+    const encodedSiteIds = encodeURIComponent(siteIds.map(id => `"${id}"`).join(','));
+    const sitesUrl = `${baseUrl}/rest/v1/sites?id=in.(${encodedSiteIds})&select=*`;
+    const sitesResponse = await fetch(sitesUrl, { headers });
 
-      const scUrl2 = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?select=*,category:categories(*)&site_id=in.(${encodedInList})`;
-      let siteCategories = [];
-      let scDebug = {};
-      try {
-        const scRes2 = await fetch(scUrl2, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
-        const scText = await scRes2.text();
-        scDebug = { ok: scRes2.ok, status: scRes2.status, statusText: scRes2.statusText, body: scText, url: scUrl2 };
-        if (scRes2.ok) {
-          try { siteCategories = JSON.parse(scText); } catch (e) { siteCategories = []; scDebug.parseError = String(e); }
-        }
-      } catch (e) { scDebug = { error: String(e) }; }
-
-      const stUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?select=*,tag:tags(*)&site_id=in.(${encodedInList})`;
-      let siteTags = [];
-      let stDebug = {};
-      try {
-        const stRes2 = await fetch(stUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
-        const stText = await stRes2.text();
-        stDebug = { ok: stRes2.ok, status: stRes2.status, statusText: stRes2.statusText, body: stText, url: stUrl };
-        if (stRes2.ok) {
-          try { siteTags = JSON.parse(stText); } catch (e) { siteTags = []; stDebug.parseError = String(e); }
-        }
-      } catch (e) { stDebug = { error: String(e) }; }
-
-      // Build maps
-      const categoriesBySite = new Map();
-      (siteCategories || []).forEach(sc => {
-        const arr = categoriesBySite.get(sc.site_id) || [];
-        if (sc.category) arr.push(sc.category);
-        categoriesBySite.set(sc.site_id, arr);
+    if (!sitesResponse.ok) {
+      return res.status(HTTP_STATUS.BAD_GATEWAY).json({
+        success: false,
+        error: ERROR_MESSAGES.UPSTREAM_ERROR,
+        details: await sitesResponse.text(),
       });
-      const tagsBySite = new Map();
-      (siteTags || []).forEach(st => {
-        const arr = tagsBySite.get(st.site_id) || [];
-        if (st.tag) arr.push(st.tag);
-        tagsBySite.set(st.site_id, arr);
-      });
-
-      const enriched = sites.map(site => {
-        const catsFromLinks = categoriesBySite.get(site.id) || [];
-        const tagsFromLinks = tagsBySite.get(site.id) || [];
-        const rawCats = site.categories_array || site.categories || catsFromLinks;
-        const normalizedCats = (Array.isArray(rawCats) ? rawCats : []).map(c => (typeof c === 'string' ? { name: c } : c));
-        const rawTags = site.tags_array || site.tags || tagsFromLinks;
-        const normalizedTags = (Array.isArray(rawTags) ? rawTags : []).map(t => (typeof t === 'string' ? { name: t } : t));
-        return Object.assign({}, site, { categories_array: normalizedCats, tags_array: normalizedTags });
-      });
-
-      const siteCategoriesCount = Array.isArray(siteCategories) ? siteCategories.length : 0;
-      const siteTagsCount = Array.isArray(siteTags) ? siteTags.length : 0;
-      let scBodyCount = null, stBodyCount = null;
-      try { if (scDebug && typeof scDebug.body === 'string') scBodyCount = JSON.parse(scDebug.body).length; } catch (e) { scBodyCount = null; }
-      try { if (stDebug && typeof stDebug.body === 'string') stBodyCount = JSON.parse(stDebug.body).length; } catch (e) { stBodyCount = null; }
-      const countsMatch = (scBodyCount === null || scBodyCount === siteCategoriesCount) && (stBodyCount === null || stBodyCount === siteTagsCount);
-
-      // Include resolved category info so callers can see what the server matched
-      return res.status(200).json({ success: true, category: cats[0] || null, requestedName: name, data: enriched, debug: { siteCategoriesCount, siteTagsCount, siteIds: siteIdsList, siteCategories: siteCategories, siteCategoriesDebug: scDebug, siteTagsDebug: stDebug, sitesUrl, sitesCount: Array.isArray(enriched) ? enriched.length : 0, integrity: { siteCategoriesCount, scBodyCount, siteTagsCount, stBodyCount, countsMatch } } });
-    } catch (err) {
-      console.warn('category -> sites enrichment failed', err);
-      return res.status(200).json({ success: true, data: sites });
     }
+
+    const sites = await sitesResponse.json();
+
+    if (!sites || sites.length === 0) {
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        data: [],
+        category: cats[0],
+        requestedName: name,
+      });
+    }
+
+    // Enrich sites with categories and tags
+    const { enriched, debug } = await enrichSitesWithRelations(sites, baseUrl, headers);
+
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      category: cats[0],
+      requestedName: name,
+      data: enriched,
+      debug,
+    });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message || String(err) });
+    console.error('Error in category sites API:', err);
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      error: err.message || String(err),
+    });
   }
 }

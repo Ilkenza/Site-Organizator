@@ -5,7 +5,9 @@
  */
 
 export default function CategoryColorIndicator({ category }) {
-    if (!category) return null;
+    if (!category) {
+        return null;
+    }
 
     const categoryColor = category.color || '#6CBBFB';
 

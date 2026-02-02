@@ -1,12 +1,33 @@
+/**
+ * @fileoverview Login and registration page with MFA support
+ * Handles user authentication, 2FA verification, and redirect to dashboard
+ */
+
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Head from 'next/head';
+import Modal from '../components/ui/Modal';
 
+// Configuration
+const LOGIN_CONFIG = {
+    DASHBOARD_URL: '/dashboard/sites',
+    SAFETY_TIMEOUT_MS: 35000,
+    SUCCESS_MESSAGE: 'Login successful — redirecting to dashboard'
+};
+
+/**
+ * Login page component with authentication and MFA support
+ * @returns {JSX.Element} Login page
+ */
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [username, setUsername] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isSignUp, setIsSignUp] = useState(false);
+    const [successModal, setSuccessModal] = useState({ isOpen: false, message: '' });
     // Signing indicates we're processing the initial email/password sign-in (no spinner on the Sign In button)
     const [signing, setSigning] = useState(false);
 
@@ -19,10 +40,10 @@ export default function Login() {
             window.__suppressAlertsDuringMfa = false;
         }
         if (showAlert) {
-            try { alert('Login successful — redirecting to dashboard'); } catch (e) { /* Suppress alert errors */ }
+            try { alert(LOGIN_CONFIG.SUCCESS_MESSAGE); } catch (e) { /* Suppress alert errors */ }
         }
         try { setLoading(true); } catch (e) { /* Suppress state update errors during unmount */ }
-        window.location.replace('/dashboard');
+        window.location.replace(LOGIN_CONFIG.DASHBOARD_URL);
     };
 
     // Ensure any alert shown while on this page results in the loading screen remaining visible (unless suppressed during MFA)
@@ -85,7 +106,7 @@ export default function Login() {
             setLoading(false);
             setSigning(false);
             safetyTimerRef.current = null;
-        }, 35000); // 35s safety net
+        }, LOGIN_CONFIG.SAFETY_TIMEOUT_MS); // Safety timeout
         return () => {
             if (safetyTimerRef.current) {
                 clearTimeout(safetyTimerRef.current);
@@ -96,6 +117,70 @@ export default function Login() {
 
 
     const { supabase } = useAuth();
+
+    // Sign Up Handler
+    const handleSignUp = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSigning(true);
+
+        try {
+            // Validate username
+            if (!username || username.length < 3) {
+                throw new Error('Username must be at least 3 characters');
+            }
+
+            // Validate password match
+            if (password !== confirmPassword) {
+                throw new Error('Passwords do not match');
+            }
+
+            // Validate password strength
+            const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+            if (!passwordRegex.test(password)) {
+                throw new Error('Password must be at least 8 characters and contain: uppercase, lowercase, number, and special character (@$!%*?&)');
+            }
+
+            const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        username: username,
+                        display_name: username
+                    },
+                    emailRedirectTo: window.location.origin + '/dashboard/sites'
+                }
+            });
+
+            if (error) throw error;
+
+            if (data?.user) {
+                // Check if email confirmation is disabled (auto-confirm)
+                if (data.user.confirmed_at || data.session) {
+                    setSuccessModal({
+                        isOpen: true,
+                        message: `Welcome, ${username}! Your account has been created successfully. You can now sign in.`
+                    });
+                } else {
+                    setSuccessModal({
+                        isOpen: true,
+                        message: `Account created! Please check your email (${email}) to verify your account before signing in.`
+                    });
+                }
+                setIsSignUp(false);
+                setEmail('');
+                setPassword('');
+                setUsername('');
+                setConfirmPassword('');
+            }
+        } catch (err) {
+            console.error('SignUp error:', err);
+            setError(err?.message || 'Sign up failed');
+        } finally {
+            setSigning(false);
+        }
+    };
 
     // Debug presence of Supabase config (do NOT log secrets)
     useEffect(() => {
@@ -110,7 +195,7 @@ export default function Login() {
                     const isExpired = payload.exp * 1000 < Date.now();
                     if (!isExpired) {
                         if (payload.aal === 'aal2') {
-                            window.location.replace('/dashboard');
+                            window.location.replace(LOGIN_CONFIG.DASHBOARD_URL);
                             return;
                         } else {
                             // Valid token but not AAL2 (e.g., AAL1) — restore MFA flow instead of redirecting
@@ -212,7 +297,7 @@ export default function Login() {
                     const payload = JSON.parse(atob(parsed.access_token.split('.')[1]));
                     const isExpired = payload.exp * 1000 < Date.now();
                     if (!isExpired && payload.aal === 'aal2') {
-                        window.location.replace('/dashboard');
+                        window.location.replace(LOGIN_CONFIG.DASHBOARD_URL);
                         return;
                     }
                     // Clear old/invalid session
@@ -533,15 +618,15 @@ export default function Login() {
                 setSigning(false);
 
                 try {
-                    window.location.replace('/dashboard');
+                    window.location.replace(LOGIN_CONFIG.DASHBOARD_URL);
                 } catch (navErr) {
                     console.error('Navigation error:', navErr);
-                    try { window.location.href = '/dashboard'; } catch (e) { console.error('href fallback failed', e); }
+                    try { window.location.href = LOGIN_CONFIG.DASHBOARD_URL; } catch (e) { console.error('href fallback failed', e); }
                 }
 
                 // As a final safety, force a location change after a short delay
                 setTimeout(() => {
-                    try { if (window.location.pathname !== '/dashboard') window.location.assign('/dashboard'); } catch (e) { /* ignore */ }
+                    try { if (window.location.pathname !== LOGIN_CONFIG.DASHBOARD_URL) window.location.assign(LOGIN_CONFIG.DASHBOARD_URL); } catch (e) { /* ignore */ }
                 }, 300);
 
                 return;
@@ -588,8 +673,43 @@ export default function Login() {
 
                     {/* Form Card */}
                     <div className="bg-app-bg-secondary border border-app-border rounded-2xl p-6 sm:p-8 shadow-xl">
+                        {!mfaRequired && (
+                            <div className="flex gap-2 mb-6 p-1 bg-app-bg-tertiary rounded-xl">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsSignUp(false);
+                                        setError('');
+                                        setUsername('');
+                                        setConfirmPassword('');
+                                    }}
+                                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${!isSignUp
+                                            ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
+                                            : 'text-app-text-secondary hover:text-app-text-primary'
+                                        }`}
+                                >
+                                    Sign In
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsSignUp(true);
+                                        setError('');
+                                        setUsername('');
+                                        setConfirmPassword('');
+                                    }}
+                                    className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${isSignUp
+                                            ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
+                                            : 'text-app-text-secondary hover:text-app-text-primary'
+                                        }`}
+                                >
+                                    Sign Up
+                                </button>
+                            </div>
+                        )}
+
                         <h2 className="text-xl font-semibold text-app-text-primary mb-6">
-                            {mfaRequired ? 'Two-Factor Authentication' : 'Welcome back'}
+                            {mfaRequired ? 'Two-Factor Authentication' : (isSignUp ? 'Create Account' : 'Welcome back')}
                         </h2>
 
                         {error && (
@@ -600,7 +720,24 @@ export default function Login() {
 
                         {!mfaRequired ? (
                             // Email/Password Form
-                            <form onSubmit={handleSubmit} className="space-y-4">
+                            <form onSubmit={isSignUp ? handleSignUp : handleSubmit} className="space-y-4">
+                                {isSignUp && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-app-text-secondary mb-2">
+                                            Username
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={username}
+                                            onChange={(e) => setUsername(e.target.value)}
+                                            required
+                                            minLength={3}
+                                            className="w-full px-4 py-3 bg-app-bg-tertiary border border-app-border rounded-xl text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-2 focus:ring-app-accent focus:border-transparent transition-all"
+                                            placeholder="johndoe"
+                                        />
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="block text-sm font-medium text-app-text-secondary mb-2">
                                         Email
@@ -624,11 +761,33 @@ export default function Login() {
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         required
-                                        minLength={6}
+                                        minLength={isSignUp ? 8 : 6}
                                         className="w-full px-4 py-3 bg-app-bg-tertiary border border-app-border rounded-xl text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-2 focus:ring-app-accent focus:border-transparent transition-all"
                                         placeholder="••••••••"
                                     />
+                                    {isSignUp && (
+                                        <p className="text-xs text-app-text-muted mt-1">
+                                            Min 8 characters: uppercase, lowercase, number, special char (@$!%*?&)
+                                        </p>
+                                    )}
                                 </div>
+
+                                {isSignUp && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-app-text-secondary mb-2">
+                                            Confirm Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            required
+                                            minLength={8}
+                                            className="w-full px-4 py-3 bg-app-bg-tertiary border border-app-border rounded-xl text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-2 focus:ring-app-accent focus:border-transparent transition-all"
+                                            placeholder="••••••••"
+                                        />
+                                    </div>
+                                )}
 
                                 <button
                                     type="submit"
@@ -640,7 +799,7 @@ export default function Login() {
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                                         </svg>
-                                    ) : 'Sign In'}
+                                    ) : (isSignUp ? 'Create Account' : 'Sign In')}
                                 </button>
                             </form>
                         ) : (
@@ -712,6 +871,19 @@ export default function Login() {
                     </p>
                 </div>
             </div>
+
+            {/* Success Modal */}
+            <Modal
+                isOpen={successModal.isOpen}
+                onClose={() => setSuccessModal({ isOpen: false, message: '' })}
+                title="Success! 🎉"
+            >
+                <div className="space-y-4">
+                    <p className="text-gray-300 text-lg">
+                        {successModal.message}
+                    </p>
+                </div>
+            </Modal>
         </>
     );
 }

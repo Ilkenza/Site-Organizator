@@ -4,6 +4,92 @@ import { useAuth, supabase } from './AuthContext';
 
 const DashboardContext = createContext(null);
 
+// Constants
+const AUTH_CLEAR_DELAY = 500;
+const TOAST_DURATION = 3000;
+const SITES_LIMIT = 500;
+
+// Helper to check if valid tokens exist in localStorage
+function hasValidTokensInStorage() {
+    if (typeof window === 'undefined') return false;
+    try {
+        const keys = Object.keys(localStorage);
+        for (const key of keys) {
+            if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                const stored = localStorage.getItem(key);
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (parsed?.access_token && parsed?.expires_at) {
+                        const expiresAt = parsed.expires_at * 1000;
+                        if (Date.now() < expiresAt) return true;
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('[DashboardContext] Error checking localStorage tokens:', e);
+    }
+    return false;
+}
+
+// Helper for generic sorting
+function sortItems(items, sortBy, sortOrder, isPinnedPrimary = false) {
+    return items.slice().sort((a, b) => {
+        // Pinned items first (only for sites)
+        if (isPinnedPrimary) {
+            const aIsPinned = a.is_pinned ? 1 : 0;
+            const bIsPinned = b.is_pinned ? 1 : 0;
+            if (aIsPinned !== bIsPinned) return bIsPinned - aIsPinned;
+        }
+
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+
+        if (sortBy === 'created_at' || sortBy === 'updated_at') {
+            aVal = new Date(aVal || 0).getTime();
+            bVal = new Date(bVal || 0).getTime();
+        } else if (sortBy === 'pricing') {
+            const pricingOrder = { fully_free: 0, freemium: 1, free_trial: 2, paid: 3 };
+            aVal = pricingOrder[aVal] ?? 4;
+            bVal = pricingOrder[bVal] ?? 4;
+        } else {
+            aVal = (aVal || '').toString().toLowerCase();
+            bVal = (bVal || '').toString().toLowerCase();
+        }
+
+        return sortOrder === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+    });
+}
+
+// Helper to handle warnings from API responses
+function handleResponseWarnings(response, siteId, siteData, setFailedRelationUpdates, showToast, fetchData) {
+    if (response?.warnings && response.warnings.length) {
+        console.warn('API response warnings:', response.warnings);
+
+        const relationRelated = response.warnings.some(w =>
+            w.stage && (w.stage.includes('site_categories') ||
+                w.stage.includes('site_tags') ||
+                w.stage === 'service_role_key_missing')
+        );
+
+        if (relationRelated) {
+            setFailedRelationUpdates(prev => ({
+                ...prev,
+                [siteId]: {
+                    categoryIds: siteData.category_ids || siteData.categoryIds || [],
+                    tagIds: siteData.tag_ids || siteData.tagIds || [],
+                    warnings: response.warnings
+                }
+            }));
+        }
+
+        showToast('Operation completed but some relation updates failed (refreshing...)', 'warning');
+        fetchData().catch(e => console.warn('fetchData after warnings failed', e));
+        return true;
+    }
+    return false;
+}
+
 export function DashboardProvider({ children }) {
     const { user } = useAuth();
     const [sites, setSites] = useState([]);
@@ -40,7 +126,7 @@ export function DashboardProvider({ children }) {
     const clearDataTimeoutRef = useRef(null);
 
     // Show toast notification
-    const showToast = useCallback((message, type = 'info', duration = 3000) => {
+    const showToast = useCallback((message, type = 'info', duration = TOAST_DURATION) => {
         setToast({ message, type, id: Date.now() });
         setTimeout(() => setToast(null), duration);
     }, []);
@@ -113,7 +199,7 @@ export function DashboardProvider({ children }) {
         setError(null);
         try {
             const [sitesRes, categoriesRes, tagsRes] = await Promise.all([
-                fetchAPI('/sites?limit=500'),
+                fetchAPI(`/sites?limit=${SITES_LIMIT}`),
                 fetchAPI('/categories'),
                 fetchAPI('/tags')
             ]);
@@ -140,10 +226,7 @@ export function DashboardProvider({ children }) {
     }, []);
 
     // Fetch data when user changes
-    // PROTECTION: Don't clear data just because user became null temporarily
-    // Check localStorage for valid tokens before clearing, and use debounce
     useEffect(() => {
-        // Clear any pending clear timeout
         if (clearDataTimeoutRef.current) {
             clearTimeout(clearDataTimeoutRef.current);
             clearDataTimeoutRef.current = null;
@@ -152,52 +235,20 @@ export function DashboardProvider({ children }) {
         if (user) {
             hadUserRef.current = true;
             fetchData();
-        } else {
-            // Before clearing data, check if tokens still exist in localStorage
-            // This prevents data loss during temporary auth state transitions
-            const hasValidTokens = (() => {
-                if (typeof window === 'undefined') return false;
-                try {
-                    // Check for Supabase auth tokens in localStorage
-                    const keys = Object.keys(localStorage);
-                    for (const key of keys) {
-                        if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-                            const stored = localStorage.getItem(key);
-                            if (stored) {
-                                const parsed = JSON.parse(stored);
-                                // Check if tokens exist and aren't expired
-                                if (parsed?.access_token && parsed?.expires_at) {
-                                    const expiresAt = parsed.expires_at * 1000; // Convert to ms
-                                    if (Date.now() < expiresAt) {
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.warn('[DashboardContext] Error checking localStorage tokens:', e);
-                }
-                return false;
-            })();
+        } else if (!hasValidTokensInStorage()) {
+            const clearData = () => {
+                setSites([]);
+                setCategories([]);
+                setTags([]);
+                setStats({ sites: 0, categories: 0, tags: 0 });
+                hadUserRef.current = false;
+            };
 
-            // Only clear data if there are no valid tokens
-            // Use debounce if we recently had a user (auth transition in progress)
-            if (!hasValidTokens) {
-                const clearData = () => {
-                    setSites([]);
-                    setCategories([]);
-                    setTags([]);
-                    setStats({ sites: 0, categories: 0, tags: 0 });
-                    hadUserRef.current = false;
-                };
-
-                // If we had a user recently, wait 500ms before clearing (gives time for auth to recover)
-                if (hadUserRef.current) {
-                    clearDataTimeoutRef.current = setTimeout(clearData, 500);
-                } else {
-                    clearData();
-                }
+            // If we had a user recently, wait before clearing (gives time for auth to recover)
+            if (hadUserRef.current) {
+                clearDataTimeoutRef.current = setTimeout(clearData, AUTH_CLEAR_DELAY);
+            } else {
+                clearData();
             }
         }
 
@@ -209,34 +260,29 @@ export function DashboardProvider({ children }) {
     }, [user, fetchData]);
 
     // Real-time subscription for automatic data refresh
+    const fetchDataRef = useRef(fetchData);
+    useEffect(() => {
+        fetchDataRef.current = fetchData;
+    }, [fetchData]);
+
     useEffect(() => {
         if (!supabase || !user) return;
 
-        // Subscribe to changes on sites, categories, and tags tables
+        const handleChange = () => fetchDataRef.current();
+
         const channel = supabase
             .channel('dashboard-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'sites' }, () => {
-                fetchData();
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, () => {
-                fetchData();
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'tags' }, () => {
-                fetchData();
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'site_categories' }, () => {
-                fetchData();
-            })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'site_tags' }, () => {
-                fetchData();
-            })
-            .subscribe((_status) => {
-            });
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'sites' }, handleChange)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, handleChange)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'tags' }, handleChange)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'site_categories' }, handleChange)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'site_tags' }, handleChange)
+            .subscribe();
 
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [user, fetchData]);
+    }, [user]);
 
     // Site operations
     const addSite = useCallback(async (siteData) => {
@@ -249,23 +295,8 @@ export function DashboardProvider({ children }) {
             const newSite = response?.data || response;
             setSites(prev => [newSite, ...prev]);
             setStats(prev => ({ ...prev, sites: prev.sites + 1 }));
-            if (response?.warnings && response.warnings.length) {
-                console.warn('Site created with warnings:', response.warnings);
 
-                // Record failed relation updates so user can retry attaching them later
-                setFailedRelationUpdates(prev => ({
-                    ...prev,
-                    [newSite.id]: {
-                        categoryIds: siteData.category_ids || siteData.categoryIds || [],
-                        tagIds: siteData.tag_ids || siteData.tagIds || [],
-                        warnings: response.warnings
-                    }
-                }));
-
-                showToast(`Site created but some relations failed (refreshing...)`, 'warning');
-                // Refresh authoritative data from server to reflect actual state
-                try { await fetchData(); } catch (e) { console.warn('fetchData after addSite warnings failed', e); }
-            } else {
+            if (!handleResponseWarnings(response, newSite.id, siteData, setFailedRelationUpdates, showToast, fetchData)) {
                 showToast(`✓ Site "${newSite.name}" created successfully`, 'success');
             }
             return newSite;
@@ -283,40 +314,15 @@ export function DashboardProvider({ children }) {
             });
             const updated = response?.data || response;
 
-            // Update local cache with server value, and then ensure authoritative data is fetched (fixes relation persistence mismatches)
             setSites(prev => prev.map(s => s.id === id ? updated : s));
-            try {
-                if (response?.warnings && response.warnings.length) {
-                    console.warn('[DashboardContext] updateSite warnings:', response.warnings);
 
-                    // If relation inserts/updates failed, capture details so user can retry
-                    const relationRelated = response.warnings.some(w => w.stage && (w.stage.includes('site_categories') || w.stage.includes('site_tags') || w.stage === 'service_role_key_missing'));
-                    if (relationRelated) {
-                        setFailedRelationUpdates(prev => ({
-                            ...prev,
-                            [id]: {
-                                categoryIds: siteData.category_ids || siteData.categoryIds || [],
-                                tagIds: siteData.tag_ids || siteData.tagIds || [],
-                                warnings: response.warnings
-                            }
-                        }));
-                    }
+            const hadWarnings = handleResponseWarnings(response, id, siteData, setFailedRelationUpdates, showToast, fetchData);
 
-                    showToast && showToast('Site updated, but related updates failed. You can retry relation updates from the site editor after configuring SUPABASE_SERVICE_ROLE_KEY.', 'warning');
-                }
-                await fetchData();
-            } catch (e) {
-                console.warn('fetchData after updateSite failed', e);
-            }
-            if (response?.warnings && response.warnings.length) {
-                console.warn('Site updated with warnings:', response.warnings);
-                showToast('Site updated but some relation updates failed (refreshing...)', 'warning');
-                try { await fetchData(); } catch (e) { console.warn('fetchData after updateSite warnings failed', e); }
-            } else {
+            if (!hadWarnings) {
                 // Clear any previous failed relation updates if no new warnings
                 setFailedRelationUpdates(prev => {
                     const next = { ...prev };
-                    delete next[response.data.id];
+                    delete next[id];
                     return next;
                 });
                 showToast(`✓ Site "${updated.name}" updated successfully`, 'success');
@@ -486,9 +492,8 @@ export function DashboardProvider({ children }) {
     }, [showToast]);
 
     // Filtered and sorted sites
-    const filteredSites = sites
-        .filter(site => {
-            // Search filter - applies to active tab only for sites
+    const filteredSites = sortItems(
+        sites.filter(site => {
             if (searchQuery) {
                 const query = searchQuery.toLowerCase();
                 const matchesName = site.name?.toLowerCase().includes(query);
@@ -496,89 +501,26 @@ export function DashboardProvider({ children }) {
                 const matchesDescription = site.description?.toLowerCase().includes(query);
                 if (!matchesName && !matchesUrl && !matchesDescription) return false;
             }
-            // Category filter
             if (selectedCategory) {
                 const siteCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
                 if (!siteCategories.some(c => c?.id === selectedCategory)) return false;
             }
-            // Tag filter
             if (selectedTag) {
                 const siteTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
                 if (!siteTags.some(t => t?.id === selectedTag)) return false;
             }
             return true;
-        })
-        .sort((a, b) => {
-            // PINNED SITES FIRST - primary sort key
-            const aIsPinned = a.is_pinned ? 1 : 0;
-            const bIsPinned = b.is_pinned ? 1 : 0;
-            if (aIsPinned !== bIsPinned) {
-                return bIsPinned - aIsPinned; // true (1) comes before false (0)
-            }
+        }),
+        sortBy,
+        sortOrder,
+        true // isPinnedPrimary
+    );
 
-            // Then apply normal sortBy logic
-            let aVal = a[sortBy];
-            let bVal = b[sortBy];
-
-            if (sortBy === 'created_at' || sortBy === 'updated_at') {
-                aVal = new Date(aVal || 0).getTime();
-                bVal = new Date(bVal || 0).getTime();
-            } else if (sortBy === 'pricing') {
-                // Sort order: free, freemium, free_trial, paid
-                const pricingOrder = { fully_free: 0, freemium: 1, free_trial: 2, paid: 3 };
-                aVal = pricingOrder[aVal] ?? 4;
-                bVal = pricingOrder[bVal] ?? 4;
-            } else {
-                aVal = (aVal || '').toString().toLowerCase();
-                bVal = (bVal || '').toString().toLowerCase();
-            }
-
-            if (sortOrder === 'asc') {
-                return aVal > bVal ? 1 : -1;
-            }
-            return aVal < bVal ? 1 : -1;
-        });
     // Sorted and filtered categories
-    const filteredCategories = categories
-        .slice()
-        .sort((a, b) => {
-            let aVal = a[sortByCategories];
-            let bVal = b[sortByCategories];
-
-            if (sortByCategories === 'created_at' || sortByCategories === 'updated_at') {
-                aVal = new Date(aVal || 0).getTime();
-                bVal = new Date(bVal || 0).getTime();
-            } else {
-                aVal = (aVal || '').toString().toLowerCase();
-                bVal = (bVal || '').toString().toLowerCase();
-            }
-
-            if (sortOrderCategories === 'asc') {
-                return aVal > bVal ? 1 : -1;
-            }
-            return aVal < bVal ? 1 : -1;
-        });
+    const filteredCategories = sortItems(categories, sortByCategories, sortOrderCategories);
 
     // Sorted and filtered tags
-    const filteredTags = tags
-        .slice()
-        .sort((a, b) => {
-            let aVal = a[sortByTags];
-            let bVal = b[sortByTags];
-
-            if (sortByTags === 'created_at' || sortByTags === 'updated_at') {
-                aVal = new Date(aVal || 0).getTime();
-                bVal = new Date(bVal || 0).getTime();
-            } else {
-                aVal = (aVal || '').toString().toLowerCase();
-                bVal = (bVal || '').toString().toLowerCase();
-            }
-
-            if (sortOrderTags === 'asc') {
-                return aVal > bVal ? 1 : -1;
-            }
-            return aVal < bVal ? 1 : -1;
-        });
+    const filteredTags = sortItems(tags, sortByTags, sortOrderTags);
     const value = {
         // Data
         sites,

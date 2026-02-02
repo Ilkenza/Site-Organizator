@@ -2,7 +2,7 @@
   "name": "Site Organizer",
   "short_name": "SiteOrg",
   "description": "Organize and manage your favorite websites",
-  "start_url": "/dashboard",
+  "start_url": "/dashboard/sites",
   "display": "standalone",
   "background_color": "#050a30",
   "theme_color": "#050a30",
@@ -66,5 +66,5 @@
   "categories": ["productivity", "utilities"],
   "prefer_related_applications": false,
   "scope": "/",
-  "id": "/dashboard"
+  "id": "/dashboard/sites"
 }

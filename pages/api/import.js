@@ -1,220 +1,527 @@
-// pages/api/import.js
-// Accepts JSON: { rows: [{ name, url, pricing, category, tag, created_at }], options: { createMissing: true } }
-// Processes rows in chunks synchronously, returns report
+/**
+ * @fileoverview Import API endpoint for bulk site creation from JSON/CSV data
+ * Processes import rows in chunks, creates missing categories/tags, and attaches relations
+ */
 
+// API Configuration
 export const config = {
   api: {
     bodyParser: {
       sizeLimit: '10mb'
     }
   }
+};
+
+// HTTP Status Codes
+const HTTP_STATUS = {
+  OK: 200,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  METHOD_NOT_ALLOWED: 405,
+  INTERNAL_ERROR: 500,
+};
+
+// Error Messages
+const ERROR_MESSAGES = {
+  METHOD_NOT_ALLOWED: 'Method not allowed',
+  MISSING_CONFIG: 'Supabase config missing',
+  AUTH_REQUIRED: 'Authentication required for import',
+  NO_ROWS: 'No rows provided',
+  USER_ID_REQUIRED: 'userId is required',
+  MISSING_URL: 'Missing URL',
+  SITE_EXISTS: 'Site already exists',
+};
+
+// Default Configuration
+const DEFAULT_CONFIG = {
+  CHUNK_SIZE: 200,
+  MIN_CHUNK_SIZE: 50,
+  CATEGORY_COLOR: '#6CBBFB',
+  TAG_COLOR: '#D98BAC',
+};
+
+// Response Field Names
+const RESPONSE_FIELDS = {
+  SUCCESS: 'success',
+  ERROR: 'error',
+  REPORT: 'report',
+};
+
+/**
+ * Get Supabase environment configuration
+ * @returns {Object} Configuration object with URL and keys
+ */
+function getSupabaseConfig() {
+  return {
+    url: process.env.SUPABASE_URL,
+    anonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY,
+  };
+}
+
+/**
+ * Extract user JWT token from Authorization header
+ * @param {Object} headers - Request headers
+ * @returns {string|null} User token or null
+ */
+function extractUserToken(headers) {
+  const authHeader = headers.authorization;
+  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+}
+
+/**
+ * Validate import request data
+ * @param {Object} payload - Request body payload
+ * @returns {Object} Validation result with isValid flag and error message
+ */
+function validateImportRequest(payload, userToken) {
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const userId = payload.userId;
+
+  if (!userToken) {
+    return { isValid: false, error: ERROR_MESSAGES.AUTH_REQUIRED, status: HTTP_STATUS.UNAUTHORIZED };
+  }
+  if (!rows.length) {
+    return { isValid: false, error: ERROR_MESSAGES.NO_ROWS, status: HTTP_STATUS.BAD_REQUEST };
+  }
+  if (!userId) {
+    return { isValid: false, error: ERROR_MESSAGES.USER_ID_REQUIRED, status: HTTP_STATUS.BAD_REQUEST };
+  }
+
+  return { isValid: true, rows, userId };
+}
+
+/**
+ * Calculate chunk size from payload or use default
+ * @param {number} requestedChunkSize - Chunk size from request
+ * @returns {number} Validated chunk size
+ */
+function calculateChunkSize(requestedChunkSize) {
+  if (requestedChunkSize && Number.isFinite(Number(requestedChunkSize))) {
+    return Math.max(DEFAULT_CONFIG.MIN_CHUNK_SIZE, Number(requestedChunkSize));
+  }
+  return DEFAULT_CONFIG.CHUNK_SIZE;
+}
+
+/**
+ * Normalize string value by trimming whitespace
+ * @param {*} value - Value to normalize
+ * @returns {string} Normalized string
+ */
+function normalizeString(value) {
+  return (value || '').toString().trim();
+}
+
+/**
+ * Split comma/semicolon/pipe/newline-separated string into array
+ * @param {*} value - Value to split
+ * @returns {Array<string>} Array of normalized strings
+ */
+function splitDelimitedString(value) {
+  if (!value && value !== 0) return [];
+  return value.toString()
+    .split(/[,;|\n]+/)
+    .map(x => normalizeString(x))
+    .filter(Boolean);
+}
+
+/**
+ * Fetch JSON from URL with error handling
+ * @param {string} url - URL to fetch
+ * @param {Object} options - Fetch options
+ * @returns {Promise<Object>} Response object with ok, status, body, and json
+ */
+async function fetchJson(url, options) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+
+  try {
+    return {
+      ok: response.ok,
+      status: response.status,
+      body: text,
+      json: response.ok ? JSON.parse(text) : null
+    };
+  } catch (e) {
+    return {
+      ok: response.ok,
+      status: response.status,
+      body: text,
+      json: null
+    };
+  }
+}
+
+/**
+ * Build Supabase REST API headers
+ * @param {string} apiKey - Supabase API key
+ * @param {string} token - Authorization token
+ * @param {boolean} includePrefer - Include Prefer header
+ * @returns {Object} Headers object
+ */
+function buildSupabaseHeaders(apiKey, token, includePrefer = false) {
+  const headers = {
+    apikey: apiKey,
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+
+  if (includePrefer) {
+    headers.Prefer = 'return=representation';
+  }
+
+  return headers;
+}
+
+/**
+ * Build Supabase REST API URL
+ * @param {string} baseUrl - Supabase base URL
+ * @param {string} endpoint - API endpoint
+ * @returns {string} Full URL
+ */
+function buildSupabaseUrl(baseUrl, endpoint) {
+  return `${baseUrl.replace(/\/$/, '')}/rest/v1/${endpoint}`;
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
+  // Validate HTTP method
+  if (req.method !== 'POST') {
+    return res.status(HTTP_STATUS.METHOD_NOT_ALLOWED).json({
+      [RESPONSE_FIELDS.SUCCESS]: false,
+      [RESPONSE_FIELDS.ERROR]: ERROR_MESSAGES.METHOD_NOT_ALLOWED
+    });
+  }
 
-
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  // Get configuration
+  const config = getSupabaseConfig();
+  const { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY, serviceKey: SUPABASE_SERVICE_ROLE_KEY } = config;
   const REL_KEY = SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
-  // Extract user's JWT token from Authorization header (sent by fetchAPI)
-  const authHeader = req.headers.authorization;
-  const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  // Extract user token
+  const userToken = extractUserToken(req.headers);
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(500).json({ success: false, error: 'Supabase config missing' });
-  if (!userToken) return res.status(401).json({ success: false, error: 'Authentication required for import' });
+  // Validate Supabase configuration
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+      [RESPONSE_FIELDS.SUCCESS]: false,
+      [RESPONSE_FIELDS.ERROR]: ERROR_MESSAGES.MISSING_CONFIG
+    });
+  }
 
   const KEY = userToken;
 
+  // Parse and validate request
   const payload = req.body || {};
-  const rows = Array.isArray(payload.rows) ? payload.rows : [];
-  const userId = payload.userId;
-  const options = payload.options || { createMissing: true };
-  const chunkSize = payload.chunkSize && Number.isFinite(Number(payload.chunkSize)) ? Math.max(50, Number(payload.chunkSize)) : 200;
+  const validation = validateImportRequest(payload, userToken);
 
-
-  if (!rows.length) return res.status(400).json({ success: false, error: 'No rows provided' });
-  if (!userId) return res.status(400).json({ success: false, error: 'userId is required' });
-
-  // helpers
-  const normName = s => (s || '').toString().trim();
-  const splitNames = v => {
-    if (!v && v !== 0) return [];
-    return v.toString().split(/[,;|\n]+/).map(x => normName(x)).filter(Boolean);
+  if (!validation.isValid) {
+    return res.status(validation.status).json({
+      [RESPONSE_FIELDS.SUCCESS]: false,
+      [RESPONSE_FIELDS.ERROR]: validation.error
+    });
   }
 
-  // caching lookups inside import
+  const { rows, userId } = validation;
+  const options = payload.options || { createMissing: true };
+  const chunkSize = calculateChunkSize(payload.chunkSize);
+
+  // Caching lookups inside import
   const catNameToObj = new Map(); // name -> {id,name}
   const tagNameToObj = new Map();
 
   const report = { created: [], attached: [], skipped: [], errors: [] };
 
-  const fetchJson = async (url, opts) => {
-    const r = await fetch(url, opts);
-    const text = await r.text();
-    try { return { ok: r.ok, status: r.status, body: text, json: r.ok ? JSON.parse(text) : null }; } catch (e) { return { ok: r.ok, status: r.status, body: text, json: null }; }
-  }
-
-  // Preload existing categories and tags to reduce roundtrips
+  /**
+   * Preload existing categories and tags to reduce roundtrips
+   * @returns {Promise<void>}
+   */
   async function preloadCategoriesAndTags() {
     try {
-      const catRes = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+      const categoriesUrl = buildSupabaseUrl(SUPABASE_URL, `categories?select=id,name&user_id=eq.${userId}`);
+      const catRes = await fetch(categoriesUrl, {
+        headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY)
+      });
+
       if (catRes.ok) {
         const cats = await catRes.json();
-        (cats || []).forEach(c => catNameToObj.set((c.name || '').toLowerCase(), c));
+        (cats || []).forEach(c =>
+          catNameToObj.set((c.name || '').toLowerCase(), c)
+        );
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      // Ignore errors during preload
+    }
+
     try {
-      const tagRes = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=id,name&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+      const tagsUrl = buildSupabaseUrl(SUPABASE_URL, `tags?select=id,name&user_id=eq.${userId}`);
+      const tagRes = await fetch(tagsUrl, {
+        headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY)
+      });
+
       if (tagRes.ok) {
         const tags = await tagRes.json();
-        (tags || []).forEach(t => tagNameToObj.set((t.name || '').toLowerCase(), t));
+        (tags || []).forEach(t =>
+          tagNameToObj.set((t.name || '').toLowerCase(), t)
+        );
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      // Ignore errors during preload
+    }
   }
 
-  // Create missing categories/tags one by one (keep it simple and resilient)
+  /**
+   * Create category if missing and cache it
+   * @param {string} name - Category name
+   * @returns {Promise<Object|null>} Category object or null
+   */
   async function ensureCategoryByName(name) {
     const key = (name || '').toLowerCase();
+
     if (catNameToObj.has(key)) {
       return catNameToObj.get(key);
     }
+
     if (!options.createMissing) {
       return null;
     }
-    // try insert
+
+    // Try insert
     try {
-      const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories`;
-      const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ name: name, color: '#6CBBFB', user_id: userId }) });
-      const txt = await r.text();
-      if (r.ok) {
-        const j = JSON.parse(txt);
-        if (Array.isArray(j) && j.length > 0) {
-          catNameToObj.set(key, j[0]);
-          return j[0];
+      const url = buildSupabaseUrl(SUPABASE_URL, 'categories');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY, true),
+        body: JSON.stringify({
+          name: name,
+          color: DEFAULT_CONFIG.CATEGORY_COLOR,
+          user_id: userId
+        })
+      });
+
+      const text = await response.text();
+
+      if (response.ok) {
+        const json = JSON.parse(text);
+        if (Array.isArray(json) && json.length > 0) {
+          catNameToObj.set(key, json[0]);
+          return json[0];
         }
       }
-      // if not ok, try to lookup (maybe created concurrently)
-      const lookup = await fetchJson(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+
+      // If not ok, try to lookup (maybe created concurrently)
+      const lookupUrl = buildSupabaseUrl(
+        SUPABASE_URL,
+        `categories?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`
+      );
+      const lookup = await fetchJson(lookupUrl, {
+        headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY)
+      });
+
       if (lookup.ok && Array.isArray(lookup.json) && lookup.json.length > 0) {
         catNameToObj.set(key, lookup.json[0]);
         return lookup.json[0];
       }
+
       return null;
     } catch (e) {
       return null;
     }
   }
 
+  /**
+   * Create tag if missing and cache it
+   * @param {string} name - Tag name
+   * @returns {Promise<Object|null>} Tag object or null
+   */
   async function ensureTagByName(name) {
     const key = (name || '').toLowerCase();
+
     if (tagNameToObj.has(key)) {
       return tagNameToObj.get(key);
     }
+
     if (!options.createMissing) {
       return null;
     }
+
     try {
-      const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags`;
-      const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify({ name: name, color: '#D98BAC', user_id: userId }) });
-      const txt = await r.text();
-      if (r.ok) {
-        const j = JSON.parse(txt);
-        if (Array.isArray(j) && j.length > 0) {
-          tagNameToObj.set(key, j[0]);
-          return j[0];
+      const url = buildSupabaseUrl(SUPABASE_URL, 'tags');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY, true),
+        body: JSON.stringify({
+          name: name,
+          color: DEFAULT_CONFIG.TAG_COLOR,
+          user_id: userId
+        })
+      });
+
+      const text = await response.text();
+
+      if (response.ok) {
+        const json = JSON.parse(text);
+        if (Array.isArray(json) && json.length > 0) {
+          tagNameToObj.set(key, json[0]);
+          return json[0];
         }
       }
-      const lookup = await fetchJson(`${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
+
+      const lookupUrl = buildSupabaseUrl(
+        SUPABASE_URL,
+        `tags?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`
+      );
+      const lookup = await fetchJson(lookupUrl, {
+        headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY)
+      });
+
       if (lookup.ok && Array.isArray(lookup.json) && lookup.json.length > 0) {
         tagNameToObj.set(key, lookup.json[0]);
         return lookup.json[0];
       }
+
       return null;
     } catch (e) {
       return null;
     }
   }
 
-  // Check existing sites by URL for a set of urls
+  /**
+   * Check existing sites by URLs
+   * @param {Array<string>} urls - Array of URLs to check
+   * @returns {Promise<Object>} Map of URL to site object
+   */
   async function lookupSitesByUrls(urls) {
-    const uniq = Array.from(new Set(urls.map(u => (u || '').trim()))).filter(Boolean);
-    if (uniq.length === 0) return {};
-    const inList = uniq.map(u => `"${u}"`).join(',');
-    const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?select=*&url=in.(${inList})`;
-    const r = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json' } });
-    if (!r.ok) return {};
-    const j = await r.json();
+    const unique = Array.from(new Set(urls.map(u => (u || '').trim()))).filter(Boolean);
+    if (unique.length === 0) return {};
+
+    const inList = unique.map(u => `"${u}"`).join(',');
+    const url = buildSupabaseUrl(SUPABASE_URL, `sites?select=*&url=in.(${inList})`);
+
+    const response = await fetch(url, {
+      headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY)
+    });
+
+    if (!response.ok) return {};
+
+    const json = await response.json();
     const out = {};
-    (j || []).forEach(s => { if (s && s.url) out[(s.url || '').trim()] = s; });
+    (json || []).forEach(s => {
+      if (s && s.url) out[(s.url || '').trim()] = s;
+    });
+
     return out;
   }
 
-  // Insert sites in batch (rows array has normalized fields)
+  /**
+   * Insert sites in batch
+   * @param {Array<Object>} rowsToInsert - Rows to insert
+   * @returns {Promise<Array<Object>>} Created sites
+   */
   async function insertSitesBatch(rowsToInsert) {
     if (!rowsToInsert || rowsToInsert.length === 0) return [];
-    const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites`;
-    const r = await fetch(url, { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${KEY}`, Accept: 'application/json', 'Content-Type': 'application/json', Prefer: 'return=representation' }, body: JSON.stringify(rowsToInsert) });
-    const text = await r.text();
-    if (!r.ok) throw new Error(`Insert failed: ${text}`);
-    const j = JSON.parse(text);
-    return Array.isArray(j) ? j : (j ? [j] : []);
+
+    const url = buildSupabaseUrl(SUPABASE_URL, 'sites');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY, true),
+      body: JSON.stringify(rowsToInsert)
+    });
+
+    const text = await response.text();
+    if (!response.ok) throw new Error(`Insert failed: ${text}`);
+
+    const json = JSON.parse(text);
+    return Array.isArray(json) ? json : (json ? [json] : []);
   }
 
-  // Attach relations in batch
+  /**
+   * Attach categories to sites in batch
+   * @param {Array<Object>} rows - Relation rows to insert
+   * @returns {Promise<void>}
+   */
   async function attachSiteCategories(rows) {
     if (!rows || rows.length === 0) {
       return;
     }
-    const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-    // rows: { site_id, category_id }
-    await fetch(url, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
+
+    const url = buildSupabaseUrl(SUPABASE_URL, 'site_categories');
+    await fetch(url, {
+      method: 'POST',
+      headers: buildSupabaseHeaders(REL_KEY, REL_KEY),
+      body: JSON.stringify(rows)
+    });
   }
+
+  /**
+   * Attach tags to sites in batch
+   * @param {Array<Object>} rows - Relation rows to insert
+   * @returns {Promise<void>}
+   */
   async function attachSiteTags(rows) {
     if (!rows || rows.length === 0) {
       return;
     }
-    const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
-    await fetch(url, { method: 'POST', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(rows) });
+
+    const url = buildSupabaseUrl(SUPABASE_URL, 'site_tags');
+    await fetch(url, {
+      method: 'POST',
+      headers: buildSupabaseHeaders(REL_KEY, REL_KEY),
+      body: JSON.stringify(rows)
+    });
+  }
+
+  /**
+   * Normalize import row data
+   * @param {Object} row - Raw import row
+   * @param {number} index - Row index
+   * @returns {Object} Normalized row
+   */
+  function normalizeImportRow(row, index) {
+    return {
+      _origIndex: index,
+      name: normalizeString(row.name || row.title || row.Name || ''),
+      url: normalizeString(row.url || row.URL || row.link || ''),
+      pricing: normalizeString(row.pricing || row.pricing_model || row.pricingModel || '') || null,
+      categories: splitDelimitedString(row.category || row.categories || row.Category || ''),
+      tags: splitDelimitedString(row.tag || row.tags || row.Tag || ''),
+      created_at: row.created_at || row.createdAt || null
+    };
   }
 
   try {
     await preloadCategoriesAndTags();
 
-    // process in chunks
+    // Process in chunks
     for (let i = 0; i < rows.length; i += chunkSize) {
       const chunk = rows.slice(i, i + chunkSize);
 
-      // normalize rows
-      const normRows = chunk.map((r, idx) => ({
-        _origIndex: i + idx,
-        name: normName(r.name || r.title || r.Name || ''),
-        url: normName(r.url || r.URL || r.link || ''),
-        pricing: normName(r.pricing || r.pricing_model || r.pricingModel || '') || null,
-        categories: splitNames(r.category || r.categories || r.Category || ''),
-        tags: splitNames(r.tag || r.tags || r.Tag || ''),
-        created_at: r.created_at || r.createdAt || null
-      }));
+      // Normalize rows
+      const normRows = chunk.map((r, idx) => normalizeImportRow(r, i + idx));
 
-
-
-      // lookup existing sites by URL
+      // Lookup existing sites by URL
       const urls = normRows.map(r => r.url).filter(Boolean);
       const existingSites = await lookupSitesByUrls(urls);
 
-      // prepare lists for creation
+      // Prepare lists for creation
       const toCreateSites = [];
 
       for (const nr of normRows) {
-        if (!nr.url) { report.errors.push({ row: nr._origIndex, error: 'Missing URL' }); continue; }
-        if (existingSites[nr.url]) {
-          report.skipped.push({ row: nr._origIndex, error: 'Site already exists', existing: existingSites[nr.url] });
+        if (!nr.url) {
+          report.errors.push({ row: nr._origIndex, error: ERROR_MESSAGES.MISSING_URL });
           continue;
         }
 
-        // ensure categories/tags exist
+        if (existingSites[nr.url]) {
+          report.skipped.push({
+            row: nr._origIndex,
+            error: ERROR_MESSAGES.SITE_EXISTS,
+            existing: existingSites[nr.url]
+          });
+          continue;
+        }
+
+        // Ensure categories/tags exist
         const cats = [];
         for (const cname of nr.categories) {
           const c = await ensureCategoryByName(cname);
@@ -222,6 +529,7 @@ export default async function handler(req, res) {
             cats.push(c);
           }
         }
+
         const tags = [];
         for (const tname of nr.tags) {
           const t = await ensureTagByName(tname);
@@ -241,11 +549,12 @@ export default async function handler(req, res) {
         created_at: x.nr.created_at || null,
         user_id: userId
       }));
+
       let createdSites = [];
       try {
         createdSites = await insertSitesBatch(siteInserts);
       } catch (err) {
-        // fallback: try single inserts to get per-row errors
+        // Fallback: try single inserts to get per-row errors
         for (let j = 0; j < siteInserts.length; j++) {
           const s = siteInserts[j];
           try {
@@ -261,27 +570,45 @@ export default async function handler(req, res) {
       // Attach relations
       const scRows = [];
       const stRows = [];
+
       for (let k = 0; k < createdSites.length; k++) {
         const site = createdSites[k];
         const ctx = toCreateSites[k];
+
         if (!site || !site.id) {
           continue;
         }
-        // categories
+
+        // Categories
         (ctx.cats || []).forEach(c => scRows.push({ site_id: site.id, category_id: c.id }));
-        // tags
+        // Tags
         (ctx.tags || []).forEach(t => stRows.push({ site_id: site.id, tag_id: t.id }));
+
         report.created.push({ row: ctx.nr._origIndex, site });
       }
 
-      try { await attachSiteCategories(scRows); } catch (e) { console.error('attachSiteCategories error:', e); }
-      try { await attachSiteTags(stRows); } catch (e) { console.error('attachSiteTags error:', e); }
+      try {
+        await attachSiteCategories(scRows);
+      } catch (e) {
+        console.error('attachSiteCategories error:', e);
+      }
 
+      try {
+        await attachSiteTags(stRows);
+      } catch (e) {
+        console.error('attachSiteTags error:', e);
+      }
     }
 
-    return res.status(200).json({ success: true, report });
+    return res.status(HTTP_STATUS.OK).json({
+      [RESPONSE_FIELDS.SUCCESS]: true,
+      [RESPONSE_FIELDS.REPORT]: report
+    });
   } catch (err) {
     console.error('import failed', err);
-    return res.status(500).json({ success: false, error: err.message || String(err) });
+    return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+      [RESPONSE_FIELDS.SUCCESS]: false,
+      [RESPONSE_FIELDS.ERROR]: err.message || String(err)
+    });
   }
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function StatsSection({ user, activeTab, showToast }) {
     const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0 });
@@ -125,7 +125,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
                     Statistics
                 </h2>
                 <button
-                    onClick={async (e) => { e.preventDefault(); await fetchStats(); }}
+                    onClick={fetchStats}
                     title="Refresh statistics"
                     className="p-2 rounded-lg bg-app-bg-secondary hover:bg-app-bg-light text-app-text-secondary transition-colors"
                 >
@@ -168,7 +168,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
                 </div>
                 <div className="space-y-3">
                     <button
-                        onClick={async () => await runLinkCheck()}
+                        onClick={runLinkCheck}
                         disabled={checkingLinks}
                         className="w-full px-4 py-2.5 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF] rounded-lg disabled:opacity-50 transition-all font-medium flex items-center justify-center gap-2"
                     >
@@ -223,8 +223,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
             {displayedBroken && displayedBroken.length > 0 && (
                 <div className="mt-3 bg-app-bg-light border border-app-border rounded-lg p-3 max-h-52 overflow-auto space-y-2 ">
                     {displayedBroken.slice(0, 200).map(b => (
-                        <div key={b.id || b.url} className={`flex items-center justify-between py-1  flex-col gap-3
-                        ${ignoredLinks.has(b.id) ? 'opacity-60' : ''}`}>
+                        <div key={b.id || b.url} className={`flex items-center justify-between py-1 flex-col gap-3 ${ignoredLinks.has(b.id) ? 'opacity-60' : ''}`}>
                             <div className="text-sm">
                                 <div className="font-medium text-app-text-primary">{b.name}</div>
                                 <div className="text-xs text-app-text-tertiary">{b.url} — {b.status} {ignoredLinks.has(b.id) && <span className="ml-2 text-yellow-400">Ignored</span>}</div>

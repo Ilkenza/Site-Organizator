@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Modal from '../ui/Modal';
-import { supabase } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function PasswordModal({ isOpen, onClose, user, mfaEnabled }) {
     const [currentPassword, setCurrentPassword] = useState('');
@@ -196,7 +196,13 @@ export default function PasswordModal({ isOpen, onClose, user, mfaEnabled }) {
                                 type={showCurrentPassword ? 'text' : 'password'}
                                 value={currentPassword}
                                 onChange={(e) => setCurrentPassword(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && currentPassword && newPassword && confirmPassword && !passwordLoading) {
+                                        handleChangePassword();
+                                    }
+                                }}
                                 placeholder="Enter current password"
+                                autoFocus
                                 className="w-full px-3 py-2 pr-12 bg-app-bg-secondary border border-app-border rounded-lg text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-2 focus:ring-app-accent"
                             />
                             <button
@@ -225,6 +231,11 @@ export default function PasswordModal({ isOpen, onClose, user, mfaEnabled }) {
                                 type={showNewPassword ? 'text' : 'password'}
                                 value={newPassword}
                                 onChange={(e) => setNewPassword(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && currentPassword && newPassword && confirmPassword && !passwordLoading) {
+                                        handleChangePassword();
+                                    }
+                                }}
                                 placeholder="Enter new password"
                                 className="w-full px-3 py-2 pr-12 bg-app-bg-secondary border border-app-border rounded-lg text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-2 focus:ring-app-accent"
                             />
@@ -254,6 +265,11 @@ export default function PasswordModal({ isOpen, onClose, user, mfaEnabled }) {
                                 type={showConfirmPassword ? 'text' : 'password'}
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && currentPassword && newPassword && confirmPassword && !passwordLoading) {
+                                        handleChangePassword();
+                                    }
+                                }}
                                 placeholder="Confirm new password"
                                 className="w-full px-3 py-2 pr-12 bg-app-bg-secondary border border-app-border rounded-lg text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-2 focus:ring-app-accent"
                             />
@@ -287,8 +303,14 @@ export default function PasswordModal({ isOpen, onClose, user, mfaEnabled }) {
                         type="text"
                         value={mfaCodeForPassword}
                         onChange={(e) => setMfaCodeForPassword(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && mfaCodeForPassword.length === 6 && !passwordLoading) {
+                                handleChangePassword();
+                            }
+                        }}
                         placeholder="000000"
                         maxLength={6}
+                        autoFocus
                         className="w-full px-3 py-2 bg-app-bg-secondary border border-app-border rounded-lg text-app-text-primary text-center text-xl tracking-widest font-mono placeholder-app-text-tertiary focus:outline-none focus:ring-2 focus:ring-app-accent"
                     />
                 </div>

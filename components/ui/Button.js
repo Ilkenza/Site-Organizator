@@ -17,7 +17,7 @@ export default function Button({
         danger: 'bg-btn-danger text-white hover:bg-btn-dangerHover focus:ring-btn-danger',
         success: 'bg-success-bg text-success-text hover:opacity-90 focus:ring-success-bg',
         ghost: 'bg-transparent text-app-text-secondary hover:bg-app-bg-light focus:ring-app-accent',
-        outline: 'border border-gray-600 text-gray-300 hover:bg-gray-800 focus:ring-gray-500'
+        outline: 'border border-app-border text-app-text-primary hover:bg-app-bg-light focus:ring-app-accent'
     };
 
     const sizes = {

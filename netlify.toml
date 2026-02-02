@@ -1,31 +1,96 @@
+# ========================================
+# Netlify Configuration - Site Organizator
+# ========================================
+# Deployment settings for Next.js PWA
+# - Build configuration
+# - Environment variables
+# - Headers for PWA support
+# - Security settings
+# ========================================
+
+# ----------------------------------------
+# Build Settings
+# ----------------------------------------
 [build]
   command = "npm run build"
   publish = ".next"
 
+# ----------------------------------------
+# Build Environment
+# ----------------------------------------
 [build.environment]
   NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
 
+# ----------------------------------------
+# Security Settings
+# ----------------------------------------
 [build.security]
   ignore = "build"
 
+# ----------------------------------------
+# Next.js Plugin
+# ----------------------------------------
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Redirects for SPA routing (removed - conflicted with Next.js routes or asset requests)
-# [[redirects]]
-#   from = "/*"
-#   to = "/index.html"
-#   status = 200
-#   conditions = {Role = ["admin"]}
+# ----------------------------------------
+# PWA Headers
+# ----------------------------------------
 
-# Headers for PWA
+# Manifest headers
 [[headers]]
   for = "/manifest.json"
   [headers.values]
     Content-Type = "application/manifest+json"
+    Cache-Control = "public, max-age=3600"
 
+# Service Worker headers
 [[headers]]
   for = "/sw.js"
   [headers.values]
     Content-Type = "application/javascript"
-    Cache-Control = "no-cache"
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# Icon headers (cache for 1 year)
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Static assets headers
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# ----------------------------------------
+# Security Headers (Global)
+# ----------------------------------------
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+# ----------------------------------------
+# Redirects
+# ----------------------------------------
+
+# Redirect old dashboard route to new route
+[[redirects]]
+  from = "/dashboard"
+  to = "/dashboard/sites"
+  status = 301
+  force = true
+
+# ----------------------------------------
+# Notes
+# ----------------------------------------
+# - Environment variables (SUPABASE_*) should be set in Netlify dashboard
+# - Use different Supabase keys for production vs development
+# - Service worker is not cached to ensure updates are picked up
+# - Static assets are cached for 1 year with immutable flag

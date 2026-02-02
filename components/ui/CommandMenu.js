@@ -73,7 +73,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '🔍',
             subtitle: 'Focus search input',
             shortcut: 'Ctrl+K',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -82,7 +82,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '🌐',
             subtitle: 'Quick add site',
             shortcut: 'N',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -91,7 +91,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '☑️',
             subtitle: 'Toggle selection mode',
             shortcut: 'M',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -100,7 +100,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '✅',
             subtitle: 'Select all items',
             shortcut: 'Ctrl+A',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -109,7 +109,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '❌',
             subtitle: 'Clear selection',
             shortcut: 'Ctrl+D',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -118,7 +118,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '⎋',
             subtitle: 'Close modals',
             shortcut: 'Esc',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -127,7 +127,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '✓',
             subtitle: 'Confirm changes in modals',
             shortcut: 'Enter',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -136,7 +136,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '🗑️',
             subtitle: 'Step 1: Press M to enable multi-select → Step 2: Click checkboxes → Step 3: Press Delete',
             shortcut: 'Del',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -145,7 +145,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '⬅️',
             subtitle: 'Navigate to previous page',
             shortcut: '←',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -154,7 +154,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '➡️',
             subtitle: 'Navigate to next page',
             shortcut: '→',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -163,7 +163,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '⏮️',
             subtitle: 'Jump to first page',
             shortcut: 'Home',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         },
         {
@@ -172,7 +172,7 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             icon: '⏭️',
             subtitle: 'Jump to last page',
             shortcut: 'End',
-            action: () => { },
+            action: () => onClose(),
             category: 'Keyboard Shortcuts'
         }
     ];
@@ -213,6 +213,13 @@ export default function CommandMenu({ isOpen, onClose, onAction }) {
             setSelectedIndex(0);
         }
     }, [isOpen]);
+
+    // Reset selectedIndex if it's out of bounds after filtering
+    useEffect(() => {
+        if (selectedIndex >= filteredCommands.length) {
+            setSelectedIndex(Math.max(0, filteredCommands.length - 1));
+        }
+    }, [filteredCommands.length, selectedIndex]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {

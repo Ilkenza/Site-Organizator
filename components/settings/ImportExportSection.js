@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function ImportExportSection({ user, fetchData }) {
+export default function ImportExportSection({ user, fetchData, showToast }) {
     const [importPreview, setImportPreview] = useState(null);
     const [importMessage, setImportMessage] = useState(null);
     const [importLoading, setImportLoading] = useState(false);
@@ -12,6 +12,8 @@ export default function ImportExportSection({ user, fetchData }) {
             const result = await exportSites(user?.id, format);
             if (!result.success) {
                 setImportMessage({ type: 'error', text: `Export failed: ${result.error}` });
+            } else {
+                showToast?.(`Sites exported successfully as ${format.toUpperCase()}`, 'success');
             }
         } catch (err) {
             console.error('Export failed:', err);
@@ -118,6 +120,7 @@ export default function ImportExportSection({ user, fetchData }) {
                             accept=".json,.csv,.html"
                             onChange={(e) => {
                                 handleFileSelect(e.target.files?.[0]);
+                                e.target.value = ''; // Reset input
                             }}
                             className="hidden"
                             id="import-file-input"
@@ -170,9 +173,7 @@ export default function ImportExportSection({ user, fetchData }) {
                 {/* Import Button */}
                 {importPreview && (
                     <button
-                        onClick={() => {
-                            handleImport();
-                        }}
+                        onClick={handleImport}
                         disabled={importLoading}
                         className="flex items-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] disabled:opacity-50 font-medium transition-colors"
                     >

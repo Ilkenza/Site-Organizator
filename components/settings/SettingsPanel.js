@@ -17,13 +17,6 @@ export default function SettingsPanel() {
     const [passwordModalOpen, setPasswordModalOpen] = useState(false);
     const [emailModalOpen, setEmailModalOpen] = useState(false);
     const [mfaModalOpen, setMfaModalOpen] = useState(false);
-    const [mfaEnabled, setMfaEnabled] = useState(false);
-    const [mfaFactorId, setMfaFactorId] = useState(null);
-
-    const handleMfaChange = (enabled, factorId) => {
-        setMfaEnabled(enabled);
-        setMfaFactorId(factorId);
-    };
 
     return (
         <>
@@ -36,20 +29,6 @@ export default function SettingsPanel() {
                         <AvatarSection user={user} refreshUser={refreshUser} />
 
                         <ProfileEditSection user={user} refreshUser={refreshUser} />
-
-                        {/* Password section */}
-                        <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2">
-                            <div>
-                                <p className="text-sm text-app-text-secondary">Password</p>
-                                <p className="text-app-text-primary font-medium">••••••••</p>
-                            </div>
-                            <button
-                                onClick={() => setPasswordModalOpen(true)}
-                                className="w-full xs:w-auto px-3 py-1.5 xs:py-1 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors text-sm text-center"
-                            >
-                                Change
-                            </button>
-                        </div>
                     </div>
 
                     <ImportExportSection user={user} fetchData={fetchData} showToast={showToast} />
@@ -71,23 +50,18 @@ export default function SettingsPanel() {
                 isOpen={passwordModalOpen}
                 onClose={() => setPasswordModalOpen(false)}
                 user={user}
-                mfaEnabled={mfaEnabled}
             />
 
             <EmailModal
                 isOpen={emailModalOpen}
                 onClose={() => setEmailModalOpen(false)}
                 user={user}
-                mfaEnabled={mfaEnabled}
             />
 
             <MfaModal
                 isOpen={mfaModalOpen}
                 onClose={() => setMfaModalOpen(false)}
                 user={user}
-                mfaEnabled={mfaEnabled}
-                mfaFactorId={mfaFactorId}
-                onMfaChange={handleMfaChange}
             />
         </>
     );
