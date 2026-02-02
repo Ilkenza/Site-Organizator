@@ -53,70 +53,67 @@ export default function PasswordResetModal({ isOpen, onClose }) {
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={handleClose}>
-            <div className="p-6 max-w-md w-full">
-                <h2 className="text-xl font-semibold text-white mb-4">Reset Password</h2>
+        <Modal
+            isOpen={isOpen}
+            onClose={handleClose}
+            title="Reset Password"
+            size="sm"
+            footer={
+                <>
+                    <Button variant="secondary" onClick={handleClose}>
+                        Cancel
+                    </Button>
+                    <Button onClick={handleResetPassword} loading={loading}>
+                        Reset Password
+                    </Button>
+                </>
+            }
+        >
+            <div className="space-y-4">
+                <p className="text-sm text-app-text-secondary">
+                    Enter a new password for <span className="font-semibold text-app-text-primary">{user?.email}</span>
+                </p>
 
-                <div className="mb-4">
-                    <p className="text-sm text-gray-400 mb-4">
-                        Enter a new password for <span className="font-semibold text-gray-300">{user?.email}</span>
-                    </p>
+                <Input
+                    label="New Password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newPassword && confirmPassword && !loading) {
+                            handleResetPassword();
+                        }
+                    }}
+                    placeholder="Enter new password"
+                    autoFocus
+                />
 
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
-                            <input
-                                type="password"
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                placeholder="Enter new password"
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
-                            <input
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                placeholder="Confirm new password"
-                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                            />
-                        </div>
-                    </div>
-                </div>
+                <Input
+                    label="Confirm Password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newPassword && confirmPassword && !loading) {
+                            handleResetPassword();
+                        }
+                    }}
+                    placeholder="Confirm new password"
+                />
 
                 {/* Message */}
                 {message && (
                     <div
-                        className={`mb-4 p-3 rounded-lg text-sm ${message.type === 'success'
-                                ? 'bg-green-500/20 text-green-400'
+                        className={`p-3 rounded-lg text-sm ${message.type === 'success'
+                                ? 'bg-success-bg/30 text-success-text'
                                 : message.type === 'error'
-                                    ? 'bg-red-500/20 text-red-400'
-                                    : 'bg-blue-500/20 text-blue-400'
+                                    ? 'bg-btn-danger/30 text-app-text-primary'
+                                    : 'bg-app-accent/20 text-app-accent'
                             }`}
                     >
                         {message.text}
                     </div>
                 )}
-
-                {/* Buttons */}
-                <div className="flex gap-3">
-                    <button
-                        onClick={handleClose}
-                        className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleResetPassword}
-                        disabled={loading}
-                        className="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg transition-colors"
-                    >
-                        {loading ? 'Resetting...' : 'Reset Password'}
-                    </button>
-                </div>
             </div>
         </Modal>
     );

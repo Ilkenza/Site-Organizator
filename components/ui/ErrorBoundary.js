@@ -19,12 +19,12 @@ export class ErrorBoundary extends React.Component {
     render() {
         if (this.state.hasError) {
             return (
-                <div className="p-6 bg-red-900/40 border border-red-800 rounded-lg">
-                    <h3 className="text-lg font-semibold text-red-300 mb-2">Something went wrong</h3>
-                    <p className="text-sm text-red-200 mb-2">A client-side error occurred while loading this panel. Check the console for details.</p>
-                    <details className="text-xs text-red-100 max-h-48 overflow-auto">
-                        <summary className="cursor-pointer">Show error</summary>
-                        <pre className="whitespace-pre-wrap">{String(this.state.error)}\n{this.state.info?.componentStack}</pre>
+                <div className="p-6 bg-btn-danger/20 border border-btn-danger/50 rounded-lg">
+                    <h3 className="text-lg font-semibold text-app-text-primary mb-2">Something went wrong</h3>
+                    <p className="text-sm text-app-text-secondary mb-2">A client-side error occurred while loading this panel. Check the console for details.</p>
+                    <details className="text-xs text-app-text-secondary max-h-48 overflow-auto">
+                        <summary className="cursor-pointer hover:text-app-text-primary transition-colors">Show error</summary>
+                        <pre className="whitespace-pre-wrap mt-2">{String(this.state.error)}{this.state.info?.componentStack ? '\n' + this.state.info.componentStack : ''}</pre>
                     </details>
                 </div>
             );

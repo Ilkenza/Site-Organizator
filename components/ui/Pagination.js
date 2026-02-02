@@ -50,7 +50,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
     const maxVisiblePages = 5;
 
     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
     if (endPage - startPage + 1 < maxVisiblePages) {
         startPage = Math.max(1, endPage - maxVisiblePages + 1);
@@ -68,7 +68,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
                 disabled={currentPage === 1}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors
                     ${currentPage === 1
-                        ? 'text-gray-500 cursor-not-allowed'
+                        ? 'text-app-text-muted cursor-not-allowed'
                         : 'text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light'
                     }`}
             >
@@ -88,7 +88,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
                         1
                     </button>
                     {startPage > 2 && (
-                        <span className="text-gray-500">...</span>
+                        <span className="text-app-text-muted">...</span>
                     )}
                 </>
             )}
@@ -112,7 +112,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
             {endPage < totalPages && (
                 <>
                     {endPage < totalPages - 1 && (
-                        <span className="text-gray-500">...</span>
+                        <span className="text-app-text-muted">...</span>
                     )}
                     <button
                         onClick={() => handlePageChange(totalPages)}
@@ -129,7 +129,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
                 disabled={currentPage === totalPages}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors
                     ${currentPage === totalPages
-                        ? 'text-gray-500 cursor-not-allowed'
+                        ? 'text-app-text-muted cursor-not-allowed'
                         : 'text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light'
                     }`}
             >
@@ -140,7 +140,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
             </button>
 
             {/* Page info */}
-            <span className="ml-2 text-xs text-gray-500">
+            <span className="ml-2 text-xs text-app-text-muted">
                 Page {currentPage} of {totalPages}
             </span>
         </div>

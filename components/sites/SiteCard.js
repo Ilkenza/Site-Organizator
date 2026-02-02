@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import Image from 'next/image';
 import Badge from '../ui/Badge';
 import InlineEditableName from '../categories/InlineEditableName';
 import { useDashboard } from '../../context/DashboardContext';
@@ -89,11 +88,14 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                 {/* Favicon - larger and centered on mobile */}
                 <div className="flex-shrink-0 w-14 h-14 sm:w-10 sm:h-10 rounded-xl sm:rounded-lg bg-app-bg-card flex items-center justify-center overflow-hidden transition-colors duration-200 group-hover:bg-app-accent/10">
                     {site.url && !imageError ? (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                             src={getFaviconUrl(site.url)}
                             alt=""
                             width={32}
                             height={32}
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
                             className="w-8 h-8 sm:w-6 sm:h-6 transition-transform"
                             onError={() => setImageError(true)}
                         />
@@ -171,11 +173,9 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
+                                togglePinned(site.id);
                                 setPinAnimating(true);
-                                setTimeout(() => {
-                                    setPinAnimating(false);
-                                    togglePinned(site.id);
-                                }, 500);
+                                setTimeout(() => setPinAnimating(false), 600);
                             }}
                             className={`p-1 sm:p-1.5 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-purple-400 ${pinAnimating ? '-translate-y-px' : ''} ${site.is_pinned
                                 ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-400/10'
@@ -275,7 +275,7 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                     site.pricing === 'freemium' ? 'bg-amber-900 text-amber-300' :
                         site.pricing === 'free_trial' ? 'bg-blue-950 text-blue-300' :
                             site.pricing === 'paid' ? 'bg-red-950 text-red-200' :
-                                'bg-gray-700 text-gray-400'
+                                'bg-app-bg-secondary text-app-text-secondary'
                     }`}>
                     {site.pricing === 'fully_free' ? '✓ Free' :
                         site.pricing === 'freemium' ? '◐ Freemium' :

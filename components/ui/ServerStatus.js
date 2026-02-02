@@ -40,9 +40,9 @@ export default function ServerStatus() {
             case 'offline':
                 return 'bg-red-500';
             case 'checking':
-                return 'bg-yellow-500 animate-pulse';
+                return 'bg-app-accent animate-pulse';
             default:
-                return 'bg-gray-500';
+                return 'bg-app-text-muted';
         }
     };
 
@@ -75,10 +75,10 @@ export default function ServerStatus() {
             </span>
 
             {/* Tooltip */}
-            <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+            <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-app-bg-primary border border-app-border text-app-text-primary text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
                 Server: {getStatusText()}
                 {lastCheck && (
-                    <div className="text-gray-400">
+                    <div className="text-app-text-secondary">
                         Last checked: {lastCheck.toLocaleTimeString()}
                     </div>
                 )}

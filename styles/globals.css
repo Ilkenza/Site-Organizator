@@ -1,6 +1,61 @@
+/**
+ * Global Styles for Site Organizer
+ * - Tailwind directives
+ * - Color scheme and theme variables
+ * - Custom scrollbar styling
+ * - Utility classes
+ * - Animation keyframes
+ */
+
+/* Tailwind directives */
+/* stylelint-disable-next-line at-rule-no-unknown */
 @tailwind base;
+/* stylelint-disable-next-line at-rule-no-unknown */
 @tailwind components;
+/* stylelint-disable-next-line at-rule-no-unknown */
 @tailwind utilities;
+
+/* ========================================
+   CSS Custom Properties (Design Tokens)
+   ======================================== */
+:root {
+  /* Colors - Background */
+  --color-bg-primary: #050a30;
+  --color-bg-secondary: #1f2937;
+
+  /* Colors - Text */
+  --color-text-primary: #e0e8f7;
+
+  /* Colors - Scrollbar */
+  --color-scrollbar-track: #1f2937; /* gray-800 */
+  --color-scrollbar-thumb: #4b5563; /* gray-600 */
+  --color-scrollbar-thumb-hover: #6b7280; /* gray-500 */
+
+  /* Colors - Focus */
+  --color-focus-ring: #3b82f6; /* blue-500 */
+
+  /* Dimensions - Scrollbar */
+  --scrollbar-width: 8px;
+  --scrollbar-height: 8px;
+  --scrollbar-radius: 4px;
+
+  /* Spacing - Focus */
+  --focus-outline-width: 2px;
+  --focus-outline-offset: 2px;
+
+  /* Animation - Durations */
+  --duration-fast: 0.3s;
+  --duration-medium: 0.5s;
+  --duration-slow: 0.6s;
+  --duration-very-slow: 2s;
+}
+
+/* ========================================
+   Base Layout
+   ======================================== */
+html {
+  scroll-behavior: smooth;
+}
 
 html,
 body,
@@ -9,38 +64,49 @@ body,
 }
 
 body {
-  background-color: #050a30;
-  color: #e0e8f7;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
 
-/* Custom scrollbar */
+/* ========================================
+   Custom Scrollbar
+   ======================================== */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-height);
 }
 
 ::-webkit-scrollbar-track {
-  background: #1f2937; /* gray-800 */
+  background: var(--color-scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4b5563; /* gray-600 */
-  border-radius: 4px;
+  background: var(--color-scrollbar-thumb);
+  border-radius: var(--scrollbar-radius);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #6b7280; /* gray-500 */
+  background: var(--color-scrollbar-thumb-hover);
 }
+
+/* ========================================
+   Utility Classes
+   ======================================== */
 
 /* Line clamp utility */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2; /* Standard property */
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-/* Custom animations */
+/* ========================================
+   Animation Keyframes
+   ======================================== */
+
+/* Fade in animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -50,6 +116,7 @@ body {
   }
 }
 
+/* Slide up animation */
 @keyframes slideUp {
   from {
     transform: translateY(20px);
@@ -61,6 +128,7 @@ body {
   }
 }
 
+/* Slow bounce animation */
 @keyframes bounceSlow {
   0%,
   100% {
@@ -71,18 +139,7 @@ body {
   }
 }
 
-.animate-fadeIn {
-  animation: fadeIn 0.3s ease-out;
-}
-
-.animate-slideUp {
-  animation: slideUp 0.3s ease-out;
-}
-
-.animate-bounce-slow {
-  animation: bounceSlow 2s ease-in-out infinite;
-}
-
+/* Star burst animation for favorites */
 @keyframes starBurst {
   0% {
     transform: scale(1) rotate(0deg);
@@ -98,6 +155,7 @@ body {
   }
 }
 
+/* Pin bounce animation */
 @keyframes pinBounce {
   0%,
   100% {
@@ -108,6 +166,7 @@ body {
   }
 }
 
+/* Check mark pop animation */
 @keyframes checkPop {
   0% {
     transform: scale(0) rotate(-12deg);
@@ -126,6 +185,7 @@ body {
   }
 }
 
+/* Ripple effect animation */
 @keyframes ripple {
   0% {
     transform: scale(0);
@@ -137,20 +197,181 @@ body {
   }
 }
 
+/* Fade in up animation for scroll */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Fade in left animation */
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Fade in right animation */
+@keyframes fadeInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Scale in animation */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ========================================
+   Animation Utility Classes
+   ======================================== */
+
+.animate-fadeIn {
+  animation: fadeIn var(--duration-fast) ease-out;
+}
+
+.animate-slideUp {
+  animation: slideUp var(--duration-fast) ease-out;
+}
+
+.animate-bounce-slow {
+  animation: bounceSlow var(--duration-very-slow) ease-in-out infinite;
+}
+
 .animate-starBurst {
-  animation: starBurst 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: starBurst var(--duration-slow) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .animate-pinBounce {
-  animation: pinBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: pinBounce var(--duration-medium) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .animate-checkPop {
-  animation: checkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: checkPop var(--duration-fast) cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Focus styles */
+.animate-fadeInUp {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+.animate-fadeInLeft {
+  animation: fadeInLeft 0.8s ease-out forwards;
+}
+
+.animate-fadeInRight {
+  animation: fadeInRight 0.8s ease-out forwards;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.6s ease-out forwards;
+}
+
+/* Animation delays for staggered effects */
+.animation-delay-100 {
+  animation-delay: 0.1s;
+}
+
+.animation-delay-200 {
+  animation-delay: 0.2s;
+}
+
+.animation-delay-300 {
+  animation-delay: 0.3s;
+}
+
+.animation-delay-400 {
+  animation-delay: 0.4s;
+}
+
+.animation-delay-500 {
+  animation-delay: 0.5s;
+}
+
+/* Scroll-based animations */
+.scroll-animate {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.8s ease-out,
+    transform 0.8s ease-out;
+}
+
+.scroll-animate.animate-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Staggered scroll animations for grid items */
+.scroll-animate-stagger {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 0.6s ease-out,
+    transform 0.6s ease-out;
+}
+
+.scroll-animate-stagger.animate-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Delay classes for staggered effects */
+.scroll-animate-stagger:nth-child(1) {
+  transition-delay: 0s;
+}
+.scroll-animate-stagger:nth-child(2) {
+  transition-delay: 0.1s;
+}
+.scroll-animate-stagger:nth-child(3) {
+  transition-delay: 0.2s;
+}
+.scroll-animate-stagger:nth-child(4) {
+  transition-delay: 0.3s;
+}
+.scroll-animate-stagger:nth-child(5) {
+  transition-delay: 0.4s;
+}
+.scroll-animate-stagger:nth-child(6) {
+  transition-delay: 0.5s;
+}
+.scroll-animate-stagger:nth-child(7) {
+  transition-delay: 0.6s;
+}
+.scroll-animate-stagger:nth-child(8) {
+  transition-delay: 0.7s;
+}
+.scroll-animate-stagger:nth-child(9) {
+  transition-delay: 0.8s;
+}
+
+/* ========================================
+   Accessibility - Focus Styles
+   ======================================== */
+
 *:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
+  outline: var(--focus-outline-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-outline-offset);
 }

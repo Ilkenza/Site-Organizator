@@ -21,7 +21,9 @@ export default function CategoriesList({ onEdit }) {
     const [editingId, setEditingId] = useState(null);
 
     const filteredCategories = useMemo(() => {
-        if (!searchQuery.trim()) return categories;
+        if (!searchQuery.trim()) {
+            return categories;
+        }
         return categories.filter(cat =>
             cat?.name?.toLowerCase().includes(searchQuery.toLowerCase())
         );
@@ -41,7 +43,9 @@ export default function CategoriesList({ onEdit }) {
     const handleInlineSave = async (categoryId, newName) => {
         try {
             const category = categories.find(c => c.id === categoryId);
-            if (!category) return;
+            if (!category) {
+                return;
+            }
 
             await updateCategory(categoryId, { name: newName, color: category.color });
             setEditingId(null);
@@ -70,7 +74,9 @@ export default function CategoriesList({ onEdit }) {
     };
 
     const confirmDelete = async () => {
-        if (!categoryToDelete) return;
+        if (!categoryToDelete) {
+            return;
+        }
 
         setDeletingId(categoryToDelete.id);
         try {

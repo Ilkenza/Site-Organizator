@@ -34,7 +34,7 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
     }, [isOpen, tag]);
 
     const handleSubmit = async (e) => {
-        e?.preventDefault();
+        e.preventDefault();
         setLoading(true);
         setError(null);
 
@@ -92,16 +92,17 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g., tutorial"
-                    autoFocus onKeyDown={(e) => {
+                    autoFocus
+                    onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                             e.preventDefault();
-                            // Focus na prvi color button
                             const colorButtons = document.querySelectorAll('button[data-tag-color]');
                             if (colorButtons.length > 0) {
                                 colorButtons[0].focus();
                             }
                         }
-                    }} />
+                    }}
+                />
 
                 {/* Color Picker */}
                 <div className="space-y-2">
@@ -132,7 +133,7 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
                 </div>
 
                 <div className="flex items-center gap-3 pt-2">
-                    <span className="text-sm text-gray-400">Preview:</span>
+                    <span className="text-sm text-app-text-secondary">Preview:</span>
                     <span
                         className="px-3 py-1 rounded-full text-sm font-medium border"
                         style={{

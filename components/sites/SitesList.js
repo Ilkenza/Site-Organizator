@@ -29,6 +29,7 @@ export default function SitesList({ onEdit, onDelete }) {
                 query: { ...router.query, page: 1 }
             }, undefined, { shallow: true });
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchQuery, selectedCategory, selectedTag]);
 
     // Handle page change
@@ -47,16 +48,16 @@ export default function SitesList({ onEdit, onDelete }) {
         return (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-6">
                 {[...Array(6)].map((_, i) => (
-                    <div key={i} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 animate-pulse">
+                    <div key={i} className="bg-app-bg-light/50 border border-app-border rounded-xl p-4 animate-pulse">
                         <div className="flex items-start gap-3 mb-3">
-                            <div className="w-10 h-10 bg-gray-700 rounded-lg" />
+                            <div className="w-10 h-10 bg-app-bg-secondary rounded-lg" />
                             <div className="flex-1">
-                                <div className="h-5 bg-gray-700 rounded w-3/4 mb-2" />
-                                <div className="h-4 bg-gray-700 rounded w-1/2" />
+                                <div className="h-5 bg-app-bg-secondary rounded w-3/4 mb-2" />
+                                <div className="h-4 bg-app-bg-secondary rounded w-1/2" />
                             </div>
                         </div>
-                        <div className="h-4 bg-gray-700 rounded w-full mb-2" />
-                        <div className="h-4 bg-gray-700 rounded w-2/3" />
+                        <div className="h-4 bg-app-bg-secondary rounded w-full mb-2" />
+                        <div className="h-4 bg-app-bg-secondary rounded w-2/3" />
                     </div>
                 ))}
             </div>
@@ -79,10 +80,10 @@ export default function SitesList({ onEdit, onDelete }) {
                         </svg>
                     )}
                 </div>
-                <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">
+                <h3 className="text-lg sm:text-xl font-semibold text-app-text-primary mb-2">
                     {hasFilters ? 'No sites found' : 'No sites yet'}
                 </h3>
-                <p className="text-gray-400 text-center max-w-md">
+                <p className="text-app-text-secondary text-center max-w-md">
                     {hasFilters
                         ? 'Try adjusting your search or filters to find what you\'re looking for.'
                         : 'Add your first site to start organizing your bookmarks and favorite websites.'}
@@ -95,7 +96,7 @@ export default function SitesList({ onEdit, onDelete }) {
         <div>
             {/* Results count */}
             {totalItems > 0 && (
-                <div className="px-3 sm:px-6 pt-3 sm:pt-4 text-sm text-gray-400">
+                <div className="px-3 sm:px-6 pt-3 sm:pt-4 text-sm text-app-text-secondary">
                     Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} sites
                 </div>
             )}

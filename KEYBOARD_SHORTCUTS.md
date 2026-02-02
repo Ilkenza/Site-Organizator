@@ -295,5 +295,33 @@ const domainPatterns = {
 
 ---
 
-**Last Updated:** January 31, 2026
-**Version:** 1.0.0
+## Metadata
+
+**Last Updated:** February 2, 2026  
+**Version:** 1.0.1  
+**Project:** Site Organizator  
+**Repository:** [GitHub](https://github.com/ilkeroguz/site-organizator)
+
+---
+
+## Quick Links
+
+- [Setup Guide](QUICK_SETUP.md)
+- [README](README.md)
+- [Configuration Files](.eslintrc.json)
+
+---
+
+## Changelog
+
+### v1.0.1 - February 2, 2026
+
+- Updated documentation structure
+- Added metadata section
+- Added quick links
+
+### v1.0.0 - January 31, 2026
+
+- Initial keyboard shortcuts documentation
+- Command menu reference
+- Animation guide

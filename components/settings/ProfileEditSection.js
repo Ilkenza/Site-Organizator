@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function ProfileEditSection({ user, refreshUser }) {
     const [displayName, setDisplayName] = useState('');
@@ -7,14 +7,7 @@ export default function ProfileEditSection({ user, refreshUser }) {
     const [savingName, setSavingName] = useState(false);
     const [nameMessage, setNameMessage] = useState(null);
 
-    // Initialize display name
-    useEffect(() => {
-        if (user?.displayName) {
-            setDisplayName(user.displayName);
-        }
-    }, [user?.displayName]);
-
-    // Load fresh name from database
+    // Load name from database
     useEffect(() => {
         const loadName = async () => {
             if (!user?.id) return;
@@ -33,14 +26,21 @@ export default function ProfileEditSection({ user, refreshUser }) {
                 const result = await response.json();
                 if (result.success && result.data?.name) {
                     setDisplayName(result.data.name);
+                } else if (user?.displayName) {
+                    // Fallback to user prop if API fails
+                    setDisplayName(user.displayName);
                 }
             } catch (err) {
                 console.error('[ProfileEditSection] Error loading name:', err);
+                // Fallback to user prop on error
+                if (user?.displayName) {
+                    setDisplayName(user.displayName);
+                }
             }
         };
 
         loadName();
-    }, [user?.id]);
+    }, [user?.id, user?.displayName]);
 
     const handleSaveName = async () => {
         if (!displayName.trim() || !user?.id) {
@@ -107,7 +107,13 @@ export default function ProfileEditSection({ user, refreshUser }) {
                             type="text"
                             value={displayName}
                             onChange={(e) => setDisplayName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && displayName.trim() && !savingName) {
+                                    handleSaveName();
+                                }
+                            }}
                             placeholder="Enter your name"
+                            autoFocus
                             className="w-full px-3 py-2 bg-app-bg-secondary border border-app-border rounded-lg text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-2 focus:ring-app-accent mb-2"
                         />
                         <div className="flex gap-2">

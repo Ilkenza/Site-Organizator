@@ -1,4 +1,8 @@
 {
+  // ESLint Configuration for Site Organizer
+  // - Next.js best practices
+  // - React/JSX rules
+  // - Code quality standards
   "extends": [
     "next/core-web-vitals",
     "eslint:recommended"
@@ -10,17 +14,45 @@
   },
   "parserOptions": {
     "ecmaVersion": 2022,
-    "sourceType": "module"
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
   },
   "rules": {
+    // Variables
     "no-unused-vars": [
       "warn",
       {
         "argsIgnorePattern": "^_",
-        "varsIgnorePattern": "^_"
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
       }
     ],
+    // React/JSX
     "react/no-unescaped-entities": "warn",
-    "no-empty": "warn"
+    "react/prop-types": "off",
+    "react/react-in-jsx-scope": "off",
+    // Code Quality
+    "no-empty": "warn",
+    "no-console": [
+      "warn",
+      {
+        "allow": [
+          "warn",
+          "error",
+          "info"
+        ]
+      }
+    ],
+    "prefer-const": "warn",
+    "no-var": "error",
+    // Best Practices
+    "eqeqeq": [
+      "warn",
+      "always"
+    ],
+    "no-eval": "error",
+    "no-implied-eval": "error"
   }
 }

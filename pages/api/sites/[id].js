@@ -1,277 +1,522 @@
+/**
+ * @fileoverview API endpoint for individual site operations (GET, PUT/PATCH, DELETE)
+ * Handles site updates with category/tag relations and RLS-aware key selection
+ */
+
+// Constants
+const HTTP_STATUS = {
+  OK: 200,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  METHOD_NOT_ALLOWED: 405,
+  INTERNAL_ERROR: 500,
+  BAD_GATEWAY: 502,
+};
+
+const ERROR_MESSAGES = {
+  METHOD_NOT_ALLOWED: 'Method not allowed',
+  MISSING_ENV: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment',
+  UPSTREAM_ERROR: 'Upstream REST error',
+  REFETCH_FAILED: 'Failed to refetch site',
+};
+
+const HEADERS = {
+  ACCEPT: 'application/json',
+  CONTENT_TYPE: 'application/json',
+  PREFER_RETURN: 'return=representation',
+};
+
+const SUPABASE_TABLES = {
+  SITES: 'sites',
+  CATEGORIES: 'categories',
+  TAGS: 'tags',
+  SITE_CATEGORIES: 'site_categories',
+  SITE_TAGS: 'site_tags',
+};
+
+const ALLOWED_SITE_FIELDS = ['name', 'url', 'pricing'];
+
+const WARNING_MESSAGES = {
+  NO_SERVICE_KEY: '[Sites/ID API] No service role key configured - falling back to anon key. Relation writes may be blocked by RLS.',
+  OWNER_CHECK_FAILED: '[Sites/ID API] Owner check for relation updates failed:',
+  RLS_BLOCKED: '[Sites/ID API] Relation insert likely blocked by RLS; REL_KEY type:',
+};
+
+// Helper Functions
+
+/**
+ * Get Supabase configuration from environment
+ * @returns {Object|null} Config object or null if missing
+ */
+function getSupabaseConfig() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) return null;
+
+  return {
+    url: url.replace(/\/$/, ''),
+    anonKey,
+    serviceKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '').replace(/^["']|["']$/g, ''),
+  };
+}
+
+/**
+ * Extract user token from Authorization header
+ * @param {string} authHeader - Authorization header value
+ * @returns {string|null} User token or null
+ */
+function extractUserToken(authHeader) {
+  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+}
+
+/**
+ * Parse JWT token to extract user ID
+ * @param {string} token - JWT token
+ * @returns {string|null} User ID (sub claim) or null
+ */
+function parseTokenUserId(token) {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    return payload?.sub || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Build headers for Supabase API calls
+ * @param {string} apiKey - API key
+ * @param {string} authToken - Authorization token
+ * @param {boolean} [includeContentType=false] - Include Content-Type header
+ * @param {boolean} [includePrefer=false] - Include Prefer header
+ * @returns {Object} Headers object
+ */
+function buildHeaders(apiKey, authToken, includeContentType = false, includePrefer = false) {
+  const headers = {
+    apikey: apiKey,
+    Authorization: `Bearer ${authToken}`,
+    Accept: HEADERS.ACCEPT,
+  };
+  if (includeContentType) headers['Content-Type'] = HEADERS.CONTENT_TYPE;
+  if (includePrefer) headers['Prefer'] = HEADERS.PREFER_RETURN;
+  return headers;
+}
+
+/**
+ * Check if user is owner of site and return appropriate key for relations
+ * @param {string} siteId - Site ID
+ * @param {string} userToken - User JWT token
+ * @param {Object} config - Supabase config
+ * @returns {Promise<string>} Key to use for relation operations
+ */
+async function determineRelationKey(siteId, userToken, config) {
+  if (!userToken || !siteId) return config.anonKey;
+
+  try {
+    const userId = parseTokenUserId(userToken);
+    if (!userId) return config.anonKey;
+
+    // Check if user owns the site
+    const ownerUrl = `${config.url}/rest/v1/${SUPABASE_TABLES.SITES}?id=eq.${siteId}&select=user_id`;
+    const headers = buildHeaders(config.anonKey, userToken);
+    const response = await fetch(ownerUrl, { headers });
+
+    if (!response.ok) return config.anonKey;
+
+    const rows = await response.json();
+    const ownerId = rows?.[0]?.user_id;
+
+    if (ownerId === userId && config.serviceKey) {
+      return config.serviceKey;
+    }
+
+    if (ownerId === userId && !config.serviceKey) {
+      console.warn(WARNING_MESSAGES.NO_SERVICE_KEY);
+    }
+
+    return config.anonKey;
+  } catch (e) {
+    console.warn(WARNING_MESSAGES.OWNER_CHECK_FAILED, e);
+    return config.anonKey;
+  }
+}
+
+/**
+ * Fetch names for given IDs from a table
+ * @param {Array<string>} ids - Array of IDs
+ * @param {string} tableName - Table name
+ * @param {string} baseUrl - Supabase base URL
+ * @param {string} apiKey - API key
+ * @param {string} authToken - Auth token
+ * @returns {Promise<Array<string>>} Array of names
+ */
+async function fetchNamesByIds(ids, tableName, baseUrl, apiKey, authToken) {
+  if (!Array.isArray(ids) || ids.length === 0) return [];
+
+  const idsParam = ids.map(id => `"${id}"`).join(',');
+  const url = `${baseUrl}/rest/v1/${tableName}?id=in.(${idsParam})&select=name`;
+  const headers = buildHeaders(apiKey, authToken);
+
+  const response = await fetch(url, { headers });
+  if (!response.ok) return [];
+
+  const data = await response.json();
+  return data.map(item => item.name);
+}
+
+/**
+ * Delete all relations for a site in a specific junction table
+ * @param {string} siteId - Site ID
+ * @param {string} tableName - Junction table name
+ * @param {string} baseUrl - Supabase base URL
+ * @param {string} relationKey - Key to use for deletion
+ * @returns {Promise<Object|null>} Warning object if failed, null if success
+ */
+async function deleteRelations(siteId, tableName, baseUrl, relationKey) {
+  const url = `${baseUrl}/rest/v1/${tableName}?site_id=eq.${siteId}`;
+  const headers = buildHeaders(relationKey, relationKey);
+
+  const response = await fetch(url, { method: 'DELETE', headers });
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error(`Failed to delete ${tableName}:`, response.status, errText);
+    return { stage: `delete_${tableName}`, status: response.status, details: errText };
+  }
+  return null;
+}
+
+/**
+ * Insert relations for a site
+ * @param {string} siteId - Site ID
+ * @param {Array<string>} relationIds - Array of relation IDs
+ * @param {string} tableName - Junction table name
+ * @param {string} relationField - Field name for relation ID
+ * @param {string} baseUrl - Supabase base URL
+ * @param {string} relationKey - Key to use for insertion
+ * @param {string} anonKey - Anon key for comparison
+ * @returns {Promise<Object|null>} Warning object if failed, null if success
+ */
+async function insertRelations(siteId, relationIds, tableName, relationField, baseUrl, relationKey, anonKey) {
+  if (relationIds.length === 0) return null;
+
+  const payload = relationIds.map(relationId => ({
+    site_id: siteId,
+    [relationField]: relationId,
+  }));
+
+  const url = `${baseUrl}/rest/v1/${tableName}`;
+  const headers = buildHeaders(relationKey, relationKey, true);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error(`Failed to insert ${tableName}:`, response.status, errText);
+
+    if (response.status === HTTP_STATUS.UNAUTHORIZED || (errText && errText.includes('42501'))) {
+      console.warn(WARNING_MESSAGES.RLS_BLOCKED, relationKey === anonKey ? 'anon' : 'service');
+      console.warn(`Upstream response for ${tableName} insert:`, errText);
+    }
+
+    return { stage: `insert_${tableName}`, status: response.status, details: errText };
+  }
+  return null;
+}
+
+/**
+ * Update site relations (categories and tags)
+ * @param {string} siteId - Site ID
+ * @param {Array<string>} categoryIds - Category IDs
+ * @param {Array<string>} tagIds - Tag IDs
+ * @param {string} baseUrl - Supabase base URL
+ * @param {string} relationKey - Key to use for relation operations
+ * @param {string} anonKey - Anon key for comparison
+ * @returns {Promise<Array>} Array of warnings
+ */
+async function updateSiteRelations(siteId, categoryIds, tagIds, baseUrl, relationKey, anonKey) {
+  const warnings = [];
+
+  // Update categories
+  if (Array.isArray(categoryIds)) {
+    try {
+      const delWarning = await deleteRelations(siteId, SUPABASE_TABLES.SITE_CATEGORIES, baseUrl, relationKey);
+      if (delWarning) warnings.push(delWarning);
+
+      const insWarning = await insertRelations(
+        siteId,
+        categoryIds,
+        SUPABASE_TABLES.SITE_CATEGORIES,
+        'category_id',
+        baseUrl,
+        relationKey,
+        anonKey
+      );
+      if (insWarning) warnings.push(insWarning);
+    } catch (err) {
+      console.error('Exception updating categories:', err);
+      warnings.push({ stage: 'exception_update_categories', error: String(err) });
+    }
+  }
+
+  // Update tags
+  if (Array.isArray(tagIds)) {
+    try {
+      const delWarning = await deleteRelations(siteId, SUPABASE_TABLES.SITE_TAGS, baseUrl, relationKey);
+      if (delWarning) warnings.push(delWarning);
+
+      const insWarning = await insertRelations(
+        siteId,
+        tagIds,
+        SUPABASE_TABLES.SITE_TAGS,
+        'tag_id',
+        baseUrl,
+        relationKey,
+        anonKey
+      );
+      if (insWarning) warnings.push(insWarning);
+    } catch (err) {
+      console.error('Exception updating tags:', err);
+      warnings.push({ stage: 'exception_update_tags', error: String(err) });
+    }
+  }
+
+  return warnings;
+}
+
+/**
+ * Refetch site with all relations
+ * @param {string} siteId - Site ID
+ * @param {string} baseUrl - Supabase base URL
+ * @param {string} apiKey - API key
+ * @param {string} authToken - Auth token
+ * @returns {Promise<Object|null>} Complete site object or null
+ */
+async function refetchSiteWithRelations(siteId, baseUrl, apiKey, authToken) {
+  const selectQuery = `*,categories_array:${SUPABASE_TABLES.SITE_CATEGORIES}(category:${SUPABASE_TABLES.CATEGORIES}(*)),tags_array:${SUPABASE_TABLES.SITE_TAGS}(tag:${SUPABASE_TABLES.TAGS}(*))`;
+  const url = `${baseUrl}/rest/v1/${SUPABASE_TABLES.SITES}?id=eq.${siteId}&select=${selectQuery}`;
+  const headers = buildHeaders(apiKey, authToken);
+
+  const response = await fetch(url, { headers });
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  const site = Array.isArray(data) ? data[0] : data;
+
+  if (!site) return null;
+
+  // Transform nested relations to flat format
+  if (site.categories_array) {
+    site.categories_array = site.categories_array.map(sc => sc.category).filter(Boolean);
+  }
+  if (site.tags_array) {
+    site.tags_array = site.tags_array.map(st => st.tag).filter(Boolean);
+  }
+
+  return site;
+}
+
+/**
+ * Filter request body to only allowed fields
+ * @param {Object} body - Request body
+ * @returns {Object} Filtered body with only allowed fields
+ */
+function filterAllowedFields(body) {
+  const filtered = {};
+  for (const key of ALLOWED_SITE_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(body, key)) {
+      filtered[key] = body[key];
+    }
+  }
+  filtered.updated_at = new Date().toISOString();
+  return filtered;
+}
+
+// Main Handler
+
+/**
+ * Handler for individual site operations (GET, PUT/PATCH, DELETE)
+ * @param {Object} req - Next.js request
+ * @param {Object} res - Next.js response
+ */
 export default async function handler(req, res) {
   const { id } = req.query;
-  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Extract user's JWT token from Authorization header (sent by fetchAPI)
-  const authHeader = req.headers.authorization;
-  const userToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-
-
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.error('Missing env vars:', { SUPABASE_URL: !!SUPABASE_URL, SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY });
-    return res.status(500).json({ success: false, error: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment' });
+  // Get Supabase configuration
+  const config = getSupabaseConfig();
+  if (!config) {
+    console.error('Missing env vars:', {
+      SUPABASE_URL: !!process.env.SUPABASE_URL,
+      SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+    });
+    return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+      success: false,
+      error: ERROR_MESSAGES.MISSING_ENV,
+    });
   }
 
-  // Use user's token for authenticated requests (respects RLS), fallback to anon key for reads
-  const AUTH_TOKEN = userToken || SUPABASE_ANON_KEY;
+  // Extract user token
+  const userToken = extractUserToken(req.headers.authorization);
+  const authToken = userToken || config.anonKey;
 
-  // Determine key to use for relation updates. If the requester is the site owner,
-  // prefer using the service role key to avoid RLS blocking relation writes.
-  let REL_KEY = userToken || SUPABASE_ANON_KEY;
-  try {
-    if (userToken && id) {
-      // Parse token to get user id
-      let userSub = null;
-      try { userSub = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString())?.sub; } catch (e) { /* ignore */ }
-
-      if (userSub) {
-        const ownerUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}&select=user_id`;
-        const ownerRes = await fetch(ownerUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}`, Accept: 'application/json' } });
-        if (ownerRes.ok) {
-          const ownerRows = await ownerRes.json();
-          if (ownerRows && ownerRows[0] && ownerRows[0].user_id === userSub) {
-            const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
-            REL_KEY = rawServiceKey ? rawServiceKey.replace(/^["']|["']$/g, '') : SUPABASE_ANON_KEY;
-            if (REL_KEY === SUPABASE_ANON_KEY) {
-              console.warn('[Sites/ID API] No service role key configured - falling back to anon key. Relation writes may be blocked by RLS.');
-              // NOTE: warnings.push() removed - warnings array not yet defined at this point
-              // The warning about missing service role key will be logged above instead
-            }
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('[Sites/ID API] Owner check for relation updates failed:', e);
-  }
+  // Determine key to use for relation updates (service key if owner, anon key otherwise)
+  const relationKey = await determineRelationKey(id, userToken, config);
 
   if (req.method === 'GET') {
     try {
-      const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
-      const r = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${AUTH_TOKEN}`, Accept: 'application/json' } });
-      if (!r.ok) return res.status(502).json({ success: false, error: 'Upstream REST error', details: await r.text() });
-      const rows = await r.json();
-      return res.status(200).json({ success: true, data: rows[0] || null });
-    } catch (err) { return res.status(500).json({ success: false, error: err.message || String(err) }); }
+      const url = `${config.url}/rest/v1/${SUPABASE_TABLES.SITES}?id=eq.${id}`;
+      const headers = buildHeaders(config.anonKey, authToken);
+      const response = await fetch(url, { headers });
+
+      if (!response.ok) {
+        return res.status(HTTP_STATUS.BAD_GATEWAY).json({
+          success: false,
+          error: ERROR_MESSAGES.UPSTREAM_ERROR,
+          details: await response.text(),
+        });
+      }
+
+      const rows = await response.json();
+      return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        data: rows[0] || null,
+      });
+    } catch (err) {
+      return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        error: err.message || String(err),
+      });
+    }
   }
 
   if (req.method === 'PUT' || req.method === 'PATCH') {
     try {
       const body = req.body || {};
-
-      // Extract category_ids and tag_ids before sending to Supabase
       const { category_ids, tag_ids, ...siteData } = body;
 
+      // Filter to only allowed fields and add timestamp
+      const filteredData = filterAllowedFields(siteData);
 
+      // Fetch category and tag names from IDs
+      const categoryNames = await fetchNamesByIds(
+        category_ids,
+        SUPABASE_TABLES.CATEGORIES,
+        config.url,
+        config.anonKey,
+        relationKey
+      );
+      const tagNames = await fetchNamesByIds(
+        tag_ids,
+        SUPABASE_TABLES.TAGS,
+        config.url,
+        config.anonKey,
+        relationKey
+      );
 
-      // Update the site itself (only allowed fields)
-      const allowedFields = ['name', 'url', 'pricing'];
-      const filteredData = {};
-      for (const key of allowedFields) {
-        if (Object.prototype.hasOwnProperty.call(siteData, key)) {
-          filteredData[key] = siteData[key];
-        }
-      }
-
-      // Add updated_at timestamp
-      filteredData.updated_at = new Date().toISOString();
-
-      // Fetch category names from IDs
-      let categoryNames = [];
-      if (Array.isArray(category_ids) && category_ids.length > 0) {
-        const catIdsParam = category_ids.map(id => `"${id}"`).join(',');
-        const catUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/categories?id=in.(${catIdsParam})&select=name`;
-        // Use REL_KEY (service role) to bypass RLS
-        const catRes = await fetch(catUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
-        if (catRes.ok) {
-          const cats = await catRes.json();
-          categoryNames = cats.map(c => c.name);
-        }
-      }
-
-      // Fetch tag names from IDs
-      let tagNames = [];
-      if (Array.isArray(tag_ids) && tag_ids.length > 0) {
-        const tagIdsParam = tag_ids.map(id => `"${id}"`).join(',');
-        const tagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/tags?id=in.(${tagIdsParam})&select=name`;
-        // Use REL_KEY (service role) to bypass RLS
-        const tagRes = await fetch(tagUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
-        if (tagRes.ok) {
-          const tagsData = await tagRes.json();
-          tagNames = tagsData.map(t => t.name);
-        }
-      }
-
-      // Save categories and tags directly to the sites table columns (using names, not IDs)
+      // Save names to sites table columns
       filteredData.categories = categoryNames;
       filteredData.tags = tagNames;
 
-
-      const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
-      const r = await fetch(url, {
+      // Update site
+      const url = `${config.url}/rest/v1/${SUPABASE_TABLES.SITES}?id=eq.${id}`;
+      const headers = buildHeaders(config.anonKey, userToken, true, true);
+      const response = await fetch(url, {
         method: 'PATCH',
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${userToken}`,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Prefer: 'return=representation'
-        },
-        body: JSON.stringify(filteredData)
+        headers,
+        body: JSON.stringify(filteredData),
       });
-      if (!r.ok) {
-        const errorText = await r.text();
-        console.error('Supabase PATCH error:', r.status, errorText);
-        return res.status(502).json({ success: false, error: 'Upstream REST error', status: r.status, details: errorText });
-      }
-      const updated = await r.json();
-      const _updatedSite = Array.isArray(updated) ? updated[0] : updated;
 
-      const warnings = [];
-
-      // Update categories if provided
-      if (Array.isArray(category_ids)) {
-        try {
-          // Delete existing site_categories
-          const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
-          const delCatRes = await fetch(delCatUrl, { method: 'DELETE', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}` } });
-          if (!delCatRes.ok) {
-            const errText = await delCatRes.text();
-            console.error('Failed to delete site_categories:', delCatRes.status, errText);
-            warnings.push({ stage: 'delete_site_categories', status: delCatRes.status, details: errText });
-          }
-
-          // Insert new categories
-          if (category_ids.length > 0) {
-            const catPayload = category_ids.map(category_id => ({ site_id: id, category_id }));
-            const insCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories`;
-            const insCatRes = await fetch(insCatUrl, {
-              method: 'POST',
-              headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify(catPayload)
-            });
-            if (!insCatRes.ok) {
-              const errText = await insCatRes.text();
-              console.error('Failed to insert site_categories:', insCatRes.status, errText);
-              if (insCatRes.status === 401 || (errText && errText.includes('42501'))) {
-                console.warn('[Sites/ID API] Relation insert likely blocked by RLS; REL_KEY type:', REL_KEY === SUPABASE_ANON_KEY ? 'anon' : 'service');
-                console.warn('Upstream response for site_categories insert:', errText);
-              }
-              warnings.push({ stage: 'insert_site_categories', status: insCatRes.status, details: errText });
-            }
-          }
-        } catch (err) { console.error('Exception updating categories:', err); warnings.push({ stage: 'exception_update_categories', error: String(err) }); }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Supabase PATCH error:', response.status, errorText);
+        return res.status(HTTP_STATUS.BAD_GATEWAY).json({
+          success: false,
+          error: ERROR_MESSAGES.UPSTREAM_ERROR,
+          status: response.status,
+          details: errorText,
+        });
       }
 
-      // Update tags if provided
-      if (Array.isArray(tag_ids)) {
-        try {
-          // Delete existing site_tags
-          const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
-          const delTagRes = await fetch(delTagUrl, { method: 'DELETE', headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}` } });
-          if (!delTagRes.ok) {
-            const errText = await delTagRes.text();
-            console.error('Failed to delete site_tags:', delTagRes.status, errText);
-            warnings.push({ stage: 'delete_site_tags', status: delTagRes.status, details: errText });
-          }
+      // Update relations (categories and tags junction tables)
+      const warnings = await updateSiteRelations(
+        id,
+        category_ids,
+        tag_ids,
+        config.url,
+        relationKey,
+        config.anonKey
+      );
 
-          // Insert new tags
-          if (tag_ids.length > 0) {
-            const tagPayload = tag_ids.map(tag_id => ({ site_id: id, tag_id }));
-            const insTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags`;
-            const insTagRes = await fetch(insTagUrl, {
-              method: 'POST',
-              headers: { apikey: REL_KEY, Authorization: `Bearer ${REL_KEY}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify(tagPayload)
-            });
-            if (!insTagRes.ok) {
-              const errText = await insTagRes.text();
-              console.error('Failed to insert site_tags:', insTagRes.status, errText);
-              if (insTagRes.status === 401 || (errText && errText.includes('42501'))) {
-                console.warn('[Sites/ID API] Relation insert likely blocked by RLS; REL_KEY type:', REL_KEY === SUPABASE_ANON_KEY ? 'anon' : 'service');
-                console.warn('Upstream response for site_tags insert:', errText);
-              }
-              warnings.push({ stage: 'insert_site_tags', status: insTagRes.status, details: errText });
-            }
-          }
-        } catch (err) { console.error('Exception updating tags:', err); warnings.push({ stage: 'exception_update_tags', error: String(err) }); }
-      }
+      // Refetch complete site with relations
+      const completeSite = await refetchSiteWithRelations(
+        id,
+        config.url,
+        config.anonKey,
+        relationKey
+      );
 
-      // Refetch the site with all related data
-      // Use REL_KEY (service role) to bypass RLS and get all categories/tags
-      const refetchUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}&select=*,categories_array:site_categories(category:categories(*)),tags_array:site_tags(tag:tags(*))`;
-      const refetchRes = await fetch(refetchUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${REL_KEY}`, Accept: 'application/json' } });
-      if (refetchRes.ok) {
-        const refetchData = await refetchRes.json();
-        const completeSite = Array.isArray(refetchData) ? refetchData[0] : refetchData;
-
-        // Transform categories_array and tags_array to flat format
-        if (completeSite?.categories_array) {
-          completeSite.categories_array = completeSite.categories_array.map(sc => sc.category).filter(Boolean);
-        }
-        if (completeSite?.tags_array) {
-          completeSite.tags_array = completeSite.tags_array.map(st => st.tag).filter(Boolean);
-        }
-
-        return res.status(200).json({ success: true, data: completeSite, warnings: warnings && warnings.length ? warnings : undefined });
+      if (completeSite) {
+        return res.status(HTTP_STATUS.OK).json({
+          success: true,
+          data: completeSite,
+          warnings: warnings.length ? warnings : undefined,
+        });
       } else {
-        const errorText = await refetchRes.text();
-        return res.status(502).json({ success: false, error: 'Failed to refetch site', details: errorText });
+        return res.status(HTTP_STATUS.BAD_GATEWAY).json({
+          success: false,
+          error: ERROR_MESSAGES.REFETCH_FAILED,
+        });
       }
     } catch (err) {
       console.error('PUT/PATCH exception:', err);
-      return res.status(500).json({ success: false, error: err.message || String(err) });
+      return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        error: err.message || String(err),
+      });
     }
   }
 
   if (req.method === 'DELETE') {
     try {
+      // Delete relations first (ignore errors)
+      await Promise.allSettled([
+        deleteRelations(id, SUPABASE_TABLES.SITE_CATEGORIES, config.url, authToken),
+        deleteRelations(id, SUPABASE_TABLES.SITE_TAGS, config.url, authToken),
+      ]);
 
+      // Delete the site itself
+      const url = `${config.url}/rest/v1/${SUPABASE_TABLES.SITES}?id=eq.${id}`;
+      const headers = buildHeaders(config.anonKey, userToken);
+      const response = await fetch(url, { method: 'DELETE', headers });
 
-      // First, delete related site_categories
-      try {
-        const delCatUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_categories?site_id=eq.${id}`;
-        await fetch(delCatUrl, {
-          method: 'DELETE',
-          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Supabase DELETE error:', response.status, errorText);
+        return res.status(HTTP_STATUS.BAD_GATEWAY).json({
+          success: false,
+          error: ERROR_MESSAGES.UPSTREAM_ERROR,
+          status: response.status,
+          details: errorText,
         });
-      } catch (err) {
-        console.warn('Failed to delete site_categories:', err);
       }
 
-      // Then, delete related site_tags
-      try {
-        const delTagUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/site_tags?site_id=eq.${id}`;
-        await fetch(delTagUrl, {
-          method: 'DELETE',
-          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${userToken}` }
-        });
-      } catch (err) {
-        console.warn('Failed to delete site_tags:', err);
-      }
-
-      // Now delete the site itself
-      const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?id=eq.${id}`;
-      const r = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${userToken}`,
-          Accept: 'application/json'
-        }
-      });
-      if (!r.ok) {
-        const errorText = await r.text();
-        console.error('Supabase DELETE error:', r.status, errorText);
-        return res.status(502).json({ success: false, error: 'Upstream REST error', status: r.status, details: errorText });
-      }
-      return res.status(200).json({ success: true });
+      return res.status(HTTP_STATUS.OK).json({ success: true });
     } catch (err) {
       console.error('DELETE exception:', err);
-      return res.status(500).json({ success: false, error: err.message || String(err) });
+      return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
+        success: false,
+        error: err.message || String(err),
+      });
     }
   }
 
-  return res.status(405).json({ success: false, error: 'Method not allowed' });
+  return res.status(HTTP_STATUS.METHOD_NOT_ALLOWED).json({
+    success: false,
+    error: ERROR_MESSAGES.METHOD_NOT_ALLOWED,
+  });
 }

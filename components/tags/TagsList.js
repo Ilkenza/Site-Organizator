@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
-import { ConfirmModal } from '../ui/Modal';
+import Modal, { ConfirmModal } from '../ui/Modal';
 import InlineEditableName from '../categories/InlineEditableName';
 
 export default function TagsList({ onEdit }) {
@@ -252,7 +252,7 @@ export default function TagsList({ onEdit }) {
                             </div>
                         );
                     })}
-                </div >
+                </div>
             )}
 
             {/* Delete Confirmation Modal */}
@@ -267,40 +267,39 @@ export default function TagsList({ onEdit }) {
                 variant="danger"
             />
             {/* Usage Warning Modal */}
-            {
-                usageWarning?.type === 'tag' && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-                        <div className="bg-app-bg-primary rounded-lg shadow-2xl max-w-md w-full mx-4 animate-slideUp border border-app-border">
-                            <div className="p-6">
-                                <h2 className="text-lg font-semibold text-app-text-primary mb-4 flex items-center gap-2">
-                                    <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                    Cannot Delete Tag
-                                </h2>
-                                <p className="text-app-text-secondary mb-4">
-                                    The tag <strong>&quot;{usageWarning.name}&quot;</strong> is used on <strong>{usageWarning.count}</strong> site{usageWarning.count !== 1 ? 's' : ''}:
-                                </p>
-                                <div className="bg-app-bg-light rounded p-3 mb-4 max-h-40 overflow-y-auto">
-                                    {usageWarning.sites?.map(site => (
-                                        <div key={site.id} className="text-sm text-app-text-secondary py-1">
-                                            • {site.name}
-                                        </div>
-                                    ))}
-                                </div>
-                                <p className="text-sm text-app-text-secondary mb-6">
-                                    Remove this tag from all sites first to delete it.
-                                </p>
-                                <button
-                                    onClick={() => setUsageWarning(null)}
-                                    className="w-full px-4 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
-                                >
-                                    Got it
-                                </button>
-                            </div>
-                        </div>
+            <Modal
+                isOpen={usageWarning?.type === 'tag'}
+                onClose={() => setUsageWarning(null)}
+                title="Cannot Delete Tag"
+                size="sm"
+            >
+                <div className="space-y-4">
+                    <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                        <svg className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <p className="text-app-text-secondary">
+                            The tag <strong>&quot;{usageWarning?.name}&quot;</strong> is used on <strong>{usageWarning?.count}</strong> site{usageWarning?.count !== 1 ? 's' : ''}:
+                        </p>
                     </div>
-                )
-            }    </div >
+                    <div className="bg-app-bg-light rounded-lg p-3 max-h-40 overflow-y-auto border border-app-border">
+                        {usageWarning?.sites?.map(site => (
+                            <div key={site.id} className="text-sm text-app-text-secondary py-1">
+                                • {site.name}
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-sm text-app-text-secondary">
+                        Remove this tag from all sites first to delete it.
+                    </p>
+                    <button
+                        onClick={() => setUsageWarning(null)}
+                        className="w-full px-4 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
+                    >
+                        Got it
+                    </button>
+                </div>
+            </Modal>
+        </div>
     );
 }

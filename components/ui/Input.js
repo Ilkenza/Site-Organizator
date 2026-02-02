@@ -65,15 +65,15 @@ export function Select({
     return (
         <div className={`space-y-1.5 ${className}`}>
             {label && (
-                <label className="block text-sm font-medium text-gray-300">
+                <label className="block text-sm font-medium text-app-text-primary">
                     {label}
                 </label>
             )}
             <select
-                className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white 
-          focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                className={`w-full px-3 py-2 bg-app-bg-light border rounded-lg text-app-text-primary 
+          focus:outline-none focus:ring-2 focus:ring-app-accent focus:border-transparent
           transition-colors disabled:opacity-50 disabled:cursor-not-allowed
-          ${error ? 'border-red-500' : 'border-gray-700 hover:border-gray-600'}`}
+          ${error ? 'border-error-text' : 'border-app-border hover:border-app-accent/50'}`}
                 {...props}
             >
                 <option value="">{placeholder}</option>
@@ -83,7 +83,7 @@ export function Select({
                     </option>
                 ))}
             </select>
-            {error && <p className="text-sm text-red-400">{error}</p>}
+            {error && <p className="text-sm text-error-text">{error}</p>}
         </div>
     );
 }

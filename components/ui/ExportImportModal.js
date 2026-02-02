@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 
@@ -9,6 +9,16 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
     const [importPreview, setImportPreview] = useState(null);
     const [message, setMessage] = useState('');
     const [messageType, setMessageType] = useState('info');
+
+    // Reset state when modal closes
+    useEffect(() => {
+        if (!isOpen) {
+            setImportFile(null);
+            setImportPreview(null);
+            setMessage('');
+            setMessageType('info');
+        }
+    }, [isOpen]);
 
     const handleExport = async (format = 'json') => {
         setExporting(true);
@@ -103,9 +113,9 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
             <div className="space-y-4">
                 {/* Message */}
                 {message && (
-                    <div className={`p-3 rounded-lg text-sm ${messageType === 'success' ? 'bg-emerald-900/30 text-emerald-200' :
-                        messageType === 'error' ? 'bg-red-900/30 text-red-200' :
-                            'bg-blue-900/30 text-blue-200'
+                    <div className={`p-3 rounded-lg text-sm ${messageType === 'success' ? 'bg-success-bg/30 text-success-text' :
+                            messageType === 'error' ? 'bg-btn-danger/30 text-app-text-primary' :
+                                'bg-app-accent/20 text-app-accent'
                         }`}>
                         {message}
                     </div>
@@ -194,7 +204,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
                                     variant="primary"
                                     className="flex-1"
                                 >
-                                    {importing ? 'Importing...' : '📤 Import Sites'}
+                                    {importing ? 'Importing...' : '� Import Sites'}
                                 </Button>
                             </div>
                         </div>

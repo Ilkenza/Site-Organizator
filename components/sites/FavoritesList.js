@@ -88,6 +88,7 @@ export default function FavoritesList({ onEdit, onDelete }) {
                 query: { ...router.query, page: 1 }
             }, undefined, { shallow: true });
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchQuery, selectedCategory, selectedTag]);
 
     // Handle page change
@@ -123,8 +124,8 @@ export default function FavoritesList({ onEdit, onDelete }) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                     </svg>
                 </div>
-                <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">No favorite sites yet</h3>
-                <p className="text-sm sm:text-base text-gray-400 text-center max-w-md">
+                <h3 className="text-lg sm:text-xl font-semibold text-app-text-primary mb-2">No favorite sites yet</h3>
+                <p className="text-sm sm:text-base text-app-text-secondary text-center max-w-md">
                     Click the star icon on any site to add it to your favorites. Your favorite sites will appear here.
                 </p>
             </div>
@@ -139,9 +140,9 @@ export default function FavoritesList({ onEdit, onDelete }) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </div>
-                <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">No favorite sites found</h3>
-                <p className="text-sm sm:text-base text-gray-400 text-center max-w-md">
-                    Try adjusting your search or filters to find what you're looking for.
+                <h3 className="text-lg sm:text-xl font-semibold text-app-text-primary mb-2">No favorite sites found</h3>
+                <p className="text-sm sm:text-base text-app-text-secondary text-center max-w-md">
+                    Try adjusting your search or filters to find what you&apos;re looking for.
                 </p>
             </div>
         );
@@ -151,7 +152,7 @@ export default function FavoritesList({ onEdit, onDelete }) {
         <div>
             {/* Results count */}
             {totalItems > 0 && (
-                <div className="px-3 sm:px-6 pt-3 sm:pt-4 text-sm text-gray-400">
+                <div className="px-3 sm:px-6 pt-3 sm:pt-4 text-sm text-app-text-secondary">
                     Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} favorite sites
                 </div>
             )}

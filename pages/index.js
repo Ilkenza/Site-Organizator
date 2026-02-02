@@ -1,35 +1,121 @@
-import { useEffect } from 'react';
+/**
+ * @fileoverview Landing page for Site Organizer
+ * Shows marketing content and redirects authenticated users to dashboard
+ */
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import { useAuth } from '../context/AuthContext';
+import { SiGooglechrome, SiFirefoxbrowser } from 'react-icons/si';
+import { FaEdge } from 'react-icons/fa';
+import { Modal } from '../components/ui';
 
-// Reusable Logo Component
+// Configuration
+const PAGE_CONFIG = {
+  TITLE: 'Site Organizer - Organize Your Favorite Websites',
+  DESCRIPTION: 'Save, categorize, and tag your favorite websites. Access them from anywhere with your personal dashboard.',
+  APP_NAME: 'Site Organizer',
+  DASHBOARD_URL: '/dashboard/sites',
+  LOGIN_URL: '/login',
+  DOMAIN: 'https://site-organizator.vercel.app/',
+  GRADIENT_COLORS: {
+    PRIMARY: '#6CBBFB',
+    SECONDARY: '#4A9FE8'
+  },
+  BUTTON_COLORS: {
+    PRIMARY: '#1E4976',
+    PRIMARY_HOVER: '#2A5B9E'
+  }
+};
+
+// Logo size configurations
+const LOGO_SIZES = {
+  sm: { container: 'w-8 h-8', icon: 'w-4 h-4' },
+  md: { container: 'w-10 h-10', icon: 'w-5 h-5' },
+  lg: { container: 'w-16 h-16', icon: 'w-8 h-8' },
+  xl: { container: 'w-20 h-20', icon: 'w-10 h-10' }
+};
+
+// Button style configurations
+const BUTTON_CLASSES = {
+  PRIMARY: 'bg-[#1E4976] hover:bg-[#2A5B9E] text-white font-medium rounded-lg transition-all',
+  PRIMARY_LARGE: 'bg-[#1E4976] hover:bg-[#2A5B9E] text-white font-semibold rounded-xl transition-all text-lg shadow-lg hover:shadow-xl',
+  SECONDARY: 'bg-app-bg-light/50 hover:bg-app-bg-light border border-app-border text-white font-medium rounded-xl transition-all text-lg backdrop-blur-sm',
+  LINK: 'text-gray-300 hover:text-white transition-colors font-medium'
+};
+
+/**
+ * Reusable Logo Component
+ * @param {Object} props - Component props
+ * @param {string} props.size - Size variant (sm, md, lg, xl)
+ * @returns {JSX.Element} Logo component
+ */
 const Logo = ({ size = 'md' }) => {
-  const sizes = {
-    sm: { container: 'w-8 h-8', icon: 'w-4 h-4' },
-    md: { container: 'w-10 h-10', icon: 'w-5 h-5' },
-    lg: { container: 'w-16 h-16', icon: 'w-8 h-8' },
-    xl: { container: 'w-20 h-20', icon: 'w-10 h-10' }
-  };
+  const sizeClasses = LOGO_SIZES[size];
 
   return (
-    <div className={`${sizes[size].container} rounded-xl bg-gradient-to-br from-app-accent to-[#4A9FE8] flex items-center justify-center shadow-lg shadow-app-accent/20`}>
-      <svg className={`${sizes[size].icon} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className={`${sizeClasses.container} rounded-xl bg-gradient-to-br from-app-accent to-[#4A9FE8] flex items-center justify-center shadow-lg shadow-app-accent/20`}>
+      <svg className={`${sizeClasses.icon} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
       </svg>
     </div>
   );
 };
 
+/**
+ * Home page component - landing page with marketing content
+ * @returns {JSX.Element} Home page
+ */
 export default function Home() {
   const { user, loading } = useAuth();
+  const [comingSoonModal, setComingSoonModal] = useState({ isOpen: false, browser: '', message: '' });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!loading && user) {
-      window.location.href = '/dashboard';
+      window.location.href = PAGE_CONFIG.DASHBOARD_URL;
     }
   }, [user, loading]);
+
+  // Scroll animation observer
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const observerOptions = {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('animate-visible');
+        }
+      });
+    }, observerOptions);
+
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      // Observe all elements with scroll-animate classes
+      const elements = document.querySelectorAll('.scroll-animate, .scroll-animate-stagger');
+
+      elements.forEach((el) => {
+        observer.observe(el);
+        // Check if element is already in viewport
+        const rect = el.getBoundingClientRect();
+        const isInViewport = rect.top < (window.innerHeight - 50) && rect.bottom > 0;
+        if (isInViewport) {
+          el.classList.add('animate-visible');
+        }
+      });
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -42,8 +128,8 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Site Organizer - Organize Your Favorite Websites</title>
-        <meta name="description" content="Save, categorize, and tag your favorite websites. Access them from anywhere with your personal dashboard." />
+        <title>{PAGE_CONFIG.TITLE}</title>
+        <meta name="description" content={PAGE_CONFIG.DESCRIPTION} />
       </Head>
 
       <div className="min-h-screen bg-gray-950 relative overflow-hidden">
@@ -58,21 +144,21 @@ export default function Home() {
         <nav className="relative z-10 border-b border-app-border/50 backdrop-blur-sm bg-gray-950/80">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <Logo size="md" />
-                <span className="text-xl font-bold text-white">Site Organizer</span>
+                <span className="text-lg sm:text-xl font-bold text-white">{PAGE_CONFIG.APP_NAME}</span>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <Link
-                  href="/login"
-                  className="px-4 py-2 text-gray-300 hover:text-white transition-colors font-medium"
+                  href={PAGE_CONFIG.LOGIN_URL}
+                  className={`px-3 sm:px-4 py-2 ${BUTTON_CLASSES.LINK} text-sm sm:text-base`}
                 >
                   Sign In
                 </Link>
                 <Link
-                  href="/login"
-                  className="px-5 py-2 bg-[#1E4976] hover:bg-[#2A5B9E] text-white font-medium rounded-lg transition-all"
+                  href={PAGE_CONFIG.LOGIN_URL}
+                  className={`px-4 sm:px-5 py-2 ${BUTTON_CLASSES.PRIMARY} text-sm sm:text-base`}
                 >
                   Get Started
                 </Link>
@@ -84,35 +170,60 @@ export default function Home() {
         {/* Hero Section */}
         <main className="relative z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-32">
-            <div className="text-center">
+            <div className="text-center animate-fadeInUp">
               {/* Logo Badge */}
               <div className="flex justify-center mb-8">
-                <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-app-bg-light/50 border border-app-border backdrop-blur-sm">
+                <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-app-bg-light/50 border border-app-border backdrop-blur-sm hover:border-app-accent/50 transition-all duration-300">
                   <Logo size="sm" />
-                  <span className="text-sm font-medium text-gray-300">Your Personal Bookmark Manager</span>
+                  <span className="text-sm font-medium text-gray-300">🚀 Save Once, Find Forever</span>
                 </div>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white mb-6 leading-tight">
-                Organize Your
+                Never Lose a Link.
                 <br />
-                <span className="text-app-accent">Favorite Websites</span>
+                <span className="bg-gradient-to-r from-app-accent to-purple-400 bg-clip-text text-transparent">Ever Again.</span>
               </h1>
 
-              <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-                Save, categorize, and tag your favorite websites. Access them from anywhere with your personal dashboard and browser extension.
+              <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-6 leading-relaxed">
+                That article you saved 3 months ago? Found in <span className="text-white font-semibold">2 seconds</span>. No folders. No digging. Just search.
+                <br className="hidden sm:block" />
+                <span className="text-gray-300">Free forever. Works everywhere.</span>
               </p>
+
+              {/* Quick Stats */}
+              <div className="flex items-center justify-center gap-6 mb-10 text-sm">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span>Forever Free</span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-400">
+                  <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  <span>Your Data Only</span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-400">
+                  <svg className="w-5 h-5 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M13 7H7v6h6V7z" />
+                    <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
+                  </svg>
+                  <span>Zero Setup</span>
+                </div>
+              </div>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link
-                  href="/login"
-                  className="w-full sm:w-auto px-8 py-4 bg-[#1E4976] hover:bg-[#2A5B9E] text-white font-semibold rounded-xl transition-all text-lg"
+                  href={PAGE_CONFIG.LOGIN_URL}
+                  className={`w-full sm:w-auto px-8 py-4 ${BUTTON_CLASSES.PRIMARY_LARGE}`}
                 >
-                  Start Organizing Free
+                  Get Started Free
                 </Link>
                 <a
                   href="#features"
-                  className="w-full sm:w-auto px-8 py-4 bg-app-bg-light/50 hover:bg-app-bg-light border border-app-border text-white font-medium rounded-xl transition-all text-lg backdrop-blur-sm"
+                  className={`w-full sm:w-auto px-8 py-4 ${BUTTON_CLASSES.SECONDARY}`}
                 >
                   Learn More
                 </a>
@@ -136,33 +247,21 @@ export default function Home() {
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                         </svg>
-                        siteorganizer.app/dashboard
+                        {PAGE_CONFIG.DOMAIN}/dashboard
                       </div>
                     </div>
                   </div>
                   {/* Mock Dashboard Content */}
                   <div className="p-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Logo size="sm" />
-                        <span className="text-white font-semibold">Site Organizer</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-app-bg-light"></div>
-                        <div className="w-8 h-8 rounded-lg bg-app-bg-light"></div>
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-app-accent to-purple-500"></div>
-                      </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="h-20 bg-app-bg-light/50 rounded-lg"></div>
+                      <div className="h-20 bg-app-bg-light/50 rounded-lg"></div>
+                      <div className="h-20 bg-app-bg-light/50 rounded-lg"></div>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="bg-app-bg-light/50 border border-app-border rounded-xl p-4 space-y-2">
-                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-app-accent/20 to-purple-500/20 flex items-center justify-center">
-                            <div className="w-6 h-6 rounded bg-app-accent/30"></div>
-                          </div>
-                          <div className="h-3 bg-gray-700 rounded w-3/4"></div>
-                          <div className="h-2 bg-gray-800 rounded w-1/2"></div>
-                        </div>
-                      ))}
+                    <div className="space-y-2">
+                      <div className="h-16 bg-app-bg-light/30 rounded-lg"></div>
+                      <div className="h-16 bg-app-bg-light/30 rounded-lg"></div>
+                      <div className="h-16 bg-app-bg-light/30 rounded-lg"></div>
                     </div>
                   </div>
                 </div>
@@ -171,131 +270,576 @@ export default function Home() {
           </div>
 
           {/* Features Section */}
-          <div id="features" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32">
+            <div className="text-center mb-20">
+              <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">
+                Bookmarking.
+                <br />
+                <span className="bg-gradient-to-r from-app-accent to-purple-400 bg-clip-text text-transparent">But Actually Good.</span>
+              </h2>
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+                Everything browser bookmarks should be, but aren&apos;t.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              {/* Feature 1 */}
+              <div className="scroll-animate-stagger group relative bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 hover:from-app-bg-light/70 hover:to-app-bg-light/50 border border-app-border hover:border-app-accent/50 rounded-3xl p-8 transition-all duration-500 hover:shadow-2xl hover:shadow-app-accent/10 hover:-translate-y-2">
+                <div className="absolute inset-0 bg-gradient-to-br from-app-accent/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-app-accent/20 to-app-accent/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-500">
+                    <svg className="w-8 h-8 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-3">Instant Search</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">Type. See results. Done. Faster than you can say &quot;loading spinner.&quot;</p>
+                </div>
+              </div>
+
+              {/* Feature 2 */}
+              <div className="scroll-animate-stagger group relative bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 hover:from-app-bg-light/70 hover:to-app-bg-light/50 border border-app-border hover:border-purple-500/50 rounded-3xl p-8 transition-all duration-500 hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-2">
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-500">
+                    <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-3">Auto-Organize</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">Categories and tags suggested automatically. Your bookmarks organize themselves.</p>
+                </div>
+              </div>
+
+              {/* Feature 3 */}
+              <div className="scroll-animate-stagger group relative bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 hover:from-app-bg-light/70 hover:to-app-bg-light/50 border border-app-border hover:border-green-500/50 rounded-3xl p-8 transition-all duration-500 hover:shadow-2xl hover:shadow-green-500/10 hover:-translate-y-2">
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500/20 to-green-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-500">
+                    <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-3">Actually Free</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">Free means free. Not &quot;free trial.&quot; Not &quot;freemium.&quot; Just free. Forever.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Browser Extensions Section */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32">
+            <div className="text-center mb-20">
+              <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">
+                Save From Anywhere.
+              </h2>
+              <p className="text-xl text-gray-400 max-w-2xl mx-auto">
+                One-click browser extension. Save any page in under a second. Chrome, Firefox, Edge.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              {/* Chrome */}
+              <div className="scroll-animate-stagger group relative bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 hover:from-app-bg-light/70 hover:to-app-bg-light/50 border border-app-border hover:border-blue-500/50 rounded-3xl p-8 transition-all duration-500 text-center hover:shadow-2xl hover:shadow-blue-500/10 hover:-translate-y-2">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="relative">
+                  <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent flex items-center justify-center group-hover:scale-110 transition-all duration-500 group-hover:rotate-6">
+                    <SiGooglechrome className="w-16 h-16" style={{ color: '#4285F4' }} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-blue-400 transition-colors duration-300">Chrome</h3>
+                  <p className="text-gray-400 text-sm mb-6">Fast & simple extension</p>
+                  <a
+                    href="#"
+                    className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-500/20 to-blue-600/20 hover:from-blue-500/30 hover:to-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl transition-all duration-300 font-semibold group-hover:shadow-lg group-hover:shadow-blue-500/20"
+                    onClick={(e) => { e.preventDefault(); setComingSoonModal({ isOpen: true, browser: 'Chrome', message: 'Save any webpage in one click. Auto-categorize. Never lose a link again. The Chrome extension launches soon!' }); }}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Add to Chrome
+                  </a>
+                </div>
+              </div>
+
+              {/* Firefox */}
+              <div className="scroll-animate-stagger group relative bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 hover:from-app-bg-light/70 hover:to-app-bg-light/50 border border-app-border hover:border-purple-500/50 rounded-3xl p-8 transition-all duration-500 text-center hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-2">
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="relative">
+                  <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent flex items-center justify-center group-hover:scale-110 transition-all duration-500 group-hover:rotate-6">
+                    <SiFirefoxbrowser className="w-16 h-16" style={{ color: '#FF7139' }} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-purple-400 transition-colors duration-300">Firefox</h3>
+                  <p className="text-gray-400 text-sm mb-6">Privacy-focused browser</p>
+                  <a
+                    href="#"
+                    className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-orange-500/20 to-orange-600/20 hover:from-orange-500/30 hover:to-orange-600/30 text-orange-400 border border-orange-500/30 rounded-xl transition-all duration-300 font-semibold group-hover:shadow-lg group-hover:shadow-orange-500/20"
+                    onClick={(e) => { e.preventDefault(); setComingSoonModal({ isOpen: true, browser: 'Firefox', message: 'One-click saves. Instant search. Auto-organization. The Firefox add-on is coming soon!' }); }}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Add to Firefox
+                  </a>
+                </div>
+              </div>
+
+              {/* Edge */}
+              <div className="group relative bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 hover:from-app-bg-light/70 hover:to-app-bg-light/50 border border-app-border hover:border-cyan-500/50 rounded-3xl p-8 transition-all duration-500 text-center hover:shadow-2xl hover:shadow-cyan-500/10 hover:-translate-y-2">
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <div className="relative">
+                  <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-blue-600/10 via-blue-600/5 to-transparent flex items-center justify-center group-hover:scale-110 transition-all duration-500 group-hover:rotate-6">
+                    <FaEdge className="w-16 h-16" style={{ color: '#0078D7' }} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors duration-300">Edge</h3>
+                  <p className="text-gray-400 text-sm mb-6">Modern & fast browser</p>
+                  <a
+                    href="#"
+                    className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-600/20 to-blue-700/20 hover:from-blue-600/30 hover:to-blue-700/30 text-blue-400 border border-blue-600/30 rounded-xl transition-all duration-300 font-semibold group-hover:shadow-lg group-hover:shadow-blue-600/20"
+                    onClick={(e) => { e.preventDefault(); setComingSoonModal({ isOpen: true, browser: 'Edge', message: 'Save anything. Find everything. Never dig through folders again. Edge extension launching soon!' }); }}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Add to Edge
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Features Section - Top 6 */}
+          <div id="features" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-animate">
+            <div className="text-center mb-12 animate-fadeInUp">
+              <div className="inline-block px-4 py-1.5 bg-app-accent/10 border border-app-accent/30 rounded-full text-app-accent text-sm font-medium mb-4">
                 Everything You Need
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                Built Different
               </h2>
               <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-                Powerful features to help you organize and access your favorite websites efficiently.
+                Everything browser bookmarks should be, but aren&apos;t.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Feature 1 */}
-              <div className="group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-app-accent/50 rounded-2xl p-6 transition-all duration-300">
+              {/* Feature 1 - Instant Search */}
+              <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-app-accent/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-app-accent/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-app-accent/20 to-app-accent/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <svg className="w-7 h-7 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Save Websites</h3>
-                <p className="text-gray-400 leading-relaxed">Quickly save any website with our browser extension or directly from the dashboard with one click.</p>
+                <h3 className="text-xl font-semibold text-white mb-3">Instant Search</h3>
+                <p className="text-gray-400 leading-relaxed">Type. See results. Done. Search 10,000 bookmarks in under a second.</p>
               </div>
 
-              {/* Feature 2 */}
-              <div className="group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-purple-500/50 rounded-2xl p-6 transition-all duration-300">
+              {/* Feature 2 - Auto-Organize */}
+              <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-purple-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-purple-500/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <svg className="w-7 h-7 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Tags & Categories</h3>
-                <p className="text-gray-400 leading-relaxed">Organize with custom categories and colorful tags to find what you need instantly.</p>
+                <h3 className="text-xl font-semibold text-white mb-3">Auto-Organize</h3>
+                <p className="text-gray-400 leading-relaxed">Categories and tags suggested automatically. Your bookmarks organize themselves.</p>
               </div>
 
-              {/* Feature 3 */}
-              <div className="group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-pink-500/50 rounded-2xl p-6 transition-all duration-300">
-                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-pink-500/20 to-pink-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                  <svg className="w-7 h-7 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              {/* Feature 3 - One-Click Save */}
+              <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-blue-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-blue-500/10">
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                  <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Powerful Search</h3>
-                <p className="text-gray-400 leading-relaxed">Find any saved site instantly with fast search, filters, and smart suggestions.</p>
+                <h3 className="text-xl font-semibold text-white mb-3">One-Click Save</h3>
+                <p className="text-gray-400 leading-relaxed">See it. Save it. Done. Browser extension works everywhere.</p>
               </div>
 
-              {/* Feature 4 */}
-              <div className="group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300">
+              {/* Feature 4 - Works Everywhere */}
+              <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-emerald-500/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <svg className="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">PWA Support</h3>
-                <p className="text-gray-400 leading-relaxed">Install as an app on your phone or desktop for quick access anywhere, anytime.</p>
+                <h3 className="text-xl font-semibold text-white mb-3">Works Everywhere</h3>
+                <p className="text-gray-400 leading-relaxed">Phone. Tablet. Desktop. Always in sync. Access from anywhere.</p>
               </div>
 
-              {/* Feature 5 */}
-              <div className="group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-amber-500/50 rounded-2xl p-6 transition-all duration-300">
-                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                  <svg className="w-7 h-7 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Favorites & Pins</h3>
-                <p className="text-gray-400 leading-relaxed">Pin your most-used sites and mark favorites for lightning-fast access.</p>
-              </div>
-
-              {/* Feature 6 */}
-              <div className="group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-cyan-500/50 rounded-2xl p-6 transition-all duration-300">
+              {/* Feature 5 - Your Data Only */}
+              <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-cyan-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-cyan-500/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <svg className="w-7 h-7 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Secure & Private</h3>
-                <p className="text-gray-400 leading-relaxed">Your data is encrypted and secure. We support 2FA for extra protection.</p>
+                <h3 className="text-xl font-semibold text-white mb-3">Your Data Only</h3>
+                <p className="text-gray-400 leading-relaxed">Export everything anytime. Zero lock-in. Leave whenever you want.</p>
+              </div>
+
+              {/* Feature 6 - Actually Free */}
+              <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-green-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-green-500/10">
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500/20 to-green-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                  <svg className="w-7 h-7 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-3">Actually Free</h3>
+                <p className="text-gray-400 leading-relaxed">Not a trial. Not freemium. Just free. No credit card. Ever.</p>
               </div>
             </div>
           </div>
 
-          {/* CTA Section */}
+          {/* Comparison Section */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-animate">
+            <div className="text-center mb-12 animate-fadeInUp">
+              <div className="inline-block px-4 py-1.5 bg-gradient-to-r from-app-accent/10 to-purple-500/10 border border-app-accent/30 rounded-full text-app-accent text-sm font-medium mb-4">
+                The Difference
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                Browser Bookmarks vs Site Organizer
+              </h2>
+              <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                See why thousands ditched their browser bookmarks.
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-3xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-app-border">
+                      <th className="text-left py-4 px-6 text-gray-400 font-medium">Feature</th>
+                      <th className="text-center py-4 px-6 text-gray-400 font-medium">Browser Bookmarks</th>
+                      <th className="text-center py-4 px-6 text-app-accent font-semibold">Site Organizer</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-app-border">
+                    <tr className="hover:bg-app-bg-light/20 transition-colors">
+                      <td className="py-4 px-6 text-white font-medium">Search Speed</td>
+                      <td className="py-4 px-6 text-center">
+                        <span className="text-red-400">Slow / Manual</span>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <span className="text-green-400 font-semibold">&lt;2 seconds</span>
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-app-bg-light/20 transition-colors">
+                      <td className="py-4 px-6 text-white font-medium">Auto-Categorize</td>
+                      <td className="py-4 px-6 text-center">
+                        <svg className="w-5 h-5 text-red-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <svg className="w-5 h-5 text-green-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-app-bg-light/20 transition-colors">
+                      <td className="py-4 px-6 text-white font-medium">Sync Across Devices</td>
+                      <td className="py-4 px-6 text-center">
+                        <span className="text-yellow-400">Browser only</span>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <span className="text-green-400 font-semibold">All devices</span>
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-app-bg-light/20 transition-colors">
+                      <td className="py-4 px-6 text-white font-medium">Dead Link Detection</td>
+                      <td className="py-4 px-6 text-center">
+                        <svg className="w-5 h-5 text-red-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <svg className="w-5 h-5 text-green-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-app-bg-light/20 transition-colors">
+                      <td className="py-4 px-6 text-white font-medium">Smart Tags</td>
+                      <td className="py-4 px-6 text-center">
+                        <svg className="w-5 h-5 text-red-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <svg className="w-5 h-5 text-green-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-app-bg-light/20 transition-colors">
+                      <td className="py-4 px-6 text-white font-medium">Export Data</td>
+                      <td className="py-4 px-6 text-center">
+                        <span className="text-yellow-400">Manual</span>
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <span className="text-green-400 font-semibold">One-click</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Benefits Section - Why Choose Us */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-animate">
+            <div className="bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-3xl p-8 sm:p-12 hover:border-purple-500/30 transition-all duration-500">
+              <div className="text-center mb-12 animate-fadeInUp">
+                <div className="inline-block px-4 py-1.5 bg-purple-500/10 border border-purple-500/30 rounded-full text-purple-400 text-sm font-medium mb-4">
+                  The Difference
+                </div>
+                <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                  Why You&apos;ll Actually Use This
+                </h2>
+                <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                  Finding that link you saved 3 months ago? 2 seconds. Not 20 minutes.
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-2">Zero Learning Curve</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed">Can you use Google? Then you already know how to use this. Search bar. That&apos;s it.</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-2">Ridiculously Fast</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed">Search 10,000 bookmarks in under a second. Yes, really. No loading screens. Ever.</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-2">Your Data. Period.</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed">Export everything anytime. Switch to anything. Zero lock-in. We don&apos;t hold your data hostage.</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-2">Actually Free</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed">Not a trial. Not freemium. Just free. No credit card. No upgrade prompts. Ever.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* FAQ Section */}
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-animate">
+            <div className="text-center mb-12 animate-fadeInUp">
+              <div className="inline-block px-4 py-1.5 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/30 rounded-full text-blue-400 text-sm font-medium mb-4">
+                ❓ FAQ
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                Quick Questions
+              </h2>
+            </div>
+
+            <div className="space-y-3">
+              {/* FAQ 1 */}
+              <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-app-accent/50 transition-all">
+                <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-app-accent transition-colors">
+                  <span>Is it really free forever?</span>
+                  <svg className="w-5 h-5 transform group-open:rotate-180 transition-transform text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div className="px-6 pb-6 text-gray-400 leading-relaxed">
+                  Yes. No credit card required. No &quot;premium&quot; tiers. No upgrade prompts. Just free. We believe bookmarking should be a basic internet right.
+                </div>
+              </details>
+
+              {/* FAQ 2 */}
+              <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-purple-500/50 transition-all">
+                <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-purple-400 transition-colors">
+                  <span>Can I export my data?</span>
+                  <svg className="w-5 h-5 transform group-open:rotate-180 transition-transform text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div className="px-6 pb-6 text-gray-400 leading-relaxed">
+                  Always. One-click export to JSON or CSV. Your data is YOURS. Take it anywhere, anytime. Zero lock-in.
+                </div>
+              </details>
+
+              {/* FAQ 3 */}
+              <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-green-500/50 transition-all">
+                <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-green-400 transition-colors">
+                  <span>How fast is the search really?</span>
+                  <svg className="w-5 h-5 transform group-open:rotate-180 transition-transform text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <div className="px-6 pb-6 text-gray-400 leading-relaxed">
+                  Sub-second. Even with 10,000+ bookmarks. Type and see results instantly. No loading spinners. No &quot;please wait.&quot; Just results.
+                </div>
+              </details>
+            </div>
+          </div>
+
+          {/* CTA Section - moved inside main */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
             <div className="bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-3xl p-8 sm:p-12 text-center relative overflow-hidden">
-              <div className="absolute inset-0 bg-app-accent/5 pointer-events-none"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-app-accent/10 via-purple-500/10 to-pink-500/10 pointer-events-none"></div>
               <div className="relative z-10">
-                <Logo size="lg" />
-                <h2 className="text-3xl sm:text-4xl font-bold text-white mt-6 mb-4">
-                  Ready to Get Organized?
+                <div className="flex justify-center mb-6">
+                  <Logo size="lg" />
+                </div>
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4">
+                  Ready to Find
+                  <br />
+                  Anything in 2 Seconds?
                 </h2>
-                <p className="text-gray-400 text-lg max-w-xl mx-auto mb-8">
-                  Join thousands of users who organize their web with Site Organizer. Free to use, forever.
+                <p className="text-gray-400 text-lg sm:text-xl max-w-2xl mx-auto mb-8">
+                  Join thousands who stopped losing links.
+                  <br className="hidden sm:block" />
+                  <span className="text-white font-semibold">60-second setup. Zero cost. Forever.</span>
                 </p>
+
+                <div className="flex flex-wrap gap-6 justify-center mb-12 text-sm">
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Free forever
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    No card needed
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Ready in 60s
+                  </div>
+                </div>
+
                 <Link
-                  href="/login"
-                  className="inline-flex items-center gap-2 px-8 py-4 bg-[#1E4976] hover:bg-[#2A5B9E] text-white font-semibold rounded-xl transition-all text-lg"
+                  href={PAGE_CONFIG.LOGIN_URL}
+                  className={`inline-flex items-center gap-2 px-10 py-5 ${BUTTON_CLASSES.PRIMARY_LARGE} group text-xl`}
                 >
-                  Get Started Free
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  Get Started Now
+                  <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </Link>
+
+                <p className="text-gray-500 text-xs mt-6">
+                  No spam. No credit card. No bullshit.
+                </p>
               </div>
             </div>
           </div>
         </main>
+      </div>
 
-        {/* Footer */}
-        <footer className="relative z-10 border-t border-app-border/50 py-8 bg-gray-950/80 backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-app-border/50 bg-gray-950/90 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+            {/* Brand */}
+            <div className="flex flex-col items-center md:items-start">
+              <div className="flex items-center gap-3 mb-3">
                 <Logo size="sm" />
-                <span className="text-gray-400 font-medium">Site Organizer</span>
+                <span className="text-white font-semibold text-lg">{PAGE_CONFIG.APP_NAME}</span>
               </div>
-              <p className="text-gray-500 text-sm">
-                © {new Date().getFullYear()} Site Organizer. All rights reserved.
+              <p className="text-gray-400 text-sm text-center md:text-left">
+                Never lose a link. Ever again.
               </p>
             </div>
+
+            {/* Quick Links */}
+            <div className="flex flex-col items-center">
+              <h3 className="text-white font-semibold mb-3 bg-gradient-to-r from-app-accent to-purple-400 bg-clip-text text-transparent">Quick Links</h3>
+              <div className="flex flex-col gap-2 text-sm">
+                <Link href="/login" className="text-gray-300 hover:text-app-accent transition-colors">
+                  Sign In
+                </Link>
+                <Link href="/dashboard" className="text-gray-300 hover:text-app-accent transition-colors">
+                  Dashboard
+                </Link>
+              </div>
+            </div>
+
+            {/* Info */}
+            <div className="flex flex-col items-center md:items-end">
+              <h3 className="text-white font-semibold mb-3 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Info</h3>
+              <div className="flex flex-col gap-2 text-sm items-center md:items-end">
+                <span className="text-gray-300">💎 100% Free Forever</span>
+                <span className="text-gray-300">⚡ No Credit Card Required</span>
+                <span className="text-gray-300">📤 Full Data Export</span>
+              </div>
+            </div>
           </div>
-        </footer>
-      </div>
+
+          {/* Bottom Bar */}
+          <div className="pt-8 border-t border-app-border/30">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-gray-400 text-sm">
+                © {new Date().getFullYear()} <span className="text-app-accent">{PAGE_CONFIG.APP_NAME}</span>. All rights reserved.
+              </p>
+              <div className="flex items-center gap-2 text-gray-400 text-sm">
+                <span>Built with</span>
+                <span className="text-pink-500 animate-pulse">❤️</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      {/* Coming Soon Modal */}
+      <Modal
+        isOpen={comingSoonModal.isOpen}
+        onClose={() => setComingSoonModal({ isOpen: false, browser: '', message: '' })}
+        title={`${comingSoonModal.browser} Extension Coming Soon! 🚀`}
+      >
+        <div className="space-y-4">
+          <p className="text-gray-300 text-lg">
+            {comingSoonModal.message}
+          </p>
+        </div>
+      </Modal>
     </>
   );
 }
 
+/**
+ * Server-side props - prevents static prerendering for client-auth dependent pages
+ * @returns {Object} Empty props
+ */
 export async function getServerSideProps() {
-  // Prevent static prerendering for pages that rely on client auth
   return { props: {} };
 }
