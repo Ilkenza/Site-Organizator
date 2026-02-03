@@ -171,7 +171,7 @@ const buildPublicUrl = (baseUrl, fileName) => {
  * @returns {Promise<boolean>} True if profile exists
  */
 const checkProfileExists = async (baseUrl, anonKey, userToken, userId) => {
-    const profileUrl = `${baseUrl}/rest/v1/profiles?id=eq.${userId}&select=${AVATAR_CONFIG.SELECT_FIELD}`;
+    const profileUrl = `${baseUrl}/rest/v1/users?id=eq.${userId}&select=${AVATAR_CONFIG.SELECT_FIELD}`;
 
     const response = await fetch(profileUrl, {
         headers: {
@@ -181,8 +181,8 @@ const checkProfileExists = async (baseUrl, anonKey, userToken, userId) => {
         }
     });
 
-    const profiles = await response.json();
-    return profiles && profiles.length > 0;
+    const users = await response.json();
+    return users && users.length > 0;
 };
 
 /**
@@ -196,7 +196,7 @@ const checkProfileExists = async (baseUrl, anonKey, userToken, userId) => {
  * @throws {Error} If profile creation fails
  */
 const createProfile = async (baseUrl, anonKey, userToken, userId, avatarUrl) => {
-    const insertUrl = `${baseUrl}/rest/v1/profiles`;
+    const insertUrl = `${baseUrl}/rest/v1/users`;
 
     const response = await fetch(insertUrl, {
         method: 'POST',
@@ -227,7 +227,7 @@ const createProfile = async (baseUrl, anonKey, userToken, userId, avatarUrl) => 
  * @throws {Error} If profile update fails
  */
 const updateProfile = async (baseUrl, anonKey, userToken, userId, avatarUrl) => {
-    const updateUrl = `${baseUrl}/rest/v1/profiles?id=eq.${userId}`;
+    const updateUrl = `${baseUrl}/rest/v1/users?id=eq.${userId}`;
 
     const response = await fetch(updateUrl, {
         method: 'PATCH',

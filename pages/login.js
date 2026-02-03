@@ -586,7 +586,7 @@ export default function Login() {
                         userWithProfile = {
                             ...session.user,
                             avatarUrl: profile.avatar_url || null,
-                            displayName: profile.name || null
+                            displayName: profile.display_name || null
                         };
                     }
                 } catch (profileErr) {
