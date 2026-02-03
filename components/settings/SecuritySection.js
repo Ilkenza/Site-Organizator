@@ -464,7 +464,7 @@ export default function SecuritySection({
             {/* Delete Success Modal */}
             <Modal
                 isOpen={deleteSuccessModal}
-                onClose={() => {}}
+                onClose={() => { }}
                 title="Account Deleted"
                 showCloseButton={false}
             >

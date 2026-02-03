@@ -132,26 +132,26 @@ export default function Home() {
         <title>{PAGE_CONFIG.TITLE}</title>
         <meta name="description" content={PAGE_CONFIG.DESCRIPTION} />
         <meta name="keywords" content={PAGE_CONFIG.KEYWORDS} />
-        
+
         {/* Open Graph / Facebook */}
         <meta property="og:type" content="website" />
         <meta property="og:url" content={PAGE_CONFIG.DOMAIN} />
         <meta property="og:title" content={PAGE_CONFIG.TITLE} />
         <meta property="og:description" content={PAGE_CONFIG.DESCRIPTION} />
         <meta property="og:site_name" content={PAGE_CONFIG.APP_NAME} />
-        
+
         {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:url" content={PAGE_CONFIG.DOMAIN} />
         <meta name="twitter:title" content={PAGE_CONFIG.TITLE} />
         <meta name="twitter:description" content={PAGE_CONFIG.DESCRIPTION} />
-        
+
         {/* Additional SEO */}
         <meta name="robots" content="index, follow" />
         <meta name="author" content="Site Organizer" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="canonical" href={PAGE_CONFIG.DOMAIN} />
-        
+
         {/* Structured Data for AI/SEO */}
         <script type="application/ld+json">
           {JSON.stringify({

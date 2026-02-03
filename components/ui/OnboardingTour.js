@@ -131,13 +131,12 @@ export default function OnboardingTour({ user, onComplete }) {
                     {steps.map((_, index) => (
                         <div
                             key={index}
-                            className={`h-2 rounded-full transition-all ${
-                                index === currentStep
+                            className={`h-2 rounded-full transition-all ${index === currentStep
                                     ? 'w-8 bg-app-primary'
                                     : index < currentStep
-                                    ? 'w-2 bg-app-primary/50'
-                                    : 'w-2 bg-app-border'
-                            }`}
+                                        ? 'w-2 bg-app-primary/50'
+                                        : 'w-2 bg-app-border'
+                                }`}
                         />
                     ))}
                 </div>
@@ -157,7 +156,7 @@ export default function OnboardingTour({ user, onComplete }) {
                             ← Previous
                         </button>
                     )}
-                    
+
                     {!isLastStep && (
                         <button
                             onClick={handleSkip}

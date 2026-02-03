@@ -518,8 +518,8 @@ export default function Dashboard() {
                         try {
                             // CRITICAL: Don't process session if MFA verification is in progress
                             const mfaInProgress = sessionStorage.getItem('mfa_verification_in_progress') === 'true' ||
-                                                 localStorage.getItem('mfa_verification_in_progress') === 'true';
-                            
+                                localStorage.getItem('mfa_verification_in_progress') === 'true';
+
                             if (mfaInProgress) {
                                 console.log('[Dashboard] 🔒 MFA verification in progress - redirecting to login page');
                                 if (isMounted) setAuthChecked(true);
