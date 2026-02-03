@@ -15,7 +15,7 @@ export default function ProfileEditSection({ user, refreshUser }) {
             try {
                 const { data: { user: authUser } } = await supabase.auth.getUser();
                 const name = authUser?.user_metadata?.display_name || authUser?.user_metadata?.username;
-                
+
                 if (name) {
                     setDisplayName(name);
                 } else if (user?.displayName) {

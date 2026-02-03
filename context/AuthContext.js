@@ -183,14 +183,14 @@ export function AuthProvider({ children }) {
                 if (session?.user) {
                     // CRITICAL: Don't process session if MFA verification is in progress
                     const mfaInProgress = sessionStorage.getItem('mfa_verification_in_progress') === 'true' ||
-                                         localStorage.getItem('mfa_verification_in_progress') === 'true';
-                    
+                        localStorage.getItem('mfa_verification_in_progress') === 'true';
+
                     if (mfaInProgress) {
                         console.log('[AuthContext] 🔒 MFA verification in progress - skipping session processing');
                         setLoading(false);
                         return;
                     }
-                    
+
                     // Don't block users based on AAL - let login page handle MFA flow
                     // Just log for debugging
                     try {
@@ -198,7 +198,7 @@ export function AuthProvider({ children }) {
                         const totpFactor = factorsResult?.data?.totp?.find(f => f.status === 'verified');
                         const hasMFA = !!totpFactor;
                         const currentAAL = getTokenAAL(session.access_token);
-                        
+
                         console.log('[AuthContext] Session loaded:', {
                             hasMFA,
                             currentAAL,
