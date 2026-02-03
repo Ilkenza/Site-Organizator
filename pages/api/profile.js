@@ -99,17 +99,17 @@ const createSupabaseHeaders = (anonKey, userToken, isUpdate = false) => {
 const filterAllowedFields = (body) => {
     const updateData = {};
     
-    // Map 'name' field from request to 'display_name' for backward compatibility
-    if (body.name !== undefined) {
+    // Handle display_name: prefer direct display_name, fall back to name for backward compatibility
+    if (body.display_name !== undefined) {
+        updateData.display_name = body.display_name;
+    } else if (body.name !== undefined) {
         updateData.display_name = body.name;
     }
     
-    // Handle other allowed fields
+    // Handle other allowed fields (excluding display_name which we handled above)
     for (const key of PROFILE_CONFIG.ALLOWED_UPDATE_FIELDS) {
-        if (body[key] !== undefined && key !== 'display_name') {
+        if (key !== 'display_name' && body[key] !== undefined) {
             updateData[key] = body[key];
-        } else if (key === 'display_name' && body.display_name !== undefined) {
-            updateData.display_name = body.display_name;
         }
     }
     
