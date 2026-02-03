@@ -20,6 +20,7 @@ const LOGIN_CONFIG = {
  * @returns {JSX.Element} Login page
  */
 export default function Login() {
+    const { user, loading: authLoading } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [username, setUsername] = useState('');
@@ -30,6 +31,30 @@ export default function Login() {
     const [successModal, setSuccessModal] = useState({ isOpen: false, message: '' });
     // Signing indicates we're processing the initial email/password sign-in (no spinner on the Sign In button)
     const [signing, setSigning] = useState(false);
+    const [redirecting, setRedirecting] = useState(false);
+    const [mfaInProgress, setMfaInProgress] = useState(false); // Track MFA state
+
+    // Redirect to dashboard if already logged in
+    useEffect(() => {
+        // CRITICAL: Don't redirect if MFA verification is in progress
+        const mfaFlag = sessionStorage.getItem('mfa_verification_in_progress') === 'true' ||
+                        localStorage.getItem('mfa_verification_in_progress') === 'true';
+        
+        // Update state to trigger re-renders
+        setMfaInProgress(mfaFlag);
+        
+        if (mfaFlag) {
+            console.log('[Login] 🔒 Redirect blocked - MFA verification in progress');
+            return;
+        }
+        
+        // Only redirect if auth is not loading and we have a user
+        if (!authLoading && user?.id && !redirecting) {
+            console.log('[Login] ✅ User logged in, redirecting to dashboard');
+            setRedirecting(true);
+            window.location.replace(LOGIN_CONFIG.DASHBOARD_URL);
+        }
+    }, [user, authLoading, redirecting]);
 
     // Silent notice for user-facing messages where we DO NOT want to show a loading spinner
 
@@ -176,7 +201,18 @@ export default function Login() {
             }
         } catch (err) {
             console.error('SignUp error:', err);
-            setError(err?.message || 'Sign up failed');
+            
+            // Better error message for email confirmation issues
+            if (err?.message?.includes('confirmation email') || err?.message?.includes('sending email')) {
+                const errorDetails = err?.message || '';
+                if (errorDetails.includes('testing emails')) {
+                    setError('⚠️ Email service is in test mode. You can only create accounts with the project owner email (ilija03kl@gmail.com). To allow other emails, verify your domain at resend.com/domains.');
+                } else {
+                    setError('⚠️ Failed to send verification email. Please check your email service configuration.');
+                }
+            } else {
+                setError(err?.message || 'Sign up failed');
+            }
         } finally {
             setSigning(false);
         }
@@ -184,102 +220,87 @@ export default function Login() {
 
     // Debug presence of Supabase config (do NOT log secrets)
     useEffect(() => {
-        // Check if user already has a valid session on page load
-        try {
-            const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-            const stored = localStorage.getItem(storageKey);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (parsed?.access_token) {
-                    const payload = JSON.parse(atob(parsed.access_token.split('.')[1] || '""'));
-                    const isExpired = payload.exp * 1000 < Date.now();
-                    if (!isExpired) {
-                        if (payload.aal === 'aal2') {
-                            window.location.replace(LOGIN_CONFIG.DASHBOARD_URL);
-                            return;
-                        } else {
-                            // Valid token but not AAL2 (e.g., AAL1) — restore MFA flow instead of redirecting
-                            try {
-                                setAal1Token(parsed.access_token);
-                                setMfaRequired(true);
-
-                                // Try to detect MFA factor id so Verify form works immediately
-                                (async () => {
-                                    try {
-                                        // First, check if we have the factorId saved in localStorage from the original login
-                                        const savedFactorId = localStorage.getItem('mfa_pending_factor');
-                                        if (savedFactorId) {
-                                            setFactorId(savedFactorId);
-                                            return; // No need to query listFactors
-                                        }
-
-                                        // Fallback: try to query listFactors (may fail with AAL1 token)
-                                        // Ensure supabase client uses the stored AAL1 token so listFactors can be queried
-                                        try {
-                                            await supabase.auth.setSession({ access_token: parsed.access_token, refresh_token: parsed.refresh_token || '' });
-                                        } catch (setErr) {
-                                            console.warn('Restored MFA flow: failed to set supabase session:', setErr);
-                                        }
-
-                                        // Try several times to find a factor (some delays may apply server-side)
-                                        let found = false;
-                                        for (let attempt = 0; attempt < 4 && !found; attempt++) {
-                                            try {
-                                                const factorsPromise = supabase.auth.mfa.listFactors();
-                                                const factorsTimeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 5000));
-                                                const factorsResult = await Promise.race([factorsPromise, factorsTimeout]);
-                                                const factorsData = factorsResult?.data;
-
-                                                // Prefer verified TOTP, else any TOTP, else any factor
-                                                let totpFactor = null;
-                                                if (Array.isArray(factorsData?.totp) && factorsData.totp.length) {
-                                                    totpFactor = factorsData.totp.find(f => f.status === 'verified') || factorsData.totp[0];
-                                                }
-                                                if (totpFactor) {
-                                                    setFactorId(totpFactor.id);
-                                                    found = true;
-                                                    break;
-                                                }
-
-                                                // Try any factor across types
-                                                const allFactors = Object.keys(factorsData || {}).flatMap(k => factorsData[k] || []);
-                                                if (allFactors.length) {
-                                                    setFactorId(allFactors[0].id);
-                                                    found = true;
-                                                    break;
-                                                }
-
-                                            } catch (qErr) {
-                                                console.warn('Restored MFA flow: listFactors attempt failed:', qErr);
-                                            }
-                                            // wait a bit before retrying
-                                            await new Promise(r => setTimeout(r, 300));
-                                        }
-
-                                        if (!found) {
-                                            console.warn('Restored MFA flow: no factor found after retries');
-                                            setError('No MFA factor found for this account. Please enable 2FA.');
-                                        }
-                                    } catch (fErr) {
-                                        console.warn('Restored MFA flow: failed to query factors:', fErr);
-                                    }
-                                })();
-
-                            } catch (e) {
-                                console.warn('Failed to restore MFA flow from token:', e);
-                            }
-                            return;
-                        }
-                    } else {
-                        // Clear expired session
-                        localStorage.removeItem(storageKey);
-                    }
+        console.log('[Login] 🔍 Mount effect running - checking for existing MFA session');
+        
+        // Check if user already has a session that needs MFA verification
+        const checkExistingSession = async () => {
+            try {
+                const mfaInProgress = sessionStorage.getItem('mfa_verification_in_progress') === 'true' ||
+                                     localStorage.getItem('mfa_verification_in_progress') === 'true';
+                
+                console.log('[Login] 🔍 MFA in progress flag:', mfaInProgress);
+                
+                if (!mfaInProgress) {
+                    // No MFA in progress, nothing to do
+                    console.log('[Login] No MFA flag detected - skipping session check');
+                    return;
                 }
+                
+                console.log('[Login] MFA verification in progress detected - checking session...');
+                
+                // Get current session
+                const { data: { session } } = await supabase.auth.getSession();
+                
+                console.log('[Login] Session check result:', session ? 'Session exists' : 'No session');
+                
+                if (!session) {
+                    console.log('[Login] No session found - clearing MFA flags');
+                    sessionStorage.removeItem('mfa_verification_in_progress');
+                    localStorage.removeItem('mfa_verification_in_progress');
+                    return;
+                }
+                
+                // Check AAL level
+                const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+                
+                console.log('[Login] Existing session check:', {
+                    currentLevel: aalData?.currentLevel,
+                    nextLevel: aalData?.nextLevel
+                });
+                
+                // If AAL2, MFA is complete - clear flags and redirect to dashboard
+                if (aalData?.currentLevel === 'aal2') {
+                    console.log('[Login] ✅ MFA already verified (AAL2) - clearing flags and allowing dashboard');
+                    sessionStorage.removeItem('mfa_verification_in_progress');
+                    localStorage.removeItem('mfa_verification_in_progress');
+                    return; // Let normal redirect logic handle it
+                }
+                
+                // If nextLevel is aal2, user needs to verify MFA
+                if (aalData?.nextLevel === 'aal2') {
+                    console.log('[Login] ⚠️ MFA verification required - showing MFA UI');
+                    
+                    // Get factor ID
+                    const { data: factorsData } = await supabase.auth.mfa.listFactors();
+                    console.log('[Login] Factors data:', factorsData);
+                    const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
+                    
+                    if (totpFactor) {
+                        console.log('[Login] ✅ Found factor ID, showing MFA screen');
+                        setFactorId(totpFactor.id);
+                        setAal1Token(session.access_token);
+                        setMfaRequired(true);
+                    } else {
+                        console.error('[Login] ❌ No TOTP factor found - clearing flags');
+                        sessionStorage.removeItem('mfa_verification_in_progress');
+                        localStorage.removeItem('mfa_verification_in_progress');
+                    }
+                } else {
+                    console.log('[Login] nextLevel is not aal2 - clearing MFA flags');
+                    sessionStorage.removeItem('mfa_verification_in_progress');
+                    localStorage.removeItem('mfa_verification_in_progress');
+                }
+                
+            } catch (err) {
+                console.error('[Login] Error checking existing session:', err);
+                // Clear flags on error
+                sessionStorage.removeItem('mfa_verification_in_progress');
+                localStorage.removeItem('mfa_verification_in_progress');
             }
-        } catch (e) {
-            console.warn('Session check on login page load failed:', e);
-        }
-    }, [supabase]);
+        };
+        
+        checkExistingSession();
+    }, []); // Empty dependency array - run only once on mount
 
 
     const handleSubmit = async (e) => {
@@ -346,42 +367,96 @@ export default function Login() {
                 throw error;
             }
 
-            // Check for MFA with timeout
-            let factorsData = null;
+            // Check AAL level to determine if MFA is required
+            console.log('[Login] Checking AAL level for MFA requirement...');
+            
             try {
-                const factorsPromise = supabase.auth.mfa.listFactors();
-                const factorsTimeout = new Promise((resolve) => {
-                    setTimeout(() => resolve({ data: null }), 10000);
-                });
-                const factorsResult = await Promise.race([factorsPromise, factorsTimeout]);
-                factorsData = factorsResult?.data;
-            } catch (e) {
-                console.warn('MFA check failed:', e);
-            }
-
-            const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
-
-            if (totpFactor) {
-                // Save AAL1 token and mark as fresh login
-                const session = data?.session;
-                if (session?.access_token) {
-                    setAal1Token(session.access_token);
+                const { data: aalData, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+                
+                console.log('[Login] AAL check result:', aalData);
+                console.log('[Login] currentLevel:', aalData?.currentLevel);
+                console.log('[Login] nextLevel:', aalData?.nextLevel);
+                console.log('[Login] Should show MFA?', aalData?.nextLevel === 'aal2');
+                
+                const shouldShowMfa = aalData?.nextLevel === 'aal2';
+                console.log('[Login] shouldShowMfa variable:', shouldShowMfa);
+                
+                // If nextLevel is aal2, user has MFA enabled and must verify
+                if (shouldShowMfa) {
+                    console.log('[Login] ✅✅✅ ENTERING MFA BLOCK');
+                    
+                    // CRITICAL: Block any redirects until MFA is complete
+                    sessionStorage.setItem('mfa_verification_in_progress', 'true');
+                    localStorage.setItem('mfa_verification_in_progress', 'true');
+                    console.log('[Login] 🔒 MFA verification flags set - redirects should be blocked');
+                    
+                    // Show loading screen during MFA setup
+                    setLoading(true);
+                    
+                    console.log('[Login] 🔹 Step 1: Starting factor ID retrieval');
+                    
+                    // Get factor ID - try a few times if needed
+                    let factorId = null;
+                    console.log('[Login] 🔹 Step 2: About to start for loop');
+                    for (let i = 0; i < 3; i++) {
+                        console.log(`[Login] 🔹 Step 3.${i}: Calling listFactors, attempt ${i + 1}`);
+                        const { data: factorsData } = await supabase.auth.mfa.listFactors();
+                        console.log(`[Login] 🔹 Step 4.${i}: listFactors returned:`, factorsData);
+                        const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
+                        if (totpFactor) {
+                            factorId = totpFactor.id;
+                            console.log('[Login] ✅ Found factor ID:', factorId);
+                            break;
+                        }
+                        console.log(`[Login] ❌ Factor ID not found yet, retry ${i + 1}/3`);
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    }
+                    
+                    if (!factorId) {
+                        console.error('[Login] ❌❌❌ Could not get factor ID after retries - THIS IS THE PROBLEM!');
+                        // Don't throw - instead use a fallback or force retry
+                        alert('MFA factor ID not found! Check console. This will cause login to bypass MFA.');
+                        throw new Error('MFA is enabled but factor ID could not be retrieved');
+                    }
+                    
+                    console.log('[Login] ✅ Setting MFA screen with factorId:', factorId);
+                    
+                    // Save AAL1 token and show MFA screen
+                    const session = data?.session;
+                    if (session?.access_token) {
+                        setAal1Token(session.access_token);
+                        console.log('[Login] ✅ AAL1 token saved');
+                    }
+                    setIsFreshLogin(true);
+                    setFactorId(factorId);
+                    
+                    try {
+                        localStorage.setItem('mfa_pending_factor', factorId);
+                        console.log('[Login] ✅ Factor ID saved to localStorage');
+                    } catch (e) {
+                        console.warn('Failed to save MFA factor to localStorage:', e);
+                    }
+                    
+                    console.log('[Login] ✅ About to call setMfaRequired(true)');
+                    setMfaRequired(true);
+                    setLoading(false); // Stop loading, show MFA UI
+                    setSigning(false);
+                    console.log('[Login] ✅ MFA screen should now be visible - RETURNING');
+                    return;
                 }
-                setIsFreshLogin(true); // Mark that SDK already has session from signInWithPassword
-
-                setFactorId(totpFactor.id);
-                // Persist factorId so page refresh can restore MFA flow
-                try {
-                    localStorage.setItem('mfa_pending_factor', totpFactor.id);
-                } catch (e) { console.warn('Failed to save MFA factor to localStorage:', e); }
-                setMfaRequired(true);
-                setSigning(false);
-                return;
+                
+                console.log('[Login] No MFA required (nextLevel is not aal2) - allowing direct login');
+                
+            } catch (aalErr) {
+                console.error('[Login] Error checking AAL:', aalErr);
+                // If AAL check fails, assume no MFA for safety
             }
-
-            // No MFA - block login (MFA required policy)
+            // No MFA configured - allow login (user can enable MFA later in settings)
             setSigning(false);
-            setError('Multi-factor authentication is required. Please enable MFA.');
+            
+            // Clear redirect flag before going to dashboard
+            sessionStorage.removeItem('login_redirecting');
+            _completeLogin({ showAlert: false });
 
         } catch (err) {
             console.error('SignIn error:', err);
@@ -559,6 +634,15 @@ export default function Login() {
 
             if (session?.access_token && session?.refresh_token && session?.user) {
                 clearTimeout(hardTimeout);
+                
+                // Clear MFA flags - verification is complete
+                console.log('[Login] ✅ MFA verified - clearing flags');
+                sessionStorage.removeItem('mfa_verification_in_progress');
+                localStorage.removeItem('mfa_verification_in_progress');
+                
+                // Set loading state to show spinner during redirect
+                setLoading(true);
+                console.log('[Login] 🔄 Redirecting to dashboard...');
 
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
 
@@ -658,6 +742,19 @@ export default function Login() {
                 <title>Login - Site Organizer</title>
             </Head>
 
+            {/* Show loading screen if MFA is in progress or during redirects */}
+            {(loading || mfaInProgress) && !mfaRequired ? (
+                <div className="min-h-screen bg-app-bg-primary flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-app-accent to-[#4A9FE8] mb-4 shadow-lg shadow-app-accent/20 animate-pulse">
+                            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                        </div>
+                        <p className="text-app-text-secondary">Loading...</p>
+                    </div>
+                </div>
+            ) : (
             <div className="min-h-screen bg-app-bg-primary flex items-center justify-center p-4">
                 <div className="w-full max-w-md">
                     {/* Logo */}
@@ -684,8 +781,8 @@ export default function Login() {
                                         setConfirmPassword('');
                                     }}
                                     className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${!isSignUp
-                                            ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
-                                            : 'text-app-text-secondary hover:text-app-text-primary'
+                                        ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
+                                        : 'text-app-text-secondary hover:text-app-text-primary'
                                         }`}
                                 >
                                     Sign In
@@ -699,8 +796,8 @@ export default function Login() {
                                         setConfirmPassword('');
                                     }}
                                     className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${isSignUp
-                                            ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
-                                            : 'text-app-text-secondary hover:text-app-text-primary'
+                                        ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
+                                        : 'text-app-text-secondary hover:text-app-text-primary'
                                         }`}
                                 >
                                     Sign Up
@@ -871,6 +968,7 @@ export default function Login() {
                     </p>
                 </div>
             </div>
+            )}
 
             {/* Success Modal */}
             <Modal

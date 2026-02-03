@@ -7,27 +7,19 @@ export default function ProfileEditSection({ user, refreshUser }) {
     const [savingName, setSavingName] = useState(false);
     const [nameMessage, setNameMessage] = useState(null);
 
-    // Load name from database
+    // Load name from auth.users metadata
     useEffect(() => {
         const loadName = async () => {
             if (!user?.id) return;
 
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                const token = session?.access_token;
-                const response = await fetch('/api/profile', {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token ? `Bearer ${token}` : ''
-                    }
-                });
-
-                const result = await response.json();
-                if (result.success && result.data?.name) {
-                    setDisplayName(result.data.name);
+                const { data: { user: authUser } } = await supabase.auth.getUser();
+                const name = authUser?.user_metadata?.display_name || authUser?.user_metadata?.username;
+                
+                if (name) {
+                    setDisplayName(name);
                 } else if (user?.displayName) {
-                    // Fallback to user prop if API fails
+                    // Fallback to user prop
                     setDisplayName(user.displayName);
                 }
             } catch (err) {
@@ -50,28 +42,14 @@ export default function ProfileEditSection({ user, refreshUser }) {
 
         setSavingName(true);
         try {
-            // Get access token from localStorage
-            const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-            const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1]?.split('.')[0]}-auth-token`;
-            const storedTokens = localStorage.getItem(storageKey);
-            const accessToken = storedTokens ? JSON.parse(storedTokens)?.access_token : null;
-
-            if (!accessToken) {
-                throw new Error('Not authenticated');
-            }
-
-            // Update user name via our API
-            const response = await fetch('/api/profile', {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`
-                },
-                body: JSON.stringify({ name: displayName.trim() })
+            // Update display_name in auth.users metadata
+            const { error } = await supabase.auth.updateUser({
+                data: {
+                    display_name: displayName.trim()
+                }
             });
 
-            const result = await response.json();
-            if (!result.success) throw new Error(result.error || 'Failed to update name');
+            if (error) throw error;
 
             setNameMessage({ type: 'success', text: 'Name updated successfully!' });
             setEditingName(false);

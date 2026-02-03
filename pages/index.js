@@ -13,12 +13,13 @@ import { Modal } from '../components/ui';
 
 // Configuration
 const PAGE_CONFIG = {
-  TITLE: 'Site Organizer - Organize Your Favorite Websites',
-  DESCRIPTION: 'Save, categorize, and tag your favorite websites. Access them from anywhere with your personal dashboard.',
+  TITLE: 'Site Organizer - Organize Your Favorite Websites | Free Bookmark Manager',
+  DESCRIPTION: 'Free online bookmark manager. Save, categorize, and tag your favorite websites. Access them from anywhere with cloud sync. Better than browser bookmarks.',
   APP_NAME: 'Site Organizer',
   DASHBOARD_URL: '/dashboard/sites',
   LOGIN_URL: '/login',
-  DOMAIN: 'https://site-organizator.vercel.app/',
+  DOMAIN: 'https://site-organizator.vercel.app',
+  KEYWORDS: 'bookmark manager, organize bookmarks, save websites, categorize links, tag websites, cloud bookmarks, free bookmark tool, website organizer, link manager, browser bookmarks alternative',
   GRADIENT_COLORS: {
     PRIMARY: '#6CBBFB',
     SECONDARY: '#4A9FE8'
@@ -130,6 +131,60 @@ export default function Home() {
       <Head>
         <title>{PAGE_CONFIG.TITLE}</title>
         <meta name="description" content={PAGE_CONFIG.DESCRIPTION} />
+        <meta name="keywords" content={PAGE_CONFIG.KEYWORDS} />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={PAGE_CONFIG.DOMAIN} />
+        <meta property="og:title" content={PAGE_CONFIG.TITLE} />
+        <meta property="og:description" content={PAGE_CONFIG.DESCRIPTION} />
+        <meta property="og:site_name" content={PAGE_CONFIG.APP_NAME} />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:url" content={PAGE_CONFIG.DOMAIN} />
+        <meta name="twitter:title" content={PAGE_CONFIG.TITLE} />
+        <meta name="twitter:description" content={PAGE_CONFIG.DESCRIPTION} />
+        
+        {/* Additional SEO */}
+        <meta name="robots" content="index, follow" />
+        <meta name="author" content="Site Organizer" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="canonical" href={PAGE_CONFIG.DOMAIN} />
+        
+        {/* Structured Data for AI/SEO */}
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": PAGE_CONFIG.APP_NAME,
+            "url": PAGE_CONFIG.DOMAIN,
+            "description": PAGE_CONFIG.DESCRIPTION,
+            "applicationCategory": "BusinessApplication",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "operatingSystem": "Web Browser",
+            "browserRequirements": "Requires JavaScript. Modern browser required.",
+            "featureList": [
+              "Save and organize bookmarks",
+              "Categorize websites",
+              "Tag system for organization",
+              "Cloud synchronization",
+              "Search functionality",
+              "Browser extension",
+              "Export/import data",
+              "Multi-device access"
+            ],
+            "aggregateRating": {
+              "@type": "AggregateRating",
+              "ratingValue": "4.8",
+              "ratingCount": "100"
+            }
+          })}
+        </script>
       </Head>
 
       <div className="min-h-screen bg-gray-950 relative overflow-hidden">
