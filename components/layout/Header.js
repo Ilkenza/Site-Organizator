@@ -41,7 +41,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                     setLocalUser({
                                         ...tokens.user,
                                         avatarUrl: profile.avatar_url || null,
-                                        displayName: profile.name || null
+                                        displayName: profile.display_name || null
                                     });
                                 } else {
                                     console.warn('[Header] Profile API returned no data:', result?.error);

@@ -24,8 +24,8 @@ export default function ProfileEditSection({ user, refreshUser }) {
                 });
 
                 const result = await response.json();
-                if (result.success && result.data?.name) {
-                    setDisplayName(result.data.name);
+                if (result.success && result.data?.display_name) {
+                    setDisplayName(result.data.display_name);
                 } else if (user?.displayName) {
                     // Fallback to user prop if API fails
                     setDisplayName(user.displayName);

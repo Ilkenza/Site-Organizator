@@ -27,9 +27,9 @@ const ERROR_MESSAGES = {
 
 // Profile Configuration
 const PROFILE_CONFIG = {
-    TABLE: 'profiles',
-    SELECT_FIELDS: 'id,name,avatar_url',
-    ALLOWED_UPDATE_FIELDS: ['name', 'avatar_url']
+    TABLE: 'users',
+    SELECT_FIELDS: 'id,display_name,avatar_url',
+    ALLOWED_UPDATE_FIELDS: ['display_name', 'avatar_url']
 };
 
 /**
@@ -92,16 +92,27 @@ const createSupabaseHeaders = (anonKey, userToken, isUpdate = false) => {
 
 /**
  * Filter request body to only include allowed fields
+ * Maps 'name' from request to 'display_name' for backward compatibility
  * @param {Object} body - Request body
  * @returns {Object} Filtered update data
  */
 const filterAllowedFields = (body) => {
     const updateData = {};
+    
+    // Map 'name' field from request to 'display_name' for backward compatibility
+    if (body.name !== undefined) {
+        updateData.display_name = body.name;
+    }
+    
+    // Handle other allowed fields
     for (const key of PROFILE_CONFIG.ALLOWED_UPDATE_FIELDS) {
-        if (body[key] !== undefined) {
+        if (body[key] !== undefined && key !== 'display_name') {
             updateData[key] = body[key];
+        } else if (key === 'display_name' && body.display_name !== undefined) {
+            updateData.display_name = body.display_name;
         }
     }
+    
     return updateData;
 };
 

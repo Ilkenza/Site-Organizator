@@ -85,7 +85,7 @@ function createUserWithProfile(baseUser, profile) {
     return {
         ...baseUser,
         avatarUrl: profile?.avatar_url || null,
-        displayName: profile?.name || null,
+        displayName: profile?.display_name || null,
     };
 }
 
@@ -480,7 +480,7 @@ export function AuthProvider({ children }) {
             (async () => {
                 try {
                     const { profile } = await fetchProfileViaAPI();
-                    if (profile && (profile.avatar_url || profile.name)) {
+                    if (profile && (profile.avatar_url || profile.display_name)) {
                         setUser(prev => createUserWithProfile(prev, profile));
                     }
                 } catch (err) {
