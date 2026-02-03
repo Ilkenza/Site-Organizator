@@ -213,12 +213,19 @@ const handlePostRequest = async (req, res, baseUrl, anonKey, serviceKey, userTok
  * @param {Object} res - Response object
  * @param {string} baseUrl - Supabase base URL
  * @param {string} anonKey - Anon key
- * @param {string} readToken - Read token (service role or anon)
+ * @param {string} userToken - User JWT token for RLS
  * @returns {Promise<void>}
  */
-const handleGetRequest = async (req, res, baseUrl, anonKey, readToken) => {
+const handleGetRequest = async (req, res, baseUrl, anonKey, userToken) => {
+  if (!userToken) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+      success: false,
+      error: 'Authentication required to fetch tags'
+    });
+  }
+
   try {
-    const tags = await fetchAllTags(baseUrl, anonKey, readToken);
+    const tags = await fetchAllTags(baseUrl, anonKey, userToken);
 
     return res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -255,7 +262,6 @@ export default async function handler(req, res) {
 
   const userToken = extractUserToken(req.headers);
   const baseUrl = buildBaseUrl(SUPABASE_URL);
-  const readToken = SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
 
   try {
     if (req.method === 'POST') {
@@ -268,7 +274,7 @@ export default async function handler(req, res) {
         userToken
       );
     } else if (req.method === 'GET') {
-      return await handleGetRequest(req, res, baseUrl, SUPABASE_ANON_KEY, readToken);
+      return await handleGetRequest(req, res, baseUrl, SUPABASE_ANON_KEY, userToken);
     } else {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,

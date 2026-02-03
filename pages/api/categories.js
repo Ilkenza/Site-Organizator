@@ -220,9 +220,17 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'GET') {
+    // Require authentication for GET to respect RLS
+    if (!userToken) {
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        error: 'Authentication required to fetch categories',
+      });
+    }
+
     try {
       const url = `${config.url}/rest/v1/${SUPABASE_TABLES.CATEGORIES}?select=*`;
-      const headers = buildHeaders(config.anonKey, config.serviceKey);
+      const headers = buildHeaders(config.anonKey, userToken);
       const response = await fetch(url, { headers });
 
       if (!response.ok) {

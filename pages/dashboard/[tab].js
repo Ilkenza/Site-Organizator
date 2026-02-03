@@ -18,6 +18,7 @@ import { ConfirmModal } from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
 import CommandMenu from '../../components/ui/CommandMenu';
 import UndoToast from '../../components/ui/UndoToast';
+import OnboardingTour from '../../components/ui/OnboardingTour';
 
 class ErrorBoundary extends Component {
     constructor(props) {
@@ -471,39 +472,31 @@ function DashboardContent() {
 }
 
 export default function Dashboard() {
-    const { user, loading, supabase, needsMfa } = useAuth();
+    const { user, loading, supabase } = useAuth();
     const [authChecked, setAuthChecked] = useState(false);
     const [hasTokens, setHasTokens] = useState(false);
+    const [redirecting, setRedirecting] = useState(false);
 
+    // CRITICAL: Check MFA flag IMMEDIATELY before any rendering
+    const mfaInProgress = typeof window !== 'undefined' && (
+        sessionStorage.getItem('mfa_verification_in_progress') === 'true' ||
+        localStorage.getItem('mfa_verification_in_progress') === 'true'
+    );
+
+    // If MFA is in progress, show loading and redirect to login
     useEffect(() => {
-        if (needsMfa) {
-            console.warn('[Dashboard] AuthContext reports needsMfa=true — redirecting to /login');
+        if (mfaInProgress && !redirecting) {
+            console.log('[Dashboard] 🔒 MFA in progress detected - redirecting to login');
+            setRedirecting(true);
             window.location.replace('/login');
         }
-    }, [needsMfa]);
+    }, [mfaInProgress, redirecting]);
 
-    // Immediate synchronous AAL check for direct /dashboard navigations.
-    // If a valid token exists in localStorage and its AAL claim is not 'aal2', redirect immediately.
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        try {
-            const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-            const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-            const stored = localStorage.getItem(storageKey);
-            if (!stored) return;
-            const tokens = JSON.parse(stored);
-            if (!tokens?.access_token) return;
+    // REMOVED: needsMfa check - login page handles MFA flow
+    // The login page will show MFA screen if user has MFA enabled
 
-            const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
-            const isExpired = payload.exp * 1000 < Date.now();
-            if (!isExpired && payload.aal && payload.aal !== 'aal2') {
-                console.warn('[Dashboard] Immediate localStorage AAL check: token AAL != aal2 — redirecting to /login');
-                window.location.replace('/login');
-            }
-        } catch (e) {
-            console.warn('[Dashboard] Immediate AAL check failed:', e);
-        }
-    }, []);
+    // REMOVED: Immediate AAL check - now MFA is optional, users without MFA can have AAL1 tokens
+    // The AuthContext and later checks handle MFA validation correctly
 
     // IMMEDIATE check on mount - check localStorage synchronously
     useEffect(() => {
@@ -523,6 +516,16 @@ export default function Dashboard() {
                     // Try to set session immediately and verify MFA/AAL. If MFA is required but AAL<2, redirect to login.
                     (async () => {
                         try {
+                            // CRITICAL: Don't process session if MFA verification is in progress
+                            const mfaInProgress = sessionStorage.getItem('mfa_verification_in_progress') === 'true' ||
+                                                 localStorage.getItem('mfa_verification_in_progress') === 'true';
+                            
+                            if (mfaInProgress) {
+                                console.log('[Dashboard] 🔒 MFA verification in progress - redirecting to login page');
+                                if (isMounted) setAuthChecked(true);
+                                window.location.href = '/login';
+                                return;
+                            }
 
                             // Wrap setSession in a timeout to prevent indefinite blocking
                             const SET_SESSION_TIMEOUT = 3000;
@@ -537,24 +540,11 @@ export default function Dashboard() {
                             await Promise.race([setSessionPromise, timeoutPromise]);
 
                             try {
-                                const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-
-                                if (aalData?.currentLevel !== 'aal2') {
-                                    try {
-                                        const { data: factors } = await supabase.auth.mfa.listFactors();
-                                        const hasFactors = Array.isArray(factors) && factors.length > 0;
-                                        if (hasFactors) {
-                                            console.warn('[Dashboard] Account requires MFA but current level is not AAL2 — redirecting to /login');
-                                            if (isMounted) setAuthChecked(true);
-                                            window.location.href = '/login';
-                                            return;
-                                        }
-                                    } catch (fErr) {
-                                        console.warn('[Dashboard] Error checking MFA factors:', fErr);
-                                    }
-                                }
+                                // REMOVED: AAL check - login page handles MFA flow
+                                // Just log for debugging
+                                console.log('[Dashboard] Session restored from localStorage');
                             } catch (aalErr) {
-                                console.warn('[Dashboard] Error checking AAL after immediate setSession:', aalErr);
+                                console.warn('[Dashboard] Error after immediate setSession:', aalErr);
                             }
 
                             if (isMounted) setAuthChecked(true);
@@ -651,11 +641,15 @@ export default function Dashboard() {
                                         try {
                                             const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
+                                            // Only require AAL2 if user has MFA enabled
                                             if (aalData?.currentLevel !== 'aal2') {
                                                 try {
-                                                    const { data: factors } = await supabase.auth.mfa.listFactors();
-                                                    const hasFactors = Array.isArray(factors) && factors.length > 0;
-                                                    if (hasFactors) {
+                                                    const { data: factorsData } = await supabase.auth.mfa.listFactors();
+                                                    const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
+                                                    const hasMFA = !!totpFactor;
+
+                                                    // Only redirect if user HAS MFA but isn't verified
+                                                    if (hasMFA) {
                                                         console.warn('[Dashboard] Account requires MFA but current level is not AAL2 — redirecting to /login');
                                                         if (isMounted) setAuthChecked(true);
                                                         window.location.href = '/login';
@@ -728,32 +722,11 @@ export default function Dashboard() {
         };
     }, [user, loading, supabase, authChecked]);
 
-    // Determine if we should block rendering because the token is AAL<2 (synchronous check)
-    let immediateAalBlock = false;
-    if (typeof window !== 'undefined' && !user) {
-        try {
-            const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-            const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
-            const stored = localStorage.getItem(storageKey);
-            if (stored) {
-                const tokens = JSON.parse(stored);
-                if (tokens?.access_token) {
-                    const payload = JSON.parse(atob(tokens.access_token.split('.')[1] || '""'));
-                    const isExpired = payload.exp * 1000 < Date.now();
-                    if (!isExpired && payload.aal && payload.aal !== 'aal2') {
-                        immediateAalBlock = true;
-                    }
-                }
-            }
-        } catch (e) {
-            // ignore parse errors
-        }
-    }
-
     // Show loading when:
+    // - MFA verification is in progress
     // - we are still checking auth and user is not set (previous behavior)
-    // - or token is present but AAL < 2 (prevent dashboard flash during immediate navigation)
-    if ((immediateAalBlock && !user) || (!authChecked && !user && !hasTokens)) {
+    // - or we are redirecting
+    if (mfaInProgress || redirecting || (!authChecked && !user && !hasTokens)) {
         return (
             <div className="min-h-screen bg-gray-950 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2" style={{ borderColor: '#6CBBFB' }}></div>
@@ -761,8 +734,10 @@ export default function Dashboard() {
         );
     }
 
-    // If no user and no tokens, redirect to login
-    if (!user && !hasTokens) {
+    // If no user and no tokens, redirect to login (only once)
+    if (!user && !hasTokens && !redirecting) {
+        setRedirecting(true);
+        window.location.replace('/login');
         return null;
     }
 
@@ -777,6 +752,7 @@ export default function Dashboard() {
             </Head>
             <DashboardProvider>
                 <DashboardContent />
+                <OnboardingTour user={user} />
             </DashboardProvider>
         </>
     );

@@ -139,10 +139,12 @@ export default function SecuritySection({
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
+    const [deleteSuccessModal, setDeleteSuccessModal] = useState(false);
+    const [deleteErrorModal, setDeleteErrorModal] = useState({ isOpen: false, message: '' });
 
     const handleDeleteAccount = async () => {
         if (deleteConfirmText !== 'DELETE') {
-            alert('Please type DELETE to confirm');
+            setDeleteErrorModal({ isOpen: true, message: 'Please type DELETE to confirm' });
             return;
         }
 
@@ -152,11 +154,15 @@ export default function SecuritySection({
             const { error } = await supabase.rpc('delete_user');
             if (error) throw error;
 
-            alert('Account deleted successfully');
-            await signOut();
+            setDeleteModalOpen(false);
+            setDeleteSuccessModal(true);
+            // Wait a moment for user to see success message, then sign out
+            setTimeout(async () => {
+                await signOut();
+            }, 2000);
         } catch (err) {
             console.error('Delete account error:', err);
-            alert(`Failed to delete account: ${err.message}`);
+            setDeleteErrorModal({ isOpen: true, message: err.message || 'Failed to delete account' });
             setDeleteLoading(false);
         }
     };
@@ -452,6 +458,44 @@ export default function SecuritySection({
                             {deleteLoading ? 'Deleting...' : 'Delete My Account'}
                         </button>
                     </div>
+                </div>
+            </Modal>
+
+            {/* Delete Success Modal */}
+            <Modal
+                isOpen={deleteSuccessModal}
+                onClose={() => {}}
+                title="Account Deleted"
+                showCloseButton={false}
+            >
+                <div className="text-center py-4">
+                    <div className="text-6xl mb-4">✅</div>
+                    <p className="text-app-text-primary text-lg mb-2">
+                        Your account has been deleted successfully
+                    </p>
+                    <p className="text-app-text-secondary text-sm">
+                        Redirecting to login...
+                    </p>
+                </div>
+            </Modal>
+
+            {/* Delete Error Modal */}
+            <Modal
+                isOpen={deleteErrorModal.isOpen}
+                onClose={() => setDeleteErrorModal({ isOpen: false, message: '' })}
+                title="Error"
+            >
+                <div className="text-center py-4">
+                    <div className="text-6xl mb-4">❌</div>
+                    <p className="text-app-text-primary mb-2">
+                        {deleteErrorModal.message}
+                    </p>
+                    <button
+                        onClick={() => setDeleteErrorModal({ isOpen: false, message: '' })}
+                        className="mt-4 px-6 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
+                    >
+                        OK
+                    </button>
                 </div>
             </Modal>
         </>

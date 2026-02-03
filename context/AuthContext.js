@@ -85,7 +85,7 @@ function createUserWithProfile(baseUser, profile) {
     return {
         ...baseUser,
         avatarUrl: profile?.avatar_url || null,
-        displayName: profile?.name || null,
+        displayName: baseUser?.user_metadata?.display_name || profile?.name || null,
     };
 }
 
@@ -181,18 +181,38 @@ export function AuthProvider({ children }) {
                 }
 
                 if (session?.user) {
-                    // Before setting user, ensure the session is at AAL2 if account requires MFA
-                    if (!isAALValid(session.access_token)) {
-                        console.warn('[AuthContext] Session AAL is not aal2 — not setting user and marking MFA required');
-                        setNeedsMfa(true);
-                        setUser(null);
+                    // CRITICAL: Don't process session if MFA verification is in progress
+                    const mfaInProgress = sessionStorage.getItem('mfa_verification_in_progress') === 'true' ||
+                                         localStorage.getItem('mfa_verification_in_progress') === 'true';
+                    
+                    if (mfaInProgress) {
+                        console.log('[AuthContext] 🔒 MFA verification in progress - skipping session processing');
+                        setLoading(false);
                         return;
+                    }
+                    
+                    // Don't block users based on AAL - let login page handle MFA flow
+                    // Just log for debugging
+                    try {
+                        const factorsResult = await supabase.auth.mfa.listFactors();
+                        const totpFactor = factorsResult?.data?.totp?.find(f => f.status === 'verified');
+                        const hasMFA = !!totpFactor;
+                        const currentAAL = getTokenAAL(session.access_token);
+                        
+                        console.log('[AuthContext] Session loaded:', {
+                            hasMFA,
+                            currentAAL,
+                            userId: session.user.id
+                        });
+                    } catch (err) {
+                        console.warn('[AuthContext] Could not check MFA status:', err);
                     }
 
                     // Check if user already has REAL profile data (from localStorage)
                     const hasProfileData = !!session.user.avatarUrl || !!session.user.displayName;
 
                     if (hasProfileData) {
+                        console.log('[AuthContext] Setting user with profile data');
                         setUser(session.user);
                     } else {
                         try {
@@ -204,10 +224,12 @@ export function AuthProvider({ children }) {
                                 console.warn('[AuthContext] Profile fetch error:', profileError.message);
                             }
 
+                            console.log('[AuthContext] Setting user from profile fetch');
                             setUser(profile ? createUserWithProfile(session.user, profile) : session.user);
                         } catch (err) {
                             if (!isMounted) return;
                             console.error('[AuthContext] Error fetching profile:', err);
+                            console.log('[AuthContext] Setting user (fallback after error)');
                             setUser(session.user);
                         }
                     }
@@ -256,12 +278,6 @@ export function AuthProvider({ children }) {
 
                         if (tokens) {
                             userSetFromLocalStorageRef.current = true;
-
-                            if (!isAALValid(tokens.access_token)) {
-                                console.warn('[AuthContext] Late recovery: token AAL not aal2 — marking MFA required');
-                                setNeedsMfa(true);
-                                return;
-                            }
 
                             try {
                                 const { profile } = await fetchProfileViaAPI();
@@ -333,12 +349,6 @@ export function AuthProvider({ children }) {
 
                             if (tokens) {
                                 userSetFromLocalStorageRef.current = true;
-
-                                if (!isAALValid(tokens.access_token)) {
-                                    console.warn('[AuthContext] Restored token AAL not aal2 — marking MFA required');
-                                    setNeedsMfa(true);
-                                    return;
-                                }
 
                                 try {
                                     const { profile } = await fetchProfileViaAPI();
@@ -438,39 +448,36 @@ export function AuthProvider({ children }) {
             if (tokens?.user && tokens?.access_token) {
                 userSetFromLocalStorageRef.current = true;
 
-                if (!isAALValid(tokens.access_token)) {
-                    console.warn('[AuthContext] Emergency recovery: token AAL not aal2 — marking MFA required');
-                    setNeedsMfa(true);
-                    return;
-                }
+                // Set user from localStorage
+                (async () => {
+                    const hasProfileData = !!tokens.user.avatarUrl || !!tokens.user.displayName;
 
-                const hasProfileData = !!tokens.user.avatarUrl || !!tokens.user.displayName;
+                    if (hasProfileData) {
+                        setUser(tokens.user);
+                    } else {
+                        // Set user immediately, then fetch profile
+                        setUser(tokens.user);
 
-                if (hasProfileData) {
-                    setUser(tokens.user);
-                } else {
-                    // Set user immediately, then fetch profile
-                    setUser(tokens.user);
+                        (async () => {
+                            try {
+                                const { profile } = await fetchProfileViaAPI();
+                                if (profile) {
+                                    const updatedUser = createUserWithProfile(tokens.user, profile);
+                                    setUser(updatedUser);
 
-                    (async () => {
-                        try {
-                            const { profile } = await fetchProfileViaAPI();
-                            if (profile) {
-                                const updatedUser = createUserWithProfile(tokens.user, profile);
-                                setUser(updatedUser);
-
-                                // Update localStorage
-                                const stored = getStoredTokens();
-                                if (stored) {
-                                    stored.user = updatedUser;
-                                    saveTokensToStorage(stored);
+                                    // Update localStorage
+                                    const stored = getStoredTokens();
+                                    if (stored) {
+                                        stored.user = updatedUser;
+                                        saveTokensToStorage(stored);
+                                    }
                                 }
+                            } catch (err) {
+                                console.warn('[AuthContext] Emergency: Failed to fetch profile:', err);
                             }
-                        } catch (err) {
-                            console.warn('[AuthContext] Emergency recovery: profile fetch failed:', err);
-                        }
-                    })();
-                }
+                        })();
+                    }
+                })();
             }
             return;
         }
