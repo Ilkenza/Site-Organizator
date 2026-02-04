@@ -75,7 +75,7 @@ export default function MobileToolbar({ onAddClick }) {
                 {/* Add Button - Icon only on mobile */}
                 <button
                     onClick={onAddClick}
-                    className="flex-shrink-0 p-2.5 bg-app-primary hover:bg-app-primary-hover text-white rounded-lg transition-colors shadow-sm"
+                    className="flex-shrink-0 p-2.5 bg-app-accent hover:bg-app-accentLight text-app-bg-primary rounded-lg transition-colors shadow-sm"
                     title={getAddButtonText()}
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

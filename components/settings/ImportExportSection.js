@@ -50,12 +50,41 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
         setImportLoading(true);
         try {
             const { importSites } = await import('../../lib/exportImport.js');
-            await importSites(importPreview.sites, user?.id);
-            setImportMessage({ type: 'success', text: 'Sites imported successfully!' });
+            const result = await importSites(importPreview.sites, user?.id);
+
+            // Show detailed report
+            const report = result?.result?.report || {};
+            const created = report.created?.length || 0;
+            const updated = report.updated?.length || 0;
+            const skipped = report.skipped?.length || 0;
+            const errors = report.errors?.length || 0;
+
+
+            if (created > 0 || updated > 0) {
+                const parts = [];
+                if (created > 0) parts.push(`${created} created`);
+                if (updated > 0) parts.push(`${updated} updated`);
+                setImportMessage({
+                    type: 'success',
+                    text: `✅ Import successful: ${parts.join(', ')}. ${errors > 0 ? `${errors} error(s).` : ''}`
+                });
+            } else if (skipped > 0) {
+                setImportMessage({
+                    type: 'warning',
+                    text: `⚠️ All ${skipped} site(s) skipped. ${errors > 0 ? `${errors} error(s).` : ''}`
+                });
+            } else {
+                setImportMessage({
+                    type: 'error',
+                    text: `❌ No sites imported. ${errors > 0 ? `${errors} error(s) occurred.` : 'Check console for details.'}`
+                });
+            }
+
             setImportPreview(null);
             setTimeout(() => {
-                setImportMessage(null);
-                fetchData();
+                if (created > 0) {
+                    fetchData();
+                }
             }, 2000);
         } catch (err) {
             console.error('Import error:', err);

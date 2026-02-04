@@ -33,9 +33,9 @@ const CONTENT_TYPES = {
     HTML: 'text/html; charset=utf-8',
 };
 
-const CSV_HEADERS = 'Name,URL,Category,Tags,Description';
+const CSV_HEADERS = 'Name,URL,Category,Tags,Description,Favorite,Pinned';
 
-const HTML_TABLE_HEADERS = ['Name', 'URL', 'Category', 'Tags', 'Description'];
+const HTML_TABLE_HEADERS = ['Name', 'URL', 'Category', 'Tags', 'Description', 'Favorite', 'Pinned'];
 
 const SUPABASE_TABLES = {
     SITES: 'sites',
@@ -116,8 +116,10 @@ function buildCsvRow(site) {
     const cats = escapeCsvField(extractNames(site.categories_array));
     const tags = escapeCsvField(extractNames(site.tags_array));
     const desc = escapeCsvField(site.description);
+    const fav = site.is_favorite ? 'Yes' : 'No';
+    const pin = site.is_pinned ? 'Yes' : 'No';
 
-    return `"${name}","${url}","${cats}","${tags}","${desc}"`;
+    return `"${name}","${url}","${cats}","${tags}","${desc}","${fav}","${pin}"`;
 }
 
 /**
@@ -131,8 +133,10 @@ function buildHtmlRow(site) {
     const cats = extractNames(site.categories_array);
     const tags = extractNames(site.tags_array);
     const desc = escapeHtml(site.description);
+    const fav = site.is_favorite ? '⭐' : '';
+    const pin = site.is_pinned ? '📌' : '';
 
-    return `<tr><td>${name}</td><td><a href="${url}">${url}</a></td><td>${cats}</td><td>${tags}</td><td>${desc}</td></tr>`;
+    return `<tr><td>${name}</td><td><a href="${url}">${url}</a></td><td>${cats}</td><td>${tags}</td><td>${desc}</td><td>${fav}</td><td>${pin}</td></tr>`;
 }
 
 /**
@@ -157,7 +161,7 @@ const convertToCSV = (sites) => {
 const convertToHTML = (sites) => {
     const rows = sites && Array.isArray(sites) && sites.length > 0
         ? sites.map(buildHtmlRow).join('')
-        : '<tr><td colspan="5">No sites</td></tr>';
+        : '<tr><td colspan="7">No sites</td></tr>';
 
     const timestamp = new Date().toLocaleString();
 

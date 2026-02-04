@@ -486,7 +486,6 @@ export default function Dashboard() {
     // If MFA is in progress, show loading and redirect to login
     useEffect(() => {
         if (mfaInProgress && !redirecting) {
-            console.log('[Dashboard] 🔒 MFA in progress detected - redirecting to login');
             setRedirecting(true);
             window.location.replace('/login');
         }
@@ -521,7 +520,6 @@ export default function Dashboard() {
                                 localStorage.getItem('mfa_verification_in_progress') === 'true';
 
                             if (mfaInProgress) {
-                                console.log('[Dashboard] 🔒 MFA verification in progress - redirecting to login page');
                                 if (isMounted) setAuthChecked(true);
                                 window.location.href = '/login';
                                 return;
@@ -542,7 +540,6 @@ export default function Dashboard() {
                             try {
                                 // REMOVED: AAL check - login page handles MFA flow
                                 // Just log for debugging
-                                console.log('[Dashboard] Session restored from localStorage');
                             } catch (aalErr) {
                                 console.warn('[Dashboard] Error after immediate setSession:', aalErr);
                             }

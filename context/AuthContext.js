@@ -186,7 +186,6 @@ export function AuthProvider({ children }) {
                         localStorage.getItem('mfa_verification_in_progress') === 'true';
 
                     if (mfaInProgress) {
-                        console.log('[AuthContext] 🔒 MFA verification in progress - skipping session processing');
                         setLoading(false);
                         return;
                     }
@@ -198,21 +197,14 @@ export function AuthProvider({ children }) {
                         const totpFactor = factorsResult?.data?.totp?.find(f => f.status === 'verified');
                         const hasMFA = !!totpFactor;
                         const currentAAL = getTokenAAL(session.access_token);
-
-                        console.log('[AuthContext] Session loaded:', {
-                            hasMFA,
-                            currentAAL,
-                            userId: session.user.id
-                        });
                     } catch (err) {
-                        console.warn('[AuthContext] Could not check MFA status:', err);
+                        // Could not check MFA status
                     }
 
                     // Check if user already has REAL profile data (from localStorage)
                     const hasProfileData = !!session.user.avatarUrl || !!session.user.displayName;
 
                     if (hasProfileData) {
-                        console.log('[AuthContext] Setting user with profile data');
                         setUser(session.user);
                     } else {
                         try {
@@ -221,15 +213,12 @@ export function AuthProvider({ children }) {
                             if (!isMounted) return;
 
                             if (profileError && profileError.code !== 'PGRST116') {
-                                console.warn('[AuthContext] Profile fetch error:', profileError.message);
+                                // Profile fetch error (non-critical)
                             }
 
-                            console.log('[AuthContext] Setting user from profile fetch');
                             setUser(profile ? createUserWithProfile(session.user, profile) : session.user);
                         } catch (err) {
                             if (!isMounted) return;
-                            console.error('[AuthContext] Error fetching profile:', err);
-                            console.log('[AuthContext] Setting user (fallback after error)');
                             setUser(session.user);
                         }
                     }
