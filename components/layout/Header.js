@@ -448,20 +448,6 @@ export default function Header({ onAddClick, onMenuClick }) {
 
                         {/* Actions */}
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                            {/* Mobile Search Toggle - shown only on mobile when not on settings */}
-                            {activeTab !== 'settings' && (
-                                <button
-                                    onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
-                                    className="md:hidden p-2 rounded-lg transition-colors text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light"
-                                    title="Search"
-                                    aria-label="Toggle search"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                </button>
-                            )}
-
                             {/* Refresh button - hidden on mobile when multi-select active */}
                             {activeTab !== 'settings' && (
                                 <button
@@ -532,10 +518,10 @@ export default function Header({ onAddClick, onMenuClick }) {
                                             }
                                         }}
                                         className={`p-2 rounded-lg transition-colors text-sm font-medium ${hasSelection
-                                                ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30'
-                                                : multiSelectMode
-                                                    ? 'bg-app-accent/20 text-app-accent border border-app-accent/50'
-                                                    : 'text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light border border-transparent'
+                                            ? 'bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/30'
+                                            : multiSelectMode
+                                                ? 'bg-app-accent/20 text-app-accent border border-app-accent/50'
+                                                : 'text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light border border-transparent'
                                             }`}
                                         title={hasSelection ? 'Deselect all' : 'Toggle multi-select mode (M)'}
                                         aria-label={hasSelection ? 'Deselect all' : 'Toggle multi-select'}
@@ -765,61 +751,6 @@ export default function Header({ onAddClick, onMenuClick }) {
                     </div>
                 </div>
 
-                {/* Mobile Search Bar - shown when mobile search is open */}
-                {activeTab !== 'settings' && mobileSearchOpen && (
-                    <div className="md:hidden px-3 pb-3 border-t border-app-border">
-                        <div className="relative pt-3">
-                            <svg
-                                className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-app-text-tertiary"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                />
-                            </svg>
-                            <input
-                                type="text"
-                                placeholder={
-                                    activeTab === 'sites'
-                                        ? 'Search sites...'
-                                        : activeTab === 'categories'
-                                            ? 'Search categories...'
-                                            : activeTab === 'tags'
-                                                ? 'Search tags...'
-                                                : 'Search...'
-                                }
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Escape') {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setSearchQuery('');
-                                        setMobileSearchOpen(false);
-                                    }
-                                }}
-                                className="w-full pl-10 pr-10 py-2 bg-app-bg-light border border-app-border rounded-lg text-app-text-primary text-sm placeholder-app-text-tertiary focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                autoFocus
-                            />
-                            <button
-                                onClick={() => {
-                                    setSearchQuery('');
-                                    setMobileSearchOpen(false);
-                                }}
-                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-app-text-tertiary hover:text-app-text-primary transition-colors"
-                                title="Close search"
-                                aria-label="Close search"
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    </div>
-                )}
             </header>
 
             {/* Bulk Delete Confirmation Modal */}

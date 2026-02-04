@@ -185,6 +185,8 @@ function buildSupabaseUrl(baseUrl, endpoint) {
 }
 
 export default async function handler(req, res) {
+
+
   // Validate HTTP method
   if (req.method !== 'POST') {
     return res.status(HTTP_STATUS.METHOD_NOT_ALLOWED).json({
@@ -223,6 +225,8 @@ export default async function handler(req, res) {
   }
 
   const { rows, userId } = validation;
+
+
   const options = payload.options || { createMissing: true };
   const chunkSize = calculateChunkSize(payload.chunkSize);
 
@@ -250,7 +254,7 @@ export default async function handler(req, res) {
         );
       }
     } catch (e) {
-      // Ignore errors during preload
+      // Silently continue
     }
 
     try {
@@ -266,7 +270,7 @@ export default async function handler(req, res) {
         );
       }
     } catch (e) {
-      // Ignore errors during preload
+      // Silently continue
     }
   }
 
@@ -286,7 +290,6 @@ export default async function handler(req, res) {
       return null;
     }
 
-    // Try insert
     try {
       const url = buildSupabaseUrl(SUPABASE_URL, 'categories');
       const response = await fetch(url, {
@@ -309,18 +312,23 @@ export default async function handler(req, res) {
         }
       }
 
-      // If not ok, try to lookup (maybe created concurrently)
+      // If not ok, try to lookup (maybe created concurrently or already exists)
       const lookupUrl = buildSupabaseUrl(
         SUPABASE_URL,
         `categories?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`
       );
-      const lookup = await fetchJson(lookupUrl, {
+
+      const lookupRes = await fetch(lookupUrl, {
         headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY)
       });
 
-      if (lookup.ok && Array.isArray(lookup.json) && lookup.json.length > 0) {
-        catNameToObj.set(key, lookup.json[0]);
-        return lookup.json[0];
+      if (lookupRes.ok) {
+        const lookupJson = await lookupRes.json();
+
+        if (Array.isArray(lookupJson) && lookupJson.length > 0) {
+          catNameToObj.set(key, lookupJson[0]);
+          return lookupJson[0];
+        }
       }
 
       return null;
@@ -367,6 +375,7 @@ export default async function handler(req, res) {
         }
       }
 
+      // NOTE: Try lookup with user_id filter
       const lookupUrl = buildSupabaseUrl(
         SUPABASE_URL,
         `tags?select=id,name&name=eq.${encodeURIComponent(name)}&user_id=eq.${userId}`
@@ -395,20 +404,28 @@ export default async function handler(req, res) {
     const unique = Array.from(new Set(urls.map(u => (u || '').trim()))).filter(Boolean);
     if (unique.length === 0) return {};
 
-    const inList = unique.map(u => `"${u}"`).join(',');
-    const url = buildSupabaseUrl(SUPABASE_URL, `sites?select=*&url=in.(${inList})`);
-
-    const response = await fetch(url, {
-      headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY)
-    });
-
-    if (!response.ok) return {};
-
-    const json = await response.json();
+    const BATCH_SIZE = 50;
     const out = {};
-    (json || []).forEach(s => {
-      if (s && s.url) out[(s.url || '').trim()] = s;
-    });
+
+    for (let i = 0; i < unique.length; i += BATCH_SIZE) {
+      const batch = unique.slice(i, i + BATCH_SIZE);
+      const inList = batch.map(u => `"${encodeURIComponent(u)}"`).join(',');
+      const url = buildSupabaseUrl(SUPABASE_URL, `sites?select=*&url=in.(${inList})&user_id=eq.${userId}`);
+
+      const response = await fetch(url, {
+        headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY)
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const json = await response.json();
+
+      (json || []).forEach(s => {
+        if (s && s.url) out[(s.url || '').trim()] = s;
+      });
+    }
 
     return out;
   }
@@ -478,13 +495,41 @@ export default async function handler(req, res) {
    * @returns {Object} Normalized row
    */
   function normalizeImportRow(row, index) {
+    // Handle categories - prioritize categories_array (from export format)
+    let categories = [];
+    if (Array.isArray(row.categories_array)) {
+      // Export format with full objects
+      categories = row.categories_array.map(c => c?.name || '').filter(Boolean);
+    } else if (typeof row.categories === 'string') {
+      categories = splitDelimitedString(row.categories);
+    } else if (Array.isArray(row.categories)) {
+      categories = row.categories.map(c => typeof c === 'string' ? c : c?.name || '').filter(Boolean);
+    } else if (row.category) {
+      categories = splitDelimitedString(row.category || row.Category || '');
+    }
+
+    // Handle tags - prioritize tags_array (from export format)
+    let tags = [];
+    if (Array.isArray(row.tags_array)) {
+      // Export format with full objects
+      tags = row.tags_array.map(t => t?.name || '').filter(Boolean);
+    } else if (typeof row.tags === 'string') {
+      tags = splitDelimitedString(row.tags);
+    } else if (Array.isArray(row.tags)) {
+      tags = row.tags.map(t => typeof t === 'string' ? t : t?.name || '').filter(Boolean);
+    } else if (row.tag) {
+      tags = splitDelimitedString(row.tag || row.Tag || '');
+    }
+
     return {
       _origIndex: index,
       name: normalizeString(row.name || row.title || row.Name || ''),
       url: normalizeString(row.url || row.URL || row.link || ''),
       pricing: normalizeString(row.pricing || row.pricing_model || row.pricingModel || '') || null,
-      categories: splitDelimitedString(row.category || row.categories || row.Category || ''),
-      tags: splitDelimitedString(row.tag || row.tags || row.Tag || ''),
+      categories: categories,
+      tags: tags,
+      is_favorite: row.is_favorite === true || row.is_favorite === 'true' || row.is_favorite === 1 || false,
+      is_pinned: row.is_pinned === true || row.is_pinned === 'true' || row.is_pinned === 1 || false,
       created_at: row.created_at || row.createdAt || null
     };
   }
@@ -503,21 +548,13 @@ export default async function handler(req, res) {
       const urls = normRows.map(r => r.url).filter(Boolean);
       const existingSites = await lookupSitesByUrls(urls);
 
-      // Prepare lists for creation
+      // Prepare lists for creation and update
       const toCreateSites = [];
+      const toUpdateSites = [];
 
       for (const nr of normRows) {
         if (!nr.url) {
           report.errors.push({ row: nr._origIndex, error: ERROR_MESSAGES.MISSING_URL });
-          continue;
-        }
-
-        if (existingSites[nr.url]) {
-          report.skipped.push({
-            row: nr._origIndex,
-            error: ERROR_MESSAGES.SITE_EXISTS,
-            existing: existingSites[nr.url]
-          });
           continue;
         }
 
@@ -538,16 +575,31 @@ export default async function handler(req, res) {
           }
         }
 
-        toCreateSites.push({ nr, cats, tags });
+        if (existingSites[nr.url]) {
+          // Site exists - prepare for update
+          toUpdateSites.push({
+            nr,
+            cats,
+            tags,
+            existingSite: existingSites[nr.url]
+          });
+        } else {
+          // New site - prepare for creation
+          toCreateSites.push({ nr, cats, tags });
+        }
       }
 
-      // Insert sites in batch
+      // Insert new sites in batch
       const siteInserts = toCreateSites.map(x => ({
         name: x.nr.name || '',
         url: x.nr.url,
         pricing: x.nr.pricing || null,
+        is_favorite: x.nr.is_favorite || false,
+        is_pinned: x.nr.is_pinned || false,
         created_at: x.nr.created_at || null,
-        user_id: userId
+        user_id: userId,
+        categories: x.cats.map(c => c.name),
+        tags: x.tags.map(t => t.name)
       }));
 
       let createdSites = [];
@@ -567,7 +619,45 @@ export default async function handler(req, res) {
         }
       }
 
-      // Attach relations
+      // Update existing sites
+      const updatedSites = [];
+      for (const updateItem of toUpdateSites) {
+        const { nr, cats, tags, existingSite } = updateItem;
+        try {
+          const updateUrl = buildSupabaseUrl(SUPABASE_URL, `sites?id=eq.${existingSite.id}&user_id=eq.${userId}`);
+          const updateBody = {
+            name: nr.name || existingSite.name,
+            pricing: nr.pricing || existingSite.pricing,
+            is_favorite: nr.is_favorite,
+            is_pinned: nr.is_pinned,
+            categories: cats.map(c => c.name),
+            tags: tags.map(t => t.name)
+          };
+
+          const updateResponse = await fetch(updateUrl, {
+            method: 'PATCH',
+            headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY, true),
+            body: JSON.stringify(updateBody)
+          });
+
+          if (!updateResponse.ok) {
+            const errorText = await updateResponse.text();
+            report.errors.push({ row: nr._origIndex, error: `Update failed: ${errorText}` });
+          } else {
+            const updatedArray = await updateResponse.json();
+            const updated = updatedArray && updatedArray[0];
+            if (updated) {
+              updatedSites.push({ site: updated, ctx: updateItem });
+              report.updated = report.updated || [];
+              report.updated.push({ row: nr._origIndex, site: updated });
+            }
+          }
+        } catch (err) {
+          report.errors.push({ row: nr._origIndex, error: err.message });
+        }
+      }
+
+      // Attach relations for new sites
       const scRows = [];
       const stRows = [];
 
@@ -587,16 +677,42 @@ export default async function handler(req, res) {
         report.created.push({ row: ctx.nr._origIndex, site });
       }
 
+      // Update relations for existing sites
+      for (const { site, ctx } of updatedSites) {
+        if (!site || !site.id) continue;
+
+        // Remove old relations
+        try {
+          const deleteCatsUrl = buildSupabaseUrl(SUPABASE_URL, `site_categories?site_id=eq.${site.id}`);
+          await fetch(deleteCatsUrl, {
+            method: 'DELETE',
+            headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, REL_KEY)
+          });
+
+          const deleteTagsUrl = buildSupabaseUrl(SUPABASE_URL, `site_tags?site_id=eq.${site.id}`);
+          await fetch(deleteTagsUrl, {
+            method: 'DELETE',
+            headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, REL_KEY)
+          });
+        } catch (err) {
+          // Continue anyway
+        }
+
+        // Add new relations
+        (ctx.cats || []).forEach(c => scRows.push({ site_id: site.id, category_id: c.id }));
+        (ctx.tags || []).forEach(t => stRows.push({ site_id: site.id, tag_id: t.id }));
+      }
+
       try {
         await attachSiteCategories(scRows);
       } catch (e) {
-        console.error('attachSiteCategories error:', e);
+        // Continue anyway
       }
 
       try {
         await attachSiteTags(stRows);
       } catch (e) {
-        console.error('attachSiteTags error:', e);
+        // Continue anyway
       }
     }
 
@@ -605,7 +721,6 @@ export default async function handler(req, res) {
       [RESPONSE_FIELDS.REPORT]: report
     });
   } catch (err) {
-    console.error('import failed', err);
     return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
       [RESPONSE_FIELDS.SUCCESS]: false,
       [RESPONSE_FIELDS.ERROR]: err.message || String(err)

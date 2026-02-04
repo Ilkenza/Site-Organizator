@@ -44,13 +44,11 @@ export default function Login() {
         setMfaInProgress(mfaFlag);
 
         if (mfaFlag) {
-            console.log('[Login] 🔒 Redirect blocked - MFA verification in progress');
             return;
         }
 
         // Only redirect if auth is not loading and we have a user
         if (!authLoading && user?.id && !redirecting) {
-            console.log('[Login] ✅ User logged in, redirecting to dashboard');
             setRedirecting(true);
             window.location.replace(LOGIN_CONFIG.DASHBOARD_URL);
         }
@@ -202,8 +200,14 @@ export default function Login() {
         } catch (err) {
             console.error('SignUp error:', err);
 
+            const errorMsg = err?.message || '';
+            
+            // Check for duplicate email
+            if (errorMsg.includes('already registered') || errorMsg.includes('already exists') || errorMsg.includes('User already registered')) {
+                setError('⚠️ This email address is already registered. Please sign in or use a different email.');
+            }
             // Better error message for email confirmation issues
-            if (err?.message?.includes('confirmation email') || err?.message?.includes('sending email')) {
+            else if (errorMsg.includes('confirmation email') || errorMsg.includes('sending email')) {
                 const errorDetails = err?.message || '';
                 if (errorDetails.includes('testing emails')) {
                     setError('⚠️ Email service is in test mode. You can only create accounts with the project owner email (ilija03kl@gmail.com). To allow other emails, verify your domain at resend.com/domains.');
@@ -211,7 +215,7 @@ export default function Login() {
                     setError('⚠️ Failed to send verification email. Please check your email service configuration.');
                 }
             } else {
-                setError(err?.message || 'Sign up failed');
+                setError(errorMsg || 'Sign up failed');
             }
         } finally {
             setSigning(false);
@@ -220,7 +224,6 @@ export default function Login() {
 
     // Debug presence of Supabase config (do NOT log secrets)
     useEffect(() => {
-        console.log('[Login] 🔍 Mount effect running - checking for existing MFA session');
 
         // Check if user already has a session that needs MFA verification
         const checkExistingSession = async () => {
@@ -228,23 +231,18 @@ export default function Login() {
                 const mfaInProgress = sessionStorage.getItem('mfa_verification_in_progress') === 'true' ||
                     localStorage.getItem('mfa_verification_in_progress') === 'true';
 
-                console.log('[Login] 🔍 MFA in progress flag:', mfaInProgress);
 
                 if (!mfaInProgress) {
                     // No MFA in progress, nothing to do
-                    console.log('[Login] No MFA flag detected - skipping session check');
                     return;
                 }
 
-                console.log('[Login] MFA verification in progress detected - checking session...');
 
                 // Get current session
                 const { data: { session } } = await supabase.auth.getSession();
 
-                console.log('[Login] Session check result:', session ? 'Session exists' : 'No session');
 
                 if (!session) {
-                    console.log('[Login] No session found - clearing MFA flags');
                     sessionStorage.removeItem('mfa_verification_in_progress');
                     localStorage.removeItem('mfa_verification_in_progress');
                     return;
@@ -253,14 +251,8 @@ export default function Login() {
                 // Check AAL level
                 const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
-                console.log('[Login] Existing session check:', {
-                    currentLevel: aalData?.currentLevel,
-                    nextLevel: aalData?.nextLevel
-                });
-
                 // If AAL2, MFA is complete - clear flags and redirect to dashboard
                 if (aalData?.currentLevel === 'aal2') {
-                    console.log('[Login] ✅ MFA already verified (AAL2) - clearing flags and allowing dashboard');
                     sessionStorage.removeItem('mfa_verification_in_progress');
                     localStorage.removeItem('mfa_verification_in_progress');
                     return; // Let normal redirect logic handle it
@@ -268,15 +260,12 @@ export default function Login() {
 
                 // If nextLevel is aal2, user needs to verify MFA
                 if (aalData?.nextLevel === 'aal2') {
-                    console.log('[Login] ⚠️ MFA verification required - showing MFA UI');
 
                     // Get factor ID
                     const { data: factorsData } = await supabase.auth.mfa.listFactors();
-                    console.log('[Login] Factors data:', factorsData);
                     const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
 
                     if (totpFactor) {
-                        console.log('[Login] ✅ Found factor ID, showing MFA screen');
                         setFactorId(totpFactor.id);
                         setAal1Token(session.access_token);
                         setMfaRequired(true);
@@ -286,7 +275,6 @@ export default function Login() {
                         localStorage.removeItem('mfa_verification_in_progress');
                     }
                 } else {
-                    console.log('[Login] nextLevel is not aal2 - clearing MFA flags');
                     sessionStorage.removeItem('mfa_verification_in_progress');
                     localStorage.removeItem('mfa_verification_in_progress');
                 }
@@ -368,47 +356,34 @@ export default function Login() {
             }
 
             // Check AAL level to determine if MFA is required
-            console.log('[Login] Checking AAL level for MFA requirement...');
 
             try {
                 const { data: aalData, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
-                console.log('[Login] AAL check result:', aalData);
-                console.log('[Login] currentLevel:', aalData?.currentLevel);
-                console.log('[Login] nextLevel:', aalData?.nextLevel);
-                console.log('[Login] Should show MFA?', aalData?.nextLevel === 'aal2');
+              
 
                 const shouldShowMfa = aalData?.nextLevel === 'aal2';
-                console.log('[Login] shouldShowMfa variable:', shouldShowMfa);
 
                 // If nextLevel is aal2, user has MFA enabled and must verify
                 if (shouldShowMfa) {
-                    console.log('[Login] ✅✅✅ ENTERING MFA BLOCK');
 
                     // CRITICAL: Block any redirects until MFA is complete
                     sessionStorage.setItem('mfa_verification_in_progress', 'true');
                     localStorage.setItem('mfa_verification_in_progress', 'true');
-                    console.log('[Login] 🔒 MFA verification flags set - redirects should be blocked');
 
                     // Show loading screen during MFA setup
                     setLoading(true);
 
-                    console.log('[Login] 🔹 Step 1: Starting factor ID retrieval');
 
                     // Get factor ID - try a few times if needed
                     let factorId = null;
-                    console.log('[Login] 🔹 Step 2: About to start for loop');
                     for (let i = 0; i < 3; i++) {
-                        console.log(`[Login] 🔹 Step 3.${i}: Calling listFactors, attempt ${i + 1}`);
                         const { data: factorsData } = await supabase.auth.mfa.listFactors();
-                        console.log(`[Login] 🔹 Step 4.${i}: listFactors returned:`, factorsData);
                         const totpFactor = factorsData?.totp?.find(f => f.status === 'verified');
                         if (totpFactor) {
                             factorId = totpFactor.id;
-                            console.log('[Login] ✅ Found factor ID:', factorId);
                             break;
                         }
-                        console.log(`[Login] ❌ Factor ID not found yet, retry ${i + 1}/3`);
                         await new Promise(resolve => setTimeout(resolve, 300));
                     }
 
@@ -419,33 +394,27 @@ export default function Login() {
                         throw new Error('MFA is enabled but factor ID could not be retrieved');
                     }
 
-                    console.log('[Login] ✅ Setting MFA screen with factorId:', factorId);
 
                     // Save AAL1 token and show MFA screen
                     const session = data?.session;
                     if (session?.access_token) {
                         setAal1Token(session.access_token);
-                        console.log('[Login] ✅ AAL1 token saved');
                     }
                     setIsFreshLogin(true);
                     setFactorId(factorId);
 
                     try {
                         localStorage.setItem('mfa_pending_factor', factorId);
-                        console.log('[Login] ✅ Factor ID saved to localStorage');
                     } catch (e) {
                         console.warn('Failed to save MFA factor to localStorage:', e);
                     }
 
-                    console.log('[Login] ✅ About to call setMfaRequired(true)');
                     setMfaRequired(true);
                     setLoading(false); // Stop loading, show MFA UI
                     setSigning(false);
-                    console.log('[Login] ✅ MFA screen should now be visible - RETURNING');
                     return;
                 }
 
-                console.log('[Login] No MFA required (nextLevel is not aal2) - allowing direct login');
 
             } catch (aalErr) {
                 console.error('[Login] Error checking AAL:', aalErr);
@@ -636,13 +605,11 @@ export default function Login() {
                 clearTimeout(hardTimeout);
 
                 // Clear MFA flags - verification is complete
-                console.log('[Login] ✅ MFA verified - clearing flags');
                 sessionStorage.removeItem('mfa_verification_in_progress');
                 localStorage.removeItem('mfa_verification_in_progress');
 
                 // Set loading state to show spinner during redirect
                 setLoading(true);
-                console.log('[Login] 🔄 Redirecting to dashboard...');
 
                 const storageKey = `sb-${(process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/^"|"$/g, '').split('//')[1].split('.')[0]}-auth-token`;
 
