@@ -277,9 +277,10 @@ export default async function handler(req, res) {
   /**
    * Create category if missing and cache it
    * @param {string} name - Category name
+   * @param {string|null} color - Category color from export
    * @returns {Promise<Object|null>} Category object or null
    */
-  async function ensureCategoryByName(name) {
+  async function ensureCategoryByName(name, color = null) {
     const key = (name || '').toLowerCase();
 
     if (catNameToObj.has(key)) {
@@ -297,7 +298,7 @@ export default async function handler(req, res) {
         headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY, true),
         body: JSON.stringify({
           name: name,
-          color: DEFAULT_CONFIG.CATEGORY_COLOR,
+          color: color || DEFAULT_CONFIG.CATEGORY_COLOR,
           user_id: userId
         })
       });
@@ -340,9 +341,10 @@ export default async function handler(req, res) {
   /**
    * Create tag if missing and cache it
    * @param {string} name - Tag name
+   * @param {string|null} color - Tag color from export
    * @returns {Promise<Object|null>} Tag object or null
    */
-  async function ensureTagByName(name) {
+  async function ensureTagByName(name, color = null) {
     const key = (name || '').toLowerCase();
 
     if (tagNameToObj.has(key)) {
@@ -360,7 +362,7 @@ export default async function handler(req, res) {
         headers: buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY, true),
         body: JSON.stringify({
           name: name,
-          color: DEFAULT_CONFIG.TAG_COLOR,
+          color: color || DEFAULT_CONFIG.TAG_COLOR,
           user_id: userId
         })
       });
@@ -498,27 +500,39 @@ export default async function handler(req, res) {
     // Handle categories - prioritize categories_array (from export format)
     let categories = [];
     if (Array.isArray(row.categories_array)) {
-      // Export format with full objects
-      categories = row.categories_array.map(c => c?.name || '').filter(Boolean);
+      // Export format with full objects - preserve name and color
+      categories = row.categories_array.map(c => ({
+        name: c?.name || '',
+        color: c?.color || null
+      })).filter(c => c.name);
     } else if (typeof row.categories === 'string') {
-      categories = splitDelimitedString(row.categories);
+      categories = splitDelimitedString(row.categories).map(name => ({ name, color: null }));
     } else if (Array.isArray(row.categories)) {
-      categories = row.categories.map(c => typeof c === 'string' ? c : c?.name || '').filter(Boolean);
+      categories = row.categories.map(c => {
+        if (typeof c === 'string') return { name: c, color: null };
+        return { name: c?.name || '', color: c?.color || null };
+      }).filter(c => c.name);
     } else if (row.category) {
-      categories = splitDelimitedString(row.category || row.Category || '');
+      categories = splitDelimitedString(row.category || row.Category || '').map(name => ({ name, color: null }));
     }
 
     // Handle tags - prioritize tags_array (from export format)
     let tags = [];
     if (Array.isArray(row.tags_array)) {
-      // Export format with full objects
-      tags = row.tags_array.map(t => t?.name || '').filter(Boolean);
+      // Export format with full objects - preserve name and color
+      tags = row.tags_array.map(t => ({
+        name: t?.name || '',
+        color: t?.color || null
+      })).filter(t => t.name);
     } else if (typeof row.tags === 'string') {
-      tags = splitDelimitedString(row.tags);
+      tags = splitDelimitedString(row.tags).map(name => ({ name, color: null }));
     } else if (Array.isArray(row.tags)) {
-      tags = row.tags.map(t => typeof t === 'string' ? t : t?.name || '').filter(Boolean);
+      tags = row.tags.map(t => {
+        if (typeof t === 'string') return { name: t, color: null };
+        return { name: t?.name || '', color: t?.color || null };
+      }).filter(t => t.name);
     } else if (row.tag) {
-      tags = splitDelimitedString(row.tag || row.Tag || '');
+      tags = splitDelimitedString(row.tag || row.Tag || '').map(name => ({ name, color: null }));
     }
 
     return {
@@ -560,16 +574,16 @@ export default async function handler(req, res) {
 
         // Ensure categories/tags exist
         const cats = [];
-        for (const cname of nr.categories) {
-          const c = await ensureCategoryByName(cname);
+        for (const catInfo of nr.categories) {
+          const c = await ensureCategoryByName(catInfo.name, catInfo.color);
           if (c) {
             cats.push(c);
           }
         }
 
         const tags = [];
-        for (const tname of nr.tags) {
-          const t = await ensureTagByName(tname);
+        for (const tagInfo of nr.tags) {
+          const t = await ensureTagByName(tagInfo.name, tagInfo.color);
           if (t) {
             tags.push(t);
           }
