@@ -84,6 +84,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
 
             {/* Sidebar */}
             <aside
+                data-tour="mobile-sidebar"
                 className={`
           w-full xs:w-64 bg-gray-900 border-r border-gray-800 flex flex-col h-full
           fixed inset-y-0 left-0 z-50
@@ -156,6 +157,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                             return (
                                 <button
                                     key={tab.id}
+                                    data-tour={`${tab.id}-tab`}
                                     onClick={() => {
                                         // Build URL based on tab
                                         const url = tab.id === 'settings' || tab.id === 'favorites'
@@ -217,7 +219,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
 
                 {/* Sort Section - Hide when on settings tab */}
                 {activeTab !== 'settings' && (
-                    <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-700">
+                    <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-700" data-tour="sorting">
                         {/* Sort Controls - improved UI */}
                         <div className="space-y-2 sm:space-y-3">
                             {/* Sort By Options - Different per tab */}
@@ -367,8 +369,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
                 )}
 
                 {/* Categories Filter */}
-                {(activeTab === 'sites' || activeTab === 'favorites') && categories.length > 0 && (
-                    <div className="p-3 sm:p-4 flex-1 overflow-y-auto  sm:max-h-none">
+                {(activeTab === 'sites' || activeTab === 'favorites') && (
+                    <div className="p-3 sm:p-4 flex-1 overflow-y-auto  sm:max-h-none" data-tour="filters">
                         <h3 className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 flex items-center gap-2">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -429,7 +431,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                         </div>
 
                         {/* Tags Filter */}
-                        {(activeTab === 'sites' || activeTab === 'favorites') && tags.length > 0 && (
+                        {(activeTab === 'sites' || activeTab === 'favorites') && (
                             <>
                                 <h3 className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 mt-6 flex items-center gap-2">
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

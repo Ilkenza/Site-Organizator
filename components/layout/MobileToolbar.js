@@ -40,7 +40,7 @@ export default function MobileToolbar({ onAddClick }) {
         <div className="md:hidden px-3 py-3 bg-app-bg-secondary border-b border-app-border">
             <div className="flex items-center gap-2">
                 {/* Search Bar */}
-                <div className="relative flex-1">
+                <div className="relative flex-1" data-tour="mobile-search">
                     <svg
                         className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-app-text-tertiary"
                         fill="none"
@@ -75,6 +75,7 @@ export default function MobileToolbar({ onAddClick }) {
                 {/* Add Button - Icon only on mobile */}
                 <button
                     onClick={onAddClick}
+                    data-tour="mobile-add-button"
                     className="flex-shrink-0 p-2.5 bg-app-accent hover:bg-app-accentLight text-app-bg-primary rounded-lg transition-colors shadow-sm"
                     title={getAddButtonText()}
                 >

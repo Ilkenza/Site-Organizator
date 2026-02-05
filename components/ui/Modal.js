@@ -8,7 +8,8 @@ export default function Modal({
     children,
     footer,
     size = 'md',
-    showClose = true
+    showClose = true,
+    dataTour
 }) {
     const modalRef = useRef(null);
 
@@ -48,6 +49,7 @@ export default function Modal({
                 className={`${sizes[size]} w-full bg-app-bg-secondary border border-app-border rounded-xl shadow-2xl transform transition-all`}
                 role="dialog"
                 aria-modal="true"
+                data-tour={dataTour}
             >
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-app-border">
@@ -92,6 +94,21 @@ export function ConfirmModal({
     variant = 'danger',
     loading = false
 }) {
+    // Handle Enter key to confirm
+    useEffect(() => {
+        if (!isOpen) return;
+        
+        const handleKeyDown = (e) => {
+            if (e.key === 'Enter' && !loading) {
+                e.preventDefault();
+                onConfirm();
+            }
+        };
+        
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onConfirm, loading]);
+
     return (
         <Modal
             isOpen={isOpen}
