@@ -402,6 +402,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
             onClose={onClose}
             title={isEditing ? 'Edit Site' : 'Add New Site'}
             size="lg"
+            dataTour="site-modal"
             footer={
                 <>
                     <Button variant="secondary" onClick={onClose} disabled={loading}>

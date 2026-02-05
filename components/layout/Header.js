@@ -377,6 +377,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                         {/* Mobile menu button */}
                         <button
                             onClick={onMenuClick}
+                            data-tour="mobile-menu"
                             className="lg:hidden p-2 text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light rounded-lg transition-colors flex-shrink-0"
                             aria-label="Toggle menu"
                         >
@@ -394,7 +395,7 @@ export default function Header({ onAddClick, onMenuClick }) {
 
                         {/* Desktop Search - hidden on mobile and settings tab */}
                         {activeTab !== 'settings' && (
-                            <div className="flex-1 min-w-0 max-w-xs sm:max-w-md hidden md:block">
+                            <div className="flex-1 min-w-0 max-w-xs sm:max-w-md hidden md:block" data-tour="search-bar">
                                 <div className="relative">
                                     <svg
                                         className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-app-text-tertiary"
@@ -503,6 +504,7 @@ export default function Header({ onAddClick, onMenuClick }) {
 
                                 return (
                                     <button
+                                        data-tour="select-mode"
                                         onClick={() => {
                                             if (hasSelection) {
                                                 if (activeTab === 'sites' || activeTab === 'favorites') setSelectedSites(new Set());
@@ -684,7 +686,7 @@ export default function Header({ onAddClick, onMenuClick }) {
 
                             {/* Add button - desktop only */}
                             {activeTab !== 'settings' && (
-                                <Button onClick={onAddClick} variant="primary" size="sm" className="whitespace-nowrap hidden sm:inline-flex">
+                                <Button onClick={onAddClick} variant="primary" size="sm" className="whitespace-nowrap hidden sm:inline-flex" data-tour="add-button">
                                     <svg className="w-4 h-4 sm:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                     </svg>

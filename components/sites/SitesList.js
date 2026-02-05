@@ -103,12 +103,13 @@ export default function SitesList({ onEdit, onDelete }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-6">
                 {paginatedSites.map((site, index) => (
-                    <SiteCard
-                        key={site.id || `site-${index}`}
-                        site={site}
-                        onEdit={onEdit}
-                        onDelete={onDelete}
-                    />
+                    <div key={site.id || `site-${index}`} data-tour={index === 0 ? 'site-card' : undefined}>
+                        <SiteCard
+                            site={site}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                        />
+                    </div>
                 ))}
             </div>
 

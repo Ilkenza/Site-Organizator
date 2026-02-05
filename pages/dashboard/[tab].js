@@ -467,6 +467,9 @@ function DashboardContent() {
                     onClose={() => setUndoToast(null)}
                 />
             )}
+
+            {/* Onboarding Tour - inside DashboardContent to access useDashboard */}
+            <OnboardingTour user={null} />
         </div>
     );
 }
@@ -749,7 +752,6 @@ export default function Dashboard() {
             </Head>
             <DashboardProvider>
                 <DashboardContent />
-                <OnboardingTour user={user} />
             </DashboardProvider>
         </>
     );
