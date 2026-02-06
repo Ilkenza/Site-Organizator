@@ -9,7 +9,7 @@ export default function OnboardingTour({ user, onComplete }) {
     const prevSitesCountRef = useRef(0);
     const [inAddSiteFlow, setInAddSiteFlow] = useState(false); // Track if user clicked Add Site
     const [isMobile, setIsMobile] = useState(false);
-    
+
     // Get sites from dashboard context to detect when new site is added
     const { sites } = useDashboard();
 
@@ -251,20 +251,16 @@ export default function OnboardingTour({ user, onComplete }) {
 
     // Check user metadata on mount for tour completion states
     useEffect(() => {
-        // TESTING: Always show tour after 1s
-        setTimeout(() => setIsOpen(true), 1000);
-        
-        /* PRODUCTION CODE:
         const checkTourStatus = async () => {
             if (!user?.id || !supabase) return;
             try {
                 const { data: { user: authUser } } = await supabase.auth.getUser();
                 const hasCompletedOnboarding = authUser?.user_metadata?.onboarding_completed;
                 const hasCompletedAddSiteTour = authUser?.user_metadata?.add_site_tour_completed;
-                
+
                 setOnboardingCompleted(hasCompletedOnboarding || false);
                 setAddSiteTourCompleted(hasCompletedAddSiteTour || false);
-                
+
                 // Show main tour for new users
                 if (!hasCompletedOnboarding) {
                     setTimeout(() => setIsOpen(true), 1000);
@@ -274,17 +270,15 @@ export default function OnboardingTour({ user, onComplete }) {
             }
         };
         checkTourStatus();
-        */
     }, [user?.id]);
 
-    // Watch for Add button click after main tour is completed (one time only)
+    // Watch for Add button click after main tour is completed (one time only) - DESKTOP ONLY
     useEffect(() => {
-        if (!onboardingCompleted || addSiteTourCompleted || isOpen) return;
-        
-        // Listen to both desktop and mobile add buttons
+        if (isMobile || !onboardingCompleted || addSiteTourCompleted || isOpen) return;
+
         const addButton = document.querySelector('[data-tour="add-button"]');
-        const mobileAddButton = document.querySelector('[data-tour="mobile-add-button"]');
-        
+        if (!addButton) return;
+
         const handleAddButtonClick = () => {
             // Start one-time Add Site tour
             setTimeout(() => {
@@ -294,44 +288,39 @@ export default function OnboardingTour({ user, onComplete }) {
                 setIsOpen(true);
             }, 300);
         };
-        
-        addButton?.addEventListener('click', handleAddButtonClick);
-        mobileAddButton?.addEventListener('click', handleAddButtonClick);
-        
-        return () => {
-            addButton?.removeEventListener('click', handleAddButtonClick);
-            mobileAddButton?.removeEventListener('click', handleAddButtonClick);
-        };
-    }, [onboardingCompleted, addSiteTourCompleted, isOpen]);
 
-    // Watch for site modal appearing (step 2: Fill Site Details)
+        addButton.addEventListener('click', handleAddButtonClick);
+        return () => addButton.removeEventListener('click', handleAddButtonClick);
+    }, [isMobile, onboardingCompleted, addSiteTourCompleted, isOpen]);
+
+    // Watch for site modal appearing (step 2: Fill Site Details) - DESKTOP ONLY
     useEffect(() => {
-        if (!isOpen || currentStep !== 2) return;
-        
+        if (isMobile || !isOpen || currentStep !== 2) return;
+
         const checkForModal = () => {
             const modal = document.querySelector('[data-tour="site-modal"]');
             if (modal) {
                 updateHighlight();
             }
         };
-        
+
         // Check immediately and then poll for modal
         const interval = setInterval(checkForModal, 200);
         checkForModal();
-        
+
         return () => clearInterval(interval);
     }, [isOpen, currentStep, updateHighlight]);
 
     // Auto-open menu when going to steps that require it
     useEffect(() => {
         if (!isOpen || !isMobile) return;
-        
+
         const step = steps[currentStep];
         if (step?.requiresMenu) {
             // Check if sidebar is open, if not - open it
             const sidebar = document.querySelector('[data-tour="mobile-sidebar"]');
             const isMenuOpen = sidebar && getComputedStyle(sidebar).transform === 'none';
-            
+
             if (!isMenuOpen) {
                 const menuButton = document.querySelector('[data-tour="mobile-menu"]');
                 if (menuButton) {
@@ -346,18 +335,22 @@ export default function OnboardingTour({ user, onComplete }) {
         }
     }, [isOpen, currentStep, isMobile, steps, updateHighlight]);
 
-    // Watch for site being added - move to Site Card step
+    // Watch for site being added - move to Site Card step - DESKTOP ONLY
     useEffect(() => {
+        if (isMobile) {
+            prevSitesCountRef.current = sites?.length || 0;
+            return;
+        }
         const sitesCount = sites?.length || 0;
         const prevCount = prevSitesCountRef.current;
-        
+
         // If a site was just added during main tour modal step
         if (isOpen && sitesCount > prevCount && currentStep === 2) {
             setTimeout(() => {
                 setCurrentStep(3); // Site Card Actions step
             }, 500);
         }
-        
+
         // If a site was just added during post-tour (tour closed but isPostTour still true)
         if (!isOpen && isPostTour && sitesCount > prevCount) {
             setTimeout(() => {
@@ -365,9 +358,9 @@ export default function OnboardingTour({ user, onComplete }) {
                 setIsOpen(true); // Reopen tour for site card
             }, 500);
         }
-        
+
         prevSitesCountRef.current = sitesCount;
-    }, [sites?.length, isOpen, currentStep, isPostTour]);
+    }, [sites?.length, isOpen, currentStep, isPostTour, isMobile]);
 
     useEffect(() => {
         if (isOpen) {
@@ -398,15 +391,15 @@ export default function OnboardingTour({ user, onComplete }) {
     // Block tab clicks and multi-select during tour
     useEffect(() => {
         if (!isOpen) return;
-        
+
         const blockClicks = (e) => {
             const target = e.target.closest('[data-tour]');
             if (!target) return;
-            
+
             const tourAttr = target.getAttribute('data-tour');
             // Block tab clicks and multi-select during tour - ALWAYS block navigation
             const blockedTargets = ['sites-tab', 'favorites-tab', 'categories-tab', 'tags-tab', 'settings-tab', 'select-mode'];
-            
+
             if (blockedTargets.includes(tourAttr)) {
                 // Always block during tour - no navigation allowed
                 e.preventDefault();
@@ -414,14 +407,14 @@ export default function OnboardingTour({ user, onComplete }) {
                 return false;
             }
         };
-        
+
         document.addEventListener('click', blockClicks, true);
         return () => document.removeEventListener('click', blockClicks, true);
     }, [isOpen, currentStep, steps]);
 
     const handleNext = () => {
-        // If this is post-tour Add Site flow
-        if (isPostTour) {
+        // If this is post-tour Add Site flow - DESKTOP ONLY
+        if (isPostTour && !isMobile) {
             // If on Fill Site Details (step 2), just close tour - modal stays open
             // Site card tour will appear when site is added
             if (currentStep === 2) {
@@ -435,33 +428,33 @@ export default function OnboardingTour({ user, onComplete }) {
                 return;
             }
         }
-        
+
         let nextStep = currentStep + 1;
-        
-        // Find step indices dynamically
-        const addSiteStepIndex = 1;
-        const modalStepIndex = 2;
-        const siteCardStepIndex = 3;
-        const firstTabStepIndex = isMobile ? 4 : 4; // "Open Menu" on mobile, "Sites Tab" on desktop
-        
-        // If on "Add Your First Site" step and user clicks Next (not the button),
-        // skip modal and site card steps, go directly to next section
-        if (currentStep === addSiteStepIndex && !inAddSiteFlow) {
-            nextStep = firstTabStepIndex; // Skip to next section
-        }
-        
-        // If on Fill Site Details (modal step) and user clicks Next,
-        // close modal and skip to next section
-        if (currentStep === modalStepIndex) {
-            // Close the modal by clicking close button or clicking outside
-            const modalCloseBtn = document.querySelector('[data-tour="site-modal"]')?.closest('.fixed')?.querySelector('button');
-            if (modalCloseBtn) {
-                modalCloseBtn.click();
+
+        // Desktop-only: skip modal/site card steps logic
+        if (!isMobile) {
+            const addSiteStepIndex = 1;
+            const modalStepIndex = 2;
+            const firstTabStepIndex = 4; // "Sites Tab" on desktop
+
+            // If on "Add Your First Site" step and user clicks Next (not the button),
+            // skip modal and site card steps, go directly to tabs
+            if (currentStep === addSiteStepIndex && !inAddSiteFlow) {
+                nextStep = firstTabStepIndex;
             }
-            setInAddSiteFlow(false);
-            nextStep = firstTabStepIndex; // Skip to next section
+
+            // If on Fill Site Details (modal step) and user clicks Next,
+            // close modal and skip to tabs
+            if (currentStep === modalStepIndex) {
+                const modalCloseBtn = document.querySelector('[data-tour="site-modal"]')?.closest('.fixed')?.querySelector('button');
+                if (modalCloseBtn) {
+                    modalCloseBtn.click();
+                }
+                setInAddSiteFlow(false);
+                nextStep = firstTabStepIndex;
+            }
         }
-        
+
         // Close mobile menu if leaving menu tabs section (going to search or done)
         if (isMobile && steps[currentStep]?.requiresMenu && !steps[nextStep]?.requiresMenu) {
             const sidebarCloseBtn = document.querySelector('[data-tour="mobile-sidebar"] button[aria-label="Close sidebar"]');
@@ -469,7 +462,7 @@ export default function OnboardingTour({ user, onComplete }) {
                 sidebarCloseBtn.click();
             }
         }
-        
+
         // Skip waitForElement steps if not in add site flow
         while (nextStep < steps.length - 1) {
             const step = steps[nextStep];
@@ -479,7 +472,7 @@ export default function OnboardingTour({ user, onComplete }) {
                 break;
             }
         }
-        
+
         if (nextStep < steps.length) {
             setCurrentStep(nextStep);
         } else {
@@ -493,9 +486,9 @@ export default function OnboardingTour({ user, onComplete }) {
             handleComplete();
             return;
         }
-        
+
         let prevStep = currentStep - 1;
-        
+
         // Skip optional steps if their target doesn't exist
         while (prevStep > 0) {
             const step = steps[prevStep];
@@ -505,7 +498,7 @@ export default function OnboardingTour({ user, onComplete }) {
                 break;
             }
         }
-        
+
         if (prevStep >= 0) {
             setCurrentStep(prevStep);
         }
@@ -523,7 +516,7 @@ export default function OnboardingTour({ user, onComplete }) {
                 console.error('[OnboardingTour] Error:', err);
             }
         }
-        
+
         // Mark add site tour as completed (one-time only)
         if (isPostTour) {
             setAddSiteTourCompleted(true);
@@ -596,40 +589,40 @@ export default function OnboardingTour({ user, onComplete }) {
         return { top: `${top}px`, left: `${left}px` };
     };
 
-    // For modal/site card steps, allow interaction with the element
-    const isModalStep = currentStep === 2;
-    const isSiteCardStep = currentStep === 3;
+    // For modal/site card steps, allow interaction with the element - DESKTOP ONLY
+    const isModalStep = !isMobile && currentStep === 2;
+    const isSiteCardStep = !isMobile && currentStep === 3;
     const isInteractiveStep = isModalStep || isSiteCardStep;
 
     return (
         <div className={`fixed inset-0 ${isInteractiveStep ? 'z-[9998] pointer-events-none' : 'z-[9999]'}`}>
             {/* Dark overlay with spotlight cutout - hide for interactive steps */}
             {!isInteractiveStep && (
-            <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'none' }}>
-                <defs>
-                    <mask id="spotlight-mask">
-                        <rect x="0" y="0" width="100%" height="100%" fill="white" />
-                        {highlightRect && (
-                            <rect
-                                x={highlightRect.left}
-                                y={highlightRect.top}
-                                width={highlightRect.width}
-                                height={highlightRect.height}
-                                rx="12"
-                                fill="black"
-                            />
-                        )}
-                    </mask>
-                </defs>
-                <rect
-                    x="0"
-                    y="0"
-                    width="100%"
-                    height="100%"
-                    fill="rgba(0, 0, 0, 0.8)"
-                    mask="url(#spotlight-mask)"
-                />
-            </svg>
+                <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'none' }}>
+                    <defs>
+                        <mask id="spotlight-mask">
+                            <rect x="0" y="0" width="100%" height="100%" fill="white" />
+                            {highlightRect && (
+                                <rect
+                                    x={highlightRect.left}
+                                    y={highlightRect.top}
+                                    width={highlightRect.width}
+                                    height={highlightRect.height}
+                                    rx="12"
+                                    fill="black"
+                                />
+                            )}
+                        </mask>
+                    </defs>
+                    <rect
+                        x="0"
+                        y="0"
+                        width="100%"
+                        height="100%"
+                        fill="rgba(0, 0, 0, 0.8)"
+                        mask="url(#spotlight-mask)"
+                    />
+                </svg>
             )}
 
             {/* Clickable area for highlighted element - NOT for modal/site card steps as we need full interaction */}
@@ -649,11 +642,15 @@ export default function OnboardingTour({ user, onComplete }) {
                         if (element) {
                             element.click();
                         }
-                        
-                        // If on "Add Your First Site" step (1), enter add site flow
-                        if (currentStep === 1) {
+
+                        // Desktop: If on "Add Your First Site" step (1), enter add site flow
+                        if (!isMobile && currentStep === 1) {
                             setInAddSiteFlow(true);
                             setCurrentStep(2); // Move to "Fill Site Details" step
+                        } else if (isMobile && currentStep === 1) {
+                            // Mobile: just open the modal, don't advance tour
+                            // User can close modal and click Next to continue
+                            return;
                         } else if (steps[currentStep]?.target === '[data-tour="mobile-menu"]') {
                             // If clicking mobile menu, wait for menu to open then advance
                             setTimeout(() => {
@@ -689,77 +686,76 @@ export default function OnboardingTour({ user, onComplete }) {
 
             {/* Tooltip Card - hide when hideTooltipOnly is true (post-tour glow only mode) */}
             {!hideTooltipOnly && (
-            <div
-                className={`absolute w-72 sm:w-80 bg-app-bg-secondary border border-app-border rounded-xl sm:rounded-2xl shadow-2xl p-3 sm:p-5 transition-all duration-300 ${isModalStep ? 'z-[10000]' : ''}`}
-                style={{ ...getTooltipStyle(), pointerEvents: 'auto' }}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="text-2xl sm:text-4xl mb-2 sm:mb-3 text-center">
-                    {currentStepData.icon}
-                </div>
+                <div
+                    className={`absolute w-72 sm:w-80 bg-app-bg-secondary border border-app-border rounded-xl sm:rounded-2xl shadow-2xl p-3 sm:p-5 transition-all duration-300 ${isModalStep ? 'z-[10000]' : ''}`}
+                    style={{ ...getTooltipStyle(), pointerEvents: 'auto' }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="text-2xl sm:text-4xl mb-2 sm:mb-3 text-center">
+                        {currentStepData.icon}
+                    </div>
 
-                <h3 className="text-base sm:text-lg font-bold text-app-text-primary mb-1 sm:mb-2 text-center">
-                    {currentStepData.title}
-                </h3>
+                    <h3 className="text-base sm:text-lg font-bold text-app-text-primary mb-1 sm:mb-2 text-center">
+                        {currentStepData.title}
+                    </h3>
 
-                <p className="text-xs sm:text-sm text-app-text-secondary mb-3 sm:mb-4 text-center leading-relaxed">
-                    {currentStepData.description}
-                </p>
+                    <p className="text-xs sm:text-sm text-app-text-secondary mb-3 sm:mb-4 text-center leading-relaxed">
+                        {currentStepData.description}
+                    </p>
 
-                {/* Progress dots - hide for mini tours */}
-                {!isMiniTour && (
-                    <div className="flex justify-center gap-1 sm:gap-1.5 mb-3 sm:mb-4">
-                        {steps.map((_, index) => (
-                            <button
-                                key={index}
-                                onClick={() => setCurrentStep(index)}
-                                className={`h-1.5 sm:h-2 rounded-full transition-all ${
-                                    index === currentStep
-                                        ? 'w-4 sm:w-6 bg-app-accent'
-                                        : index < currentStep
-                                            ? 'w-1.5 sm:w-2 bg-app-accent/50 hover:bg-app-accent/70'
-                                            : 'w-1.5 sm:w-2 bg-app-border hover:bg-app-text-tertiary'
-                                }`}
-                        />
-                    ))}
-                </div>
-                )}
-
-                {/* Navigation buttons */}
-                <div className="flex gap-2 justify-between">
+                    {/* Progress dots - hide for mini tours */}
                     {!isMiniTour && (
-                        <button
-                            onClick={handleComplete}
-                            className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-app-text-tertiary hover:text-app-text-secondary transition-colors"
-                        >
-                            Skip
-                        </button>
+                        <div className="flex justify-center gap-1 sm:gap-1.5 mb-3 sm:mb-4">
+                            {steps.map((_, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => setCurrentStep(index)}
+                                    className={`h-1.5 sm:h-2 rounded-full transition-all ${index === currentStep
+                                            ? 'w-4 sm:w-6 bg-app-accent'
+                                            : index < currentStep
+                                                ? 'w-1.5 sm:w-2 bg-app-accent/50 hover:bg-app-accent/70'
+                                                : 'w-1.5 sm:w-2 bg-app-border hover:bg-app-text-tertiary'
+                                        }`}
+                                />
+                            ))}
+                        </div>
                     )}
 
-                    <div className={`flex gap-2 ${isMiniTour ? 'w-full justify-center' : ''}`}>
-                        {!isFirstStep && !isMiniTour && (
+                    {/* Navigation buttons */}
+                    <div className="flex gap-2 justify-between">
+                        {!isMiniTour && (
                             <button
-                                onClick={handlePrevious}
-                                className="px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm bg-app-bg-light border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-lighter transition-colors"
+                                onClick={handleComplete}
+                                className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-app-text-tertiary hover:text-app-text-secondary transition-colors"
                             >
-                                ←
+                                Skip
                             </button>
                         )}
-                        <button
-                            onClick={handleNext}
-                            className="px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm bg-app-accent text-white rounded-lg hover:bg-app-accentLight transition-colors font-medium"
-                        >
-                            {isMiniTour ? 'Got it!' : isLastStep ? 'Done' : 'Next →'}
-                        </button>
-                    </div>
-                </div>
 
-                {!isMiniTour && (
-                    <p className="text-[9px] sm:text-[10px] text-app-text-tertiary mt-2 sm:mt-3 text-center hidden sm:block">
-                        Use arrow keys to navigate • Esc to skip
-                    </p>
-                )}
-            </div>
+                        <div className={`flex gap-2 ${isMiniTour ? 'w-full justify-center' : ''}`}>
+                            {!isFirstStep && !isMiniTour && (
+                                <button
+                                    onClick={handlePrevious}
+                                    className="px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm bg-app-bg-light border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-lighter transition-colors"
+                                >
+                                    ←
+                                </button>
+                            )}
+                            <button
+                                onClick={handleNext}
+                                className="px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm bg-app-accent text-white rounded-lg hover:bg-app-accentLight transition-colors font-medium"
+                            >
+                                {isMiniTour ? 'Got it!' : isLastStep ? 'Done' : 'Next →'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {!isMiniTour && (
+                        <p className="text-[9px] sm:text-[10px] text-app-text-tertiary mt-2 sm:mt-3 text-center hidden sm:block">
+                            Use arrow keys to navigate • Esc to skip
+                        </p>
+                    )}
+                </div>
             )}
         </div>
     );

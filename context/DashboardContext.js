@@ -268,7 +268,12 @@ export function DashboardProvider({ children }) {
     useEffect(() => {
         if (!supabase || !user) return;
 
-        const handleChange = () => fetchDataRef.current();
+        let debounceTimer = null;
+        const handleChange = () => {
+            // Debounce real-time updates to avoid multiple rapid refreshes
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => fetchDataRef.current(), 2000);
+        };
 
         const channel = supabase
             .channel('dashboard-changes')
@@ -280,6 +285,7 @@ export function DashboardProvider({ children }) {
             .subscribe();
 
         return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
             supabase.removeChannel(channel);
         };
     }, [user]);
