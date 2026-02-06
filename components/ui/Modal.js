@@ -97,14 +97,14 @@ export function ConfirmModal({
     // Handle Enter key to confirm
     useEffect(() => {
         if (!isOpen) return;
-        
+
         const handleKeyDown = (e) => {
             if (e.key === 'Enter' && !loading) {
                 e.preventDefault();
                 onConfirm();
             }
         };
-        
+
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, onConfirm, loading]);
