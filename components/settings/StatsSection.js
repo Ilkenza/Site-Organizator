@@ -49,7 +49,11 @@ export default function StatsSection({ user, activeTab, showToast }) {
     const fetchStats = useCallback(async () => {
         setLoadingStats(true);
         try {
-            const r = await fetch('/api/stats');
+            const sess = await supabase.auth.getSession();
+            const token = sess?.data?.session?.access_token;
+            const r = await fetch('/api/stats', {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
             if (!r.ok) throw new Error(await r.text());
             const json = await r.json();
             setStats(json.stats || { sites: 0, categories: 0, tags: 0 });

@@ -225,7 +225,10 @@ export function DashboardProvider({ children }) {
         }
     }, []);
 
-    // Fetch data when user changes
+    // Track which user ID we already fetched for to prevent duplicate fetches
+    const fetchedForUserRef = useRef(null);
+
+    // Fetch data when user changes (only if user ID actually changed)
     useEffect(() => {
         if (clearDataTimeoutRef.current) {
             clearTimeout(clearDataTimeoutRef.current);
@@ -234,7 +237,11 @@ export function DashboardProvider({ children }) {
 
         if (user) {
             hadUserRef.current = true;
-            fetchData();
+            // Only fetch if we haven't already fetched for this user
+            if (fetchedForUserRef.current !== user.id) {
+                fetchedForUserRef.current = user.id;
+                fetchData();
+            }
         } else if (!hasValidTokensInStorage()) {
             const clearData = () => {
                 setSites([]);
@@ -242,6 +249,7 @@ export function DashboardProvider({ children }) {
                 setTags([]);
                 setStats({ sites: 0, categories: 0, tags: 0 });
                 hadUserRef.current = false;
+                fetchedForUserRef.current = null;
             };
 
             // If we had a user recently, wait before clearing (gives time for auth to recover)
@@ -509,11 +517,19 @@ export function DashboardProvider({ children }) {
             }
             if (selectedCategory) {
                 const siteCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
-                if (!siteCategories.some(c => c?.id === selectedCategory)) return false;
+                if (selectedCategory === 'uncategorized') {
+                    if (siteCategories.length > 0) return false;
+                } else {
+                    if (!siteCategories.some(c => c?.id === selectedCategory)) return false;
+                }
             }
             if (selectedTag) {
                 const siteTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
-                if (!siteTags.some(t => t?.id === selectedTag)) return false;
+                if (selectedTag === 'untagged') {
+                    if (siteTags.length > 0) return false;
+                } else {
+                    if (!siteTags.some(t => t?.id === selectedTag)) return false;
+                }
             }
             return true;
         }),

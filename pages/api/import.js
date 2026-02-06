@@ -113,6 +113,34 @@ function normalizeString(value) {
 }
 
 /**
+ * Valid pricing values matching DB CHECK constraint:
+ * pricing TEXT CHECK (pricing IN ('fully_free', 'freemium', 'free_trial', 'paid'))
+ */
+const VALID_PRICING_SET = new Set(['fully_free', 'freemium', 'free_trial', 'paid']);
+const PRICING_ALIASES = {
+  'fully_free': 'fully_free', 'fullyfree': 'fully_free', 'free': 'fully_free', 'besplatno': 'fully_free',
+  'freemium': 'freemium',
+  'free_trial': 'free_trial', 'freetrial': 'free_trial', 'trial': 'free_trial',
+  'paid': 'paid', 'nesto_se_placa': 'paid', 'nestoseplaca': 'paid', 'placeno': 'paid', 'premium': 'paid',
+};
+
+function normalizePricingValue(raw) {
+  if (!raw) return null;
+  const s = raw.toString().trim().toLowerCase();
+  if (!s) return null;
+  if (VALID_PRICING_SET.has(s)) return s;
+  const w = s.replace(/[\s-]+/g, '_');
+  if (PRICING_ALIASES[w]) return PRICING_ALIASES[w];
+  const f = s.replace(/[\s_-]+/g, '');
+  if (PRICING_ALIASES[f]) return PRICING_ALIASES[f];
+  if (/trial/i.test(s)) return 'free_trial';
+  if (/freemium/i.test(s)) return 'freemium';
+  if (/paid|premium|plac|money|cost/i.test(s)) return 'paid';
+  if (/free|besplatn|gratis/i.test(s)) return 'fully_free';
+  return null;
+}
+
+/**
  * Split comma/semicolon/pipe/newline-separated string into array
  * @param {*} value - Value to split
  * @returns {Array<string>} Array of normalized strings
@@ -539,7 +567,7 @@ export default async function handler(req, res) {
       _origIndex: index,
       name: normalizeString(row.name || row.title || row.Name || ''),
       url: normalizeString(row.url || row.URL || row.link || ''),
-      pricing: normalizeString(row.pricing || row.pricing_model || row.pricingModel || '') || null,
+      pricing: normalizePricingValue(row.pricing || row.pricing_model || row.pricingModel || '') || 'freemium',
       categories: categories,
       tags: tags,
       is_favorite: row.is_favorite === true || row.is_favorite === 'true' || row.is_favorite === 1 || false,
@@ -604,17 +632,21 @@ export default async function handler(req, res) {
       }
 
       // Insert new sites in batch
-      const siteInserts = toCreateSites.map(x => ({
-        name: x.nr.name || '',
-        url: x.nr.url,
-        pricing: x.nr.pricing || null,
-        is_favorite: x.nr.is_favorite || false,
-        is_pinned: x.nr.is_pinned || false,
-        created_at: x.nr.created_at || null,
-        user_id: userId,
-        categories: x.cats.map(c => c.name),
-        tags: x.tags.map(t => t.name)
-      }));
+      const siteInserts = toCreateSites.map(x => {
+        const row = {
+          name: x.nr.name || '',
+          url: x.nr.url,
+          pricing: x.nr.pricing || 'freemium',
+          is_favorite: x.nr.is_favorite || false,
+          is_pinned: x.nr.is_pinned || false,
+          user_id: userId,
+          categories: x.cats.map(c => c.name),
+          tags: x.tags.map(t => t.name)
+        };
+        // Only include created_at when it has a value — sending null overrides DB DEFAULT
+        if (x.nr.created_at) row.created_at = x.nr.created_at;
+        return row;
+      });
 
       let createdSites = [];
       try {

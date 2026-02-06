@@ -55,7 +55,7 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
     };
 
     return (
-        <div className={`group bg-app-bg-light/50 border-2 rounded-xl p-3 sm:p-4 transition-all duration-200 hover:shadow-lg hover:shadow-app-accent/5 ${selectedSites.has(site.id)
+        <div className={`group h-full flex flex-col bg-app-bg-light/50 border-2 rounded-xl p-3 sm:p-4 transition-all duration-200 hover:shadow-lg hover:shadow-app-accent/5 ${selectedSites.has(site.id)
             ? activeTab === 'favorites'
                 ? 'border-[#D4B86A] bg-[#D4B86A]/10'
                 : 'border-[#A0D8FF] bg-[#A0D8FF]/10'
@@ -230,9 +230,9 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
             )}
 
             {/* Categories and Tags */}
-            <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-2 sm:mb-3">
+            <div className="flex flex-wrap content-start gap-1 sm:gap-1.5 mb-2 sm:mb-3 flex-1">
                 {(showAllCategories ? categories : categories.slice(0, 6)).map((cat, index) => (
-                    <Badge key={`cat-${cat.id || index}`} color={cat.color || 'blue'} size="xs" variant="category">
+                    <Badge key={`cat-${cat.id || index}`} color={cat.color || 'blue'} size="xs" variant="category" className="inline-flex">
                         {cat.name}
                     </Badge>
                 ))}
@@ -242,16 +242,16 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                             e.stopPropagation();
                             setShowAllCategories(!showAllCategories);
                         }}
-                        className="px-2 py-0.5 text-[10px] sm:text-xs font-medium text-app-accent hover:text-app-accent/80 bg-app-accent/10 hover:bg-app-accent/20 rounded-full transition-colors"
+                        className="inline-flex px-2 py-0.5 text-[10px] sm:text-xs font-medium text-app-accent hover:text-app-accent/80 bg-app-accent/10 hover:bg-app-accent/20 rounded-full transition-colors"
                     >
                         {showAllCategories ? '−' : `+${categories.length - 6}`}
                     </button>
                 )}
                 {categories.length > 0 && tags.length > 0 && (
-                    <span className="text-app-text-muted/40 px-1 self-center">|</span>
+                    <span className="inline-flex text-app-text-muted/40 px-1 self-center">|</span>
                 )}
                 {(showAllTags ? tags : tags.slice(0, 6)).map((tag, index) => (
-                    <Badge key={`tag-${tag.id || index}`} color={tag.color || '#5B8DEE'} size="xs" variant="tag">
+                    <Badge key={`tag-${tag.id || index}`} color={tag.color || '#5B8DEE'} size="xs" variant="tag" className="inline-flex">
                         {tag.name}
                     </Badge>
                 ))}
@@ -269,7 +269,7 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
             </div>
 
             {/* Footer: Pricing and Date */}
-            <div className="flex items-center justify-between text-[10px] sm:text-xs text-app-text-secondary pt-2 sm:pt-3 border-t border-app-border/50">
+            <div className="flex items-center justify-between text-[10px] sm:text-xs text-app-text-secondary pt-2 sm:pt-3 border-t border-app-border/50 mt-auto">
                 {/* Pricing */}
                 <span className={`px-2 py-0.5 rounded-full font-medium ${site.pricing === 'fully_free' ? 'bg-green-950 text-emerald-300' :
                     site.pricing === 'freemium' ? 'bg-amber-900 text-amber-300' :

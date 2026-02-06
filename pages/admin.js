@@ -1,0 +1,1058 @@
+/**
+ * @fileoverview Admin Dashboard page — Full-featured admin panel
+ * Features: Stats, Growth Chart, Pricing Chart, Sites/User Stats, Most Active Users,
+ * Popular Domains, Duplicate Sites, Empty Accounts, Recent Activity, Broken Links,
+ * Export CSV, User List with Ban/Delete, Top Categories/Tags
+ * Protected: only accessible to emails listed in NEXT_PUBLIC_ADMIN_EMAILS env var
+ */
+
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/router';
+import Head from 'next/head';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
+
+// ========================================
+// Constants
+// ========================================
+const REFRESH_INTERVAL = 60000;
+const TABS = [
+    { key: 'overview', label: 'Overview', icon: '📊' },
+    { key: 'users', label: 'Users', icon: '👥' },
+    { key: 'content', label: 'Content', icon: '🌐' },
+    { key: 'tools', label: 'Tools', icon: '🔧' },
+];
+
+// ========================================
+// Helper: Get auth token
+// ========================================
+async function getToken() {
+    const session = await supabase.auth.getSession();
+    return session?.data?.session?.access_token;
+}
+
+// ========================================
+// Stat Card
+// ========================================
+function StatCard({ label, value, icon, color = 'blue', subtitle }) {
+    const colors = {
+        blue: 'from-blue-600/20 to-blue-900/10 border-blue-500/30',
+        green: 'from-emerald-600/20 to-emerald-900/10 border-emerald-500/30',
+        purple: 'from-purple-600/20 to-purple-900/10 border-purple-500/30',
+        amber: 'from-amber-600/20 to-amber-900/10 border-amber-500/30',
+        rose: 'from-rose-600/20 to-rose-900/10 border-rose-500/30',
+        cyan: 'from-cyan-600/20 to-cyan-900/10 border-cyan-500/30',
+        indigo: 'from-indigo-600/20 to-indigo-900/10 border-indigo-500/30',
+        teal: 'from-teal-600/20 to-teal-900/10 border-teal-500/30',
+    };
+
+    return (
+        <div className={`bg-gradient-to-br ${colors[color]} border rounded-xl p-4 sm:p-5 transition-all hover:scale-[1.02]`}>
+            <div className="flex items-center justify-between">
+                <div>
+                    <p className="text-app-text-muted text-[10px] sm:text-xs uppercase tracking-wider font-medium">{label}</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-app-text-primary mt-1">
+                        {typeof value === 'number' ? value.toLocaleString() : value ?? '—'}
+                    </p>
+                    {subtitle && <p className="text-app-text-muted text-[10px] mt-0.5">{subtitle}</p>}
+                </div>
+                <span className="text-2xl sm:text-3xl opacity-60">{icon}</span>
+            </div>
+        </div>
+    );
+}
+
+// ========================================
+// Top Items List (Categories / Tags)
+// ========================================
+function TopItemsList({ items }) {
+    if (!items?.length) return <p className="text-app-text-muted text-sm">No data</p>;
+    return (
+        <div className="space-y-2">
+            {items.map((item, i) => (
+                <div key={`${item.name}-${i}`} className="flex items-center gap-3 group">
+                    <span className="text-app-text-muted text-xs w-5 text-right">{i + 1}.</span>
+                    <span className="w-3 h-3 rounded-full flex-shrink-0 ring-1 ring-white/10"
+                        style={{ backgroundColor: item.color || '#667eea' }} />
+                    <span className="text-app-text-primary text-sm flex-1 truncate">{item.name}</span>
+                    <span className="text-app-text-muted text-xs bg-app-bg-light px-2 py-0.5 rounded-full">
+                        {item.usage} {item.usage === 1 ? 'site' : 'sites'}
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// ========================================
+// Pricing Donut Chart
+// ========================================
+const PRICING_CONFIG = [
+    { key: 'fully_free', label: 'Fully Free', color: '#10b981', icon: '✓' },
+    { key: 'freemium', label: 'Freemium', color: '#3b82f6', icon: '◐' },
+    { key: 'free_trial', label: 'Free Trial', color: '#f59e0b', icon: '⏱' },
+    { key: 'paid', label: 'Paid', color: '#ef4444', icon: '$' }
+];
+
+function PricingChart({ data }) {
+    if (!data) return null;
+    const total = Object.values(data).reduce((a, b) => a + b, 0);
+    if (total === 0) return <p className="text-app-text-muted text-sm">No sites yet</p>;
+
+    const size = 120, strokeWidth = 24;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    let offset = 0;
+    const segments = PRICING_CONFIG.map(p => ({ ...p, count: data[p.key] || 0 })).filter(p => p.count > 0);
+
+    return (
+        <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5">
+            <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+                    {segments.map(seg => {
+                        const pct = seg.count / total;
+                        const dashLength = pct * circumference;
+                        const el = (
+                            <circle key={seg.key} cx={size / 2} cy={size / 2} r={radius} fill="none"
+                                stroke={seg.color} strokeWidth={strokeWidth}
+                                strokeDasharray={`${dashLength} ${circumference - dashLength}`}
+                                strokeDashoffset={-offset} className="transition-all duration-500" />
+                        );
+                        offset += dashLength;
+                        return el;
+                    })}
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-lg font-bold text-app-text-primary">{total}</span>
+                </div>
+            </div>
+            <div className="space-y-2 flex-1">
+                {PRICING_CONFIG.map(p => {
+                    const count = data[p.key] || 0;
+                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                    return (
+                        <div key={p.key} className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                            <span className="text-app-text-secondary text-xs flex-1">{p.icon} {p.label}</span>
+                            <span className="text-app-text-primary text-xs font-semibold">{count}</span>
+                            <span className="text-app-text-muted text-[10px] w-8 text-right">{pct}%</span>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+// ========================================
+// Growth Chart (Bar chart — daily / monthly / yearly)
+// ========================================
+const GROWTH_PERIODS = [
+    { key: 'hourly', label: 'Hourly (24h)', short: '24h', icon: '🕐' },
+    { key: 'daily', label: 'Daily (30d)', short: '30d', icon: '📅' },
+    { key: 'monthly', label: 'Monthly (12m)', short: '12m', icon: '📆' },
+    { key: 'yearly', label: 'Yearly', short: 'Year', icon: '📊' },
+];
+
+function GrowthChart({ data, period, onPeriodChange }) {
+    const chartData = data?.[period] || [];
+    if (!chartData.length) return <p className="text-app-text-muted text-sm">No data</p>;
+    const maxVal = Math.max(...chartData.map(d => Math.max(d.users, d.sites)), 1);
+    const totalUsers = chartData.reduce((s, d) => s + d.users, 0);
+    const totalSites = chartData.reduce((s, d) => s + d.sites, 0);
+
+    return (
+        <div>
+            {/* Period toggle */}
+            <div className="flex flex-col xs:flex-row flex-wrap items-start xs:items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-3 sm:gap-4">
+                    <span className="flex items-center gap-1.5 text-[10px] sm:text-xs text-app-text-muted">
+                        <span className="w-3 h-2 rounded-sm bg-blue-500" /> Users ({totalUsers})
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[10px] sm:text-xs text-app-text-muted">
+                        <span className="w-3 h-2 rounded-sm bg-emerald-500" /> Sites ({totalSites})
+                    </span>
+                </div>
+                <div className="flex bg-app-bg-primary rounded-lg p-0.5 border border-app-border/50 w-full xs:w-auto">
+                    {GROWTH_PERIODS.map(p => (
+                        <button key={p.key}
+                            onClick={() => onPeriodChange(p.key)}
+                            className={`flex-1 xs:flex-none px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] rounded-md transition-all font-medium ${period === p.key
+                                    ? 'bg-app-accent text-white shadow-sm'
+                                    : 'text-app-text-muted hover:text-app-text-primary'
+                                }`}>
+                            {p.icon} <span className="hidden sm:inline">{p.label}</span><span className="sm:hidden">{p.short}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Bar chart */}
+            <div className="flex items-end gap-[2px] h-44 pt-8 relative">
+                {chartData.map((d, i) => (
+                    <div key={i} className="flex-1 min-w-0 flex flex-col items-center gap-0.5 group relative">
+                        <div className="w-full flex gap-0.5 items-end justify-center" style={{ height: '110px' }}>
+                            <div className="w-[40%] bg-blue-500/80 rounded-t-sm transition-all group-hover:bg-blue-400"
+                                style={{ height: `${Math.max((d.users / maxVal) * 100, d.users > 0 ? 4 : 0)}%` }}
+                                title={`${d.users} users`} />
+                            <div className="w-[40%] bg-emerald-500/80 rounded-t-sm transition-all group-hover:bg-emerald-400"
+                                style={{ height: `${Math.max((d.sites / maxVal) * 100, d.sites > 0 ? 4 : 0)}%` }}
+                                title={`${d.sites} sites`} />
+                        </div>
+                        <span className={`text-app-text-muted truncate w-full text-center ${period === 'hourly' || period === 'daily' ? 'text-[7px]' : 'text-[9px]'
+                            }`}>{d.label}</span>
+                        {/* Tooltip */}
+                        <div className="absolute bottom-full mb-1 hidden group-hover:block z-50 pointer-events-none"
+                            style={{ left: '50%', transform: 'translateX(-50%)' }}>
+                            <div className="bg-app-bg-secondary border border-app-border rounded-lg px-2.5 py-1.5 shadow-lg text-[10px] whitespace-nowrap">
+                                <p className="font-medium text-app-text-muted mb-0.5">{d.label}</p>
+                                <p className="text-blue-400 font-medium">{d.users} users</p>
+                                <p className="text-emerald-400 font-medium">{d.sites} sites</p>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// ========================================
+// User Row
+// ========================================
+function UserRow({ user, index, onDelete, onBan, isCurrentUser }) {
+    const timeAgo = (date) => {
+        if (!date) return 'Never';
+        const diff = Date.now() - new Date(date).getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 60) return `${mins}m ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 30) return `${days}d ago`;
+        return new Date(date).toLocaleDateString();
+    };
+
+    return (
+        <tr className={`border-b border-app-border/30 hover:bg-app-bg-light/30 transition-colors ${user.banned ? 'opacity-60' : ''}`}>
+            <td className="px-4 py-3 text-app-text-muted text-sm">{index + 1}</td>
+            <td className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                    {user.avatar ? (
+                        <img src={user.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                        <div className="w-8 h-8 rounded-full bg-app-accent/20 flex items-center justify-center text-app-accent text-xs font-bold">
+                            {(user.username?.[0] || user.email?.[0] || '?').toUpperCase()}
+                        </div>
+                    )}
+                    <div>
+                        <div className="flex items-center gap-1.5">
+                            <p className="text-app-text-primary text-sm font-medium">{user.username}</p>
+                            {user.banned && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded-full font-medium">BANNED</span>
+                            )}
+                        </div>
+                        <p className="text-app-text-muted text-xs">{user.email}</p>
+                    </div>
+                </div>
+            </td>
+            <td className="px-4 py-3 text-center"><span className="font-semibold text-app-text-primary text-sm">{user.sites}</span></td>
+            <td className="px-4 py-3 text-center"><span className="font-semibold text-app-text-primary text-sm">{user.categories}</span></td>
+            <td className="px-4 py-3 text-center"><span className="font-semibold text-app-text-primary text-sm">{user.tags}</span></td>
+            <td className="px-4 py-3 text-app-text-muted text-xs">{new Date(user.created_at).toLocaleDateString()}</td>
+            <td className="px-4 py-3 text-app-text-muted text-xs">{timeAgo(user.last_sign_in)}</td>
+            <td className="px-4 py-3 text-center">
+                {user.onboarded ? <span className="text-emerald-400 text-sm">✓</span> : <span className="text-app-text-muted text-sm">—</span>}
+            </td>
+            <td className="px-4 py-3">
+                {!isCurrentUser ? (
+                    <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => onBan(user)}
+                            className={`p-1 rounded transition-colors ${user.banned
+                                ? 'text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-900/20'
+                                : 'text-app-text-muted hover:text-amber-400 hover:bg-amber-900/20'
+                                }`}
+                            title={user.banned ? 'Unban user' : 'Ban user'}>
+                            {user.banned ? (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                </svg>
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                </svg>
+                            )}
+                        </button>
+                        <button onClick={() => onDelete(user)}
+                            className="text-app-text-muted hover:text-red-400 transition-colors p-1 rounded hover:bg-red-900/20"
+                            title="Delete user">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                ) : (
+                    <span className="text-app-text-muted text-xs block text-center">You</span>
+                )}
+            </td>
+        </tr>
+    );
+}
+
+// ========================================
+// Section Card wrapper
+// ========================================
+function SectionCard({ title, children, className = '', action }) {
+    return (
+        <div className={`bg-app-bg-secondary/50 border border-app-border/30 rounded-xl p-3 sm:p-5 ${className}`}>
+            <div className="flex items-center justify-between mb-3 sm:mb-4 gap-2">
+                <h3 className="text-xs sm:text-sm font-semibold text-app-text-muted uppercase tracking-wider">{title}</h3>
+                {action}
+            </div>
+            {children}
+        </div>
+    );
+}
+
+// ========================================
+// Main Admin Page
+// ========================================
+export default function AdminDashboard() {
+    const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
+
+    // Data
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [lastRefresh, setLastRefresh] = useState(null);
+
+    // Tabs
+    const [activeTab, setActiveTab] = useState('overview');
+
+    // Users tab
+    const [userSearch, setUserSearch] = useState('');
+    const [sortBy, setSortBy] = useState('created_at');
+    const [sortDir, setSortDir] = useState('desc');
+
+    // Modals
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deleting, setDeleting] = useState(false);
+    const [banTarget, setBanTarget] = useState(null);
+    const [banning, setBanning] = useState(false);
+
+    // Growth chart period
+    const [growthPeriod, setGrowthPeriod] = useState('monthly');
+
+    // Tools
+    const [linkCheckResult, setLinkCheckResult] = useState(null);
+    const [checkingLinks, setCheckingLinks] = useState(false);
+    const [exporting, setExporting] = useState(null);
+
+    // ========================================
+    // Fetch main data
+    // ========================================
+    const fetchData = useCallback(async () => {
+        try {
+            setError(null);
+            const token = await getToken();
+            if (!token) { setError('Not authenticated'); setLoading(false); return; }
+
+            const res = await fetch('/api/admin/stats', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const json = await res.json();
+
+            if (!res.ok) {
+                setError(res.status === 403 ? 'ACCESS_DENIED' : json.error || 'Failed to load');
+                setLoading(false);
+                return;
+            }
+
+            setData(json);
+            setLastRefresh(new Date());
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (authLoading) return;
+        if (!user) { router.replace('/login'); return; }
+        fetchData();
+        const interval = setInterval(fetchData, REFRESH_INTERVAL);
+        return () => clearInterval(interval);
+    }, [user, authLoading, fetchData, router]);
+
+    // ========================================
+    // User actions
+    // ========================================
+    const handleDeleteUser = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        try {
+            const token = await getToken();
+            const res = await fetch('/api/admin/delete-user', {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: deleteTarget.id })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error);
+            setDeleteTarget(null);
+            fetchData();
+        } catch (err) {
+            alert(`Failed to delete: ${err.message}`);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const handleBanUser = async () => {
+        if (!banTarget) return;
+        setBanning(true);
+        try {
+            const token = await getToken();
+            const res = await fetch('/api/admin/ban-user', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: banTarget.id, ban: !banTarget.banned })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error);
+            setBanTarget(null);
+            fetchData();
+        } catch (err) {
+            alert(`Failed: ${err.message}`);
+        } finally {
+            setBanning(false);
+        }
+    };
+
+    const handleExport = async (type) => {
+        setExporting(type);
+        try {
+            const token = await getToken();
+            const res = await fetch(`/api/admin/export?type=${type}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) throw new Error('Export failed');
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${type}-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            alert(`Export failed: ${err.message}`);
+        } finally {
+            setExporting(null);
+        }
+    };
+
+    const handleCheckLinks = async () => {
+        setCheckingLinks(true);
+        setLinkCheckResult(null);
+        try {
+            const token = await getToken();
+            const res = await fetch('/api/admin/check-links', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error);
+            setLinkCheckResult(json);
+        } catch (err) {
+            alert(`Link check failed: ${err.message}`);
+        } finally {
+            setCheckingLinks(false);
+        }
+    };
+
+    // ========================================
+    // User filtering + sorting
+    // ========================================
+    const filteredUsers = useMemo(() => {
+        if (!data?.users) return [];
+        let list = data.users;
+        if (userSearch.trim()) {
+            const q = userSearch.toLowerCase();
+            list = list.filter(u => u.email?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q));
+        }
+        list = [...list].sort((a, b) => {
+            let aVal, bVal;
+            if (sortBy === 'created_at' || sortBy === 'last_sign_in') {
+                aVal = new Date(a[sortBy] || 0).getTime();
+                bVal = new Date(b[sortBy] || 0).getTime();
+            } else {
+                aVal = a[sortBy] ?? 0;
+                bVal = b[sortBy] ?? 0;
+            }
+            return sortDir === 'desc' ? bVal - aVal : aVal - bVal;
+        });
+        return list;
+    }, [data?.users, userSearch, sortBy, sortDir]);
+
+    const handleSort = (col) => {
+        if (sortBy === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+        else { setSortBy(col); setSortDir('desc'); }
+    };
+
+    const SortIcon = ({ col }) => {
+        if (sortBy !== col) return <span className="text-app-text-muted/30 ml-1">↕</span>;
+        return <span className="text-app-accent ml-1">{sortDir === 'desc' ? '↓' : '↑'}</span>;
+    };
+
+    // ========================================
+    // Render States
+    // ========================================
+    if (authLoading || loading) {
+        return (
+            <div className="min-h-screen bg-app-bg-primary flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-10 h-10 border-2 border-app-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-app-text-muted">Loading admin dashboard...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error === 'ACCESS_DENIED') {
+        return (
+            <div className="min-h-screen bg-app-bg-primary flex items-center justify-center">
+                <div className="text-center max-w-md">
+                    <div className="text-6xl mb-4">🔒</div>
+                    <h1 className="text-2xl font-bold text-app-text-primary mb-2">Access Denied</h1>
+                    <p className="text-app-text-muted mb-6">Your account doesn&apos;t have admin access.</p>
+                    <button onClick={() => router.push('/dashboard/sites')}
+                        className="px-4 py-2 bg-app-accent text-white rounded-lg hover:bg-app-accentLight transition-colors">
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen bg-app-bg-primary flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-red-400 mb-4">{error}</p>
+                    <button onClick={fetchData} className="px-4 py-2 bg-app-accent rounded-lg text-white">Retry</button>
+                </div>
+            </div>
+        );
+    }
+
+    const { overview, pricingBreakdown, topCategories, topTags, growthData, sitesPerUserStats,
+        mostActiveUsers, popularDomains, duplicateSites, emptyAccountsCount, recentActivity } = data || {};
+
+    // ========================================
+    // Tab Content
+    // ========================================
+    const renderOverviewTab = () => (
+        <div className="space-y-6">
+            {/* Stat Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <StatCard label="Total Users" value={overview?.totalUsers} icon="👥" color="blue" />
+                <StatCard label="Total Sites" value={overview?.totalSites} icon="🌐" color="green" />
+                <StatCard label="Categories" value={overview?.totalCategories} icon="📁" color="purple" />
+                <StatCard label="Tags" value={overview?.totalTags} icon="🏷️" color="amber" />
+                <StatCard label="Active (7d)" value={overview?.activeUsers} icon="⚡" color="cyan" />
+                <StatCard label="New (30d)" value={overview?.newUsersLast30Days} icon="📈" color="rose" />
+                <StatCard label="Empty Accounts" value={emptyAccountsCount} icon="👻" color="indigo"
+                    subtitle="Users with 0 sites" />
+                <StatCard label="Sites/User"
+                    value={sitesPerUserStats?.avg}
+                    icon="📊" color="teal"
+                    subtitle={`min: ${sitesPerUserStats?.min} / max: ${sitesPerUserStats?.max} / med: ${sitesPerUserStats?.median}`} />
+            </div>
+
+            {/* Growth Chart */}
+            <SectionCard title="Growth">
+                <GrowthChart data={growthData} period={growthPeriod} onPeriodChange={setGrowthPeriod} />
+            </SectionCard>
+
+            {/* Pricing + Top Items */}
+            <div className="grid md:grid-cols-3 gap-4">
+                <SectionCard title="Sites by Pricing">
+                    <PricingChart data={pricingBreakdown} />
+                </SectionCard>
+                <SectionCard title="Top Categories">
+                    <TopItemsList items={topCategories} />
+                </SectionCard>
+                <SectionCard title="Top Tags">
+                    <TopItemsList items={topTags} />
+                </SectionCard>
+            </div>
+
+            {/* Most Active + Popular Domains */}
+            <div className="grid md:grid-cols-2 gap-4">
+                <SectionCard title="Most Active Users (7d)">
+                    {mostActiveUsers?.length ? (
+                        <div className="space-y-2">
+                            {mostActiveUsers.map((u, i) => (
+                                <div key={u.id} className="flex items-center gap-3">
+                                    <span className="text-app-text-muted text-xs w-5 text-right">{i + 1}.</span>
+                                    {u.avatar ? (
+                                        <img src={u.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                    ) : (
+                                        <div className="w-6 h-6 rounded-full bg-app-accent/20 flex items-center justify-center text-app-accent text-[10px] font-bold">
+                                            {(u.username?.[0] || '?').toUpperCase()}
+                                        </div>
+                                    )}
+                                    <span className="text-app-text-primary text-sm flex-1 truncate">{u.username}</span>
+                                    <span className="text-emerald-400 text-xs font-semibold">+{u.recentSites} sites</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : <p className="text-app-text-muted text-sm">No activity in last 7 days</p>}
+                </SectionCard>
+
+                <SectionCard title="Popular Domains">
+                    {popularDomains?.length ? (
+                        <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                            {popularDomains.map((d, i) => (
+                                <div key={d.domain} className="flex items-center gap-3">
+                                    <span className="text-app-text-muted text-xs w-5 text-right">{i + 1}.</span>
+                                    <img src={`https://www.google.com/s2/favicons?domain=${d.domain}&sz=16`}
+                                        alt="" className="w-4 h-4 rounded-sm" />
+                                    <span className="text-app-text-primary text-sm flex-1 truncate">{d.domain}</span>
+                                    <span className="text-app-text-muted text-xs bg-app-bg-light px-2 py-0.5 rounded-full">
+                                        {d.count}×
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : <p className="text-app-text-muted text-sm">No data</p>}
+                </SectionCard>
+            </div>
+        </div>
+    );
+
+    const renderUsersTab = () => (
+        <div className="space-y-4">
+            {/* Toolbar */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-app-text-muted uppercase tracking-wider">
+                    Users ({filteredUsers.length})
+                </h2>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button onClick={() => handleExport('users')} disabled={!!exporting}
+                        className="px-3 py-1.5 text-xs bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border disabled:opacity-50 flex-shrink-0">
+                        {exporting === 'users' ? '⏳...' : '📥 CSV'}
+                    </button>
+                    <div className="relative flex-1 sm:flex-none">
+                        <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-app-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input type="text" placeholder="Search users..." value={userSearch}
+                            onChange={(e) => setUserSearch(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-app-bg-secondary border border-app-border/50 rounded-lg text-sm text-app-text-primary placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-app-accent sm:w-64" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Sort controls - mobile */}
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none md:hidden pb-1">
+                {[{ col: 'sites', label: 'Sites' }, { col: 'categories', label: 'Cat' }, { col: 'tags', label: 'Tags' },
+                { col: 'created_at', label: 'Joined' }, { col: 'last_sign_in', label: 'Active' }].map(s => (
+                    <button key={s.col} onClick={() => handleSort(s.col)}
+                        className={`px-2.5 py-1 text-[10px] rounded-full whitespace-nowrap border transition-colors flex-shrink-0 ${sortBy === s.col
+                                ? 'bg-app-accent/20 border-app-accent/50 text-app-accent'
+                                : 'bg-app-bg-secondary border-app-border/30 text-app-text-muted'
+                            }`}>
+                        {s.label} {sortBy === s.col ? (sortDir === 'desc' ? '↓' : '↑') : ''}
+                    </button>
+                ))}
+            </div>
+
+            {/* Mobile card layout */}
+            <div className="md:hidden space-y-2">
+                {filteredUsers.map((u, _i) => {
+                    const isMe = u.email === user?.email;
+                    return (
+                        <div key={u.id} className={`bg-app-bg-secondary/50 border border-app-border/30 rounded-xl p-3 ${u.banned ? 'opacity-60' : ''}`}>
+                            <div className="flex items-start gap-3">
+                                {/* Avatar */}
+                                {u.avatar ? (
+                                    <img src={u.avatar} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                                ) : (
+                                    <div className="w-9 h-9 rounded-full bg-app-accent/20 flex items-center justify-center text-app-accent text-xs font-bold flex-shrink-0">
+                                        {(u.username?.[0] || u.email?.[0] || '?').toUpperCase()}
+                                    </div>
+                                )}
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                        <p className="text-app-text-primary text-sm font-medium truncate">{u.username}</p>
+                                        {u.banned && <span className="text-[9px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded-full font-medium">BANNED</span>}
+                                        {isMe && <span className="text-[9px] px-1.5 py-0.5 bg-app-accent/20 text-app-accent rounded-full">You</span>}
+                                    </div>
+                                    <p className="text-app-text-muted text-xs truncate">{u.email}</p>
+                                </div>
+                                {/* Actions */}
+                                {!isMe && (
+                                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                                        <button onClick={() => setBanTarget(u)}
+                                            className={`p-1.5 rounded-lg transition-colors ${u.banned
+                                                ? 'text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-900/20'
+                                                : 'text-app-text-muted hover:text-amber-400 hover:bg-amber-900/20'
+                                                }`}>
+                                            {u.banned ? '✅' : '🚫'}
+                                        </button>
+                                        <button onClick={() => setDeleteTarget(u)}
+                                            className="p-1.5 rounded-lg text-app-text-muted hover:text-red-400 hover:bg-red-900/20 transition-colors">
+                                            🗑️
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            {/* Stats row */}
+                            <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-app-border/20">
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-app-text-muted">🌐</span>
+                                    <span className="text-xs font-semibold text-app-text-primary">{u.sites}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-app-text-muted">📁</span>
+                                    <span className="text-xs font-semibold text-app-text-primary">{u.categories}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[10px] text-app-text-muted">🏷️</span>
+                                    <span className="text-xs font-semibold text-app-text-primary">{u.tags}</span>
+                                </div>
+                                <span className="text-app-text-muted text-[9px] ml-auto">
+                                    {new Date(u.created_at).toLocaleDateString()}
+                                </span>
+                                {u.onboarded && <span className="text-emerald-400 text-[10px]">✓ Tour</span>}
+                            </div>
+                        </div>
+                    );
+                })}
+                {filteredUsers.length === 0 && (
+                    <div className="text-center py-8 text-app-text-muted text-sm">
+                        {userSearch ? 'No users match your search' : 'No users found'}
+                    </div>
+                )}
+            </div>
+
+            {/* Desktop table layout */}
+            <div className="hidden md:block bg-app-bg-secondary/50 border border-app-border/30 rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="border-b border-app-border/50 text-app-text-muted text-xs uppercase tracking-wider">
+                                <th className="px-4 py-3 text-left w-10">#</th>
+                                <th className="px-4 py-3 text-left">User</th>
+                                <th className="px-4 py-3 text-center cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('sites')}>Sites <SortIcon col="sites" /></th>
+                                <th className="px-4 py-3 text-center cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('categories')}>Cat <SortIcon col="categories" /></th>
+                                <th className="px-4 py-3 text-center cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('tags')}>Tags <SortIcon col="tags" /></th>
+                                <th className="px-4 py-3 text-left cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('created_at')}>Joined <SortIcon col="created_at" /></th>
+                                <th className="px-4 py-3 text-left cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('last_sign_in')}>Active <SortIcon col="last_sign_in" /></th>
+                                <th className="px-4 py-3 text-center">Tour</th>
+                                <th className="px-4 py-3 text-center w-20">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredUsers.map((u, i) => (
+                                <UserRow key={u.id} user={u} index={i}
+                                    onDelete={setDeleteTarget} onBan={setBanTarget}
+                                    isCurrentUser={u.email === user?.email} />
+                            ))}
+                            {filteredUsers.length === 0 && (
+                                <tr><td colSpan={9} className="px-4 py-8 text-center text-app-text-muted">
+                                    {userSearch ? 'No users match your search' : 'No users found'}
+                                </td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderContentTab = () => (
+        <div className="space-y-6">
+            {/* Recent Activity */}
+            <SectionCard title="Recent Activity (Latest Sites Added)">
+                {recentActivity?.length ? (
+                    <div className="space-y-2 max-h-80 overflow-y-auto">
+                        {recentActivity.map((a, i) => (
+                            <div key={i} className="flex items-center gap-3 py-1.5 border-b border-app-border/20 last:border-0">
+                                {a.user?.avatar ? (
+                                    <img src={a.user.avatar} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                                ) : (
+                                    <div className="w-6 h-6 rounded-full bg-app-accent/20 flex items-center justify-center text-app-accent text-[10px] font-bold flex-shrink-0">
+                                        {(a.user?.username?.[0] || '?').toUpperCase()}
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-app-text-primary text-sm font-medium truncate">{a.user?.username || 'Unknown'}</span>
+                                        <span className="text-app-text-muted text-[10px]">added</span>
+                                    </div>
+                                    <a href={a.url} target="_blank" rel="noopener noreferrer"
+                                        className="text-blue-400 text-xs hover:underline truncate block">{a.domain || a.url}</a>
+                                </div>
+                                <span className="text-app-text-muted text-[10px] flex-shrink-0">
+                                    {new Date(a.created_at).toLocaleDateString()}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                ) : <p className="text-app-text-muted text-sm">No recent activity</p>}
+            </SectionCard>
+
+            {/* Duplicate Sites */}
+            <SectionCard title="Duplicate Sites (Same URL, Multiple Users)">
+                {duplicateSites?.length ? (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {duplicateSites.map((d, i) => (
+                            <div key={i} className="flex items-center gap-3">
+                                <span className="text-app-text-muted text-xs w-5 text-right">{i + 1}.</span>
+                                <a href={d.url} target="_blank" rel="noopener noreferrer"
+                                    className="text-blue-400 text-sm hover:underline flex-1 truncate">{d.url}</a>
+                                <span className="text-amber-400 text-xs font-semibold bg-amber-500/10 px-2 py-0.5 rounded-full">
+                                    {d.userCount} users
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                ) : <p className="text-app-text-muted text-sm">No duplicate sites found 🎉</p>}
+            </SectionCard>
+
+            {/* Export */}
+            <div className="grid sm:grid-cols-2 gap-4">
+                <SectionCard title="Export Sites">
+                    <p className="text-app-text-muted text-sm mb-3">Download all sites as CSV with name, URL, pricing, owner.</p>
+                    <button onClick={() => handleExport('sites')} disabled={!!exporting}
+                        className="px-4 py-2 text-sm bg-emerald-600 text-white hover:bg-emerald-500 rounded-lg transition-colors disabled:opacity-50">
+                        {exporting === 'sites' ? '⏳ Exporting...' : '📥 Export Sites CSV'}
+                    </button>
+                </SectionCard>
+                <SectionCard title="Export Users">
+                    <p className="text-app-text-muted text-sm mb-3">Download all users as CSV with email, username, stats.</p>
+                    <button onClick={() => handleExport('users')} disabled={!!exporting}
+                        className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-500 rounded-lg transition-colors disabled:opacity-50">
+                        {exporting === 'users' ? '⏳ Exporting...' : '📥 Export Users CSV'}
+                    </button>
+                </SectionCard>
+            </div>
+        </div>
+    );
+
+    const renderToolsTab = () => (
+        <div className="space-y-6">
+            {/* Broken Links Checker */}
+            <SectionCard title="Broken Links Checker"
+                action={
+                    <button onClick={handleCheckLinks} disabled={checkingLinks}
+                        className="px-3 py-1.5 text-xs bg-app-accent text-white hover:bg-app-accentLight rounded-lg transition-colors disabled:opacity-50">
+                        {checkingLinks ? '⏳ Checking...' : '🔍 Run Check'}
+                    </button>
+                }>
+                <p className="text-app-text-muted text-sm mb-3">
+                    Scan all sites for broken links (404, timeout, DNS errors). This may take a while.
+                </p>
+
+                {checkingLinks && (
+                    <div className="flex items-center gap-3 py-4">
+                        <div className="w-5 h-5 border-2 border-app-accent border-t-transparent rounded-full animate-spin" />
+                        <p className="text-app-text-secondary text-sm">Checking all site URLs...</p>
+                    </div>
+                )}
+
+                {linkCheckResult && !checkingLinks && (
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-4 text-sm">
+                            <span className="text-app-text-secondary">
+                                Checked: <strong className="text-app-text-primary">{linkCheckResult.checked}</strong>
+                            </span>
+                            <span className={linkCheckResult.brokenCount > 0 ? 'text-red-400' : 'text-emerald-400'}>
+                                Broken: <strong>{linkCheckResult.brokenCount}</strong>
+                            </span>
+                        </div>
+
+                        {linkCheckResult.broken?.length > 0 ? (
+                            <div className="space-y-2 max-h-80 overflow-y-auto">
+                                {linkCheckResult.broken.map((b, i) => (
+                                    <div key={i} className="flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-3 py-2 border-b border-app-border/20 last:border-0">
+                                        <span className={`text-xs px-1.5 py-0.5 rounded font-mono flex-shrink-0 ${b.status === 0 ? 'bg-gray-500/20 text-gray-400' :
+                                            b.status >= 500 ? 'bg-red-500/20 text-red-400' :
+                                                b.status >= 400 ? 'bg-amber-500/20 text-amber-400' :
+                                                    'bg-gray-500/20 text-gray-400'
+                                            }`}>
+                                            {b.status || 'ERR'}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-app-text-primary text-sm truncate">{b.name}</p>
+                                            <a href={b.url} target="_blank" rel="noopener noreferrer"
+                                                className="text-blue-400 text-xs hover:underline truncate block">{b.url}</a>
+                                            <p className="text-red-400/70 text-[10px] mt-0.5">{b.error}</p>
+                                            <p className="text-app-text-muted text-[10px] sm:hidden">{b.ownerName || b.ownerEmail}</p>
+                                        </div>
+                                        <span className="text-app-text-muted text-[10px] flex-shrink-0 hidden sm:block">{b.ownerName || b.ownerEmail}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-emerald-400 text-sm">✓ All links are healthy!</p>
+                        )}
+                    </div>
+                )}
+            </SectionCard>
+
+            {/* Quick Stats */}
+            <SectionCard title="Platform Health">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                    <div className="text-center p-2.5 sm:p-4 bg-app-bg-light/30 rounded-lg">
+                        <p className="text-xl sm:text-3xl font-bold text-app-text-primary">{sitesPerUserStats?.avg || 0}</p>
+                        <p className="text-app-text-muted text-[10px] sm:text-xs mt-1">Avg Sites/User</p>
+                    </div>
+                    <div className="text-center p-2.5 sm:p-4 bg-app-bg-light/30 rounded-lg">
+                        <p className="text-xl sm:text-3xl font-bold text-app-text-primary">{emptyAccountsCount || 0}</p>
+                        <p className="text-app-text-muted text-[10px] sm:text-xs mt-1">Empty Accounts</p>
+                    </div>
+                    <div className="text-center p-2.5 sm:p-4 bg-app-bg-light/30 rounded-lg">
+                        <p className="text-xl sm:text-3xl font-bold text-app-text-primary">{duplicateSites?.length || 0}</p>
+                        <p className="text-app-text-muted text-[10px] sm:text-xs mt-1">Duplicate URLs</p>
+                    </div>
+                </div>
+            </SectionCard>
+        </div>
+    );
+
+    // ========================================
+    // Main Render
+    // ========================================
+    return (
+        <>
+            <Head><title>Admin Dashboard — Site Organizer</title></Head>
+
+            <div className="min-h-screen bg-app-bg-primary">
+                {/* Header */}
+                <header className="border-b border-app-border/50 bg-app-bg-secondary/50 backdrop-blur-sm sticky top-0 z-20">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="text-xl sm:text-2xl">🛡️</span>
+                            <div>
+                                <h1 className="text-lg sm:text-xl font-bold text-app-text-primary">Admin Dashboard</h1>
+                                <p className="text-app-text-muted text-[10px] sm:text-xs">
+                                    {lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString()}` : 'Loading...'}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <button onClick={fetchData}
+                                className="p-2 text-app-text-muted hover:text-app-text-primary hover:bg-app-bg-light rounded-lg transition-colors"
+                                title="Refresh">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                            </button>
+                            <button onClick={() => router.push('/dashboard/sites')}
+                                className="px-3 py-1.5 text-xs sm:text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">
+                                ← Dashboard
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6">
+                        <div className="flex gap-1 overflow-x-auto scrollbar-none -mb-px">
+                            {TABS.map(tab => (
+                                <button key={tab.key}
+                                    onClick={() => setActiveTab(tab.key)}
+                                    className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${activeTab === tab.key
+                                        ? 'border-app-accent text-app-accent'
+                                        : 'border-transparent text-app-text-muted hover:text-app-text-secondary'
+                                        }`}>
+                                    <span>{tab.icon}</span>
+                                    <span>{tab.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </header>
+
+                {/* Content */}
+                <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+                    {activeTab === 'overview' && renderOverviewTab()}
+                    {activeTab === 'users' && renderUsersTab()}
+                    {activeTab === 'content' && renderContentTab()}
+                    {activeTab === 'tools' && renderToolsTab()}
+                </main>
+
+                {/* Delete Modal */}
+                {deleteTarget && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+                        onClick={() => !deleting && setDeleteTarget(null)}>
+                        <div className="bg-app-bg-secondary border border-app-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
+                            onClick={e => e.stopPropagation()}>
+                            <div className="text-center mb-4">
+                                <div className="text-4xl mb-3">⚠️</div>
+                                <h3 className="text-lg font-bold text-app-text-primary">Delete User?</h3>
+                            </div>
+                            <p className="text-app-text-secondary text-sm text-center mb-1">
+                                Permanently delete <strong className="text-app-text-primary">{deleteTarget.email}</strong>
+                            </p>
+                            <p className="text-app-text-muted text-xs text-center mb-5">
+                                Including {deleteTarget.sites} sites, {deleteTarget.categories} categories, {deleteTarget.tags} tags. Cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setDeleteTarget(null)} disabled={deleting}
+                                    className="flex-1 px-4 py-2 text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">
+                                    Cancel
+                                </button>
+                                <button onClick={handleDeleteUser} disabled={deleting}
+                                    className="flex-1 px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-500 rounded-lg transition-colors font-medium disabled:opacity-50">
+                                    {deleting ? 'Deleting...' : 'Delete'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Ban/Unban Modal */}
+                {banTarget && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+                        onClick={() => !banning && setBanTarget(null)}>
+                        <div className="bg-app-bg-secondary border border-app-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
+                            onClick={e => e.stopPropagation()}>
+                            <div className="text-center mb-4">
+                                <div className="text-4xl mb-3">{banTarget.banned ? '✅' : '🚫'}</div>
+                                <h3 className="text-lg font-bold text-app-text-primary">
+                                    {banTarget.banned ? 'Unban' : 'Ban'} User?
+                                </h3>
+                            </div>
+                            <p className="text-app-text-secondary text-sm text-center mb-1">
+                                {banTarget.banned ? 'Restore access for' : 'Disable access for'}{' '}
+                                <strong className="text-app-text-primary">{banTarget.email}</strong>
+                            </p>
+                            <p className="text-app-text-muted text-xs text-center mb-5">
+                                {banTarget.banned
+                                    ? 'This user will be able to log in again.'
+                                    : 'This user will not be able to log in. Their data will remain intact.'}
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setBanTarget(null)} disabled={banning}
+                                    className="flex-1 px-4 py-2 text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">
+                                    Cancel
+                                </button>
+                                <button onClick={handleBanUser} disabled={banning}
+                                    className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors font-medium disabled:opacity-50 ${banTarget.banned ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500'
+                                        }`}>
+                                    {banning ? 'Processing...' : banTarget.banned ? 'Unban' : 'Ban'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </>
+    );
+}

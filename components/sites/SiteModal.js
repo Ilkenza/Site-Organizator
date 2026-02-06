@@ -46,8 +46,6 @@ const STYLES = {
 const VALIDATION_MESSAGES = {
     NAME_REQUIRED: 'Site name is required',
     URL_REQUIRED: 'URL is required',
-    CATEGORY_REQUIRED: 'Minimum 1 category is required',
-    TAG_REQUIRED: 'Minimum 1 tag is required',
     PRICING_REQUIRED: 'Pricing model is required',
 };
 
@@ -180,8 +178,8 @@ function removeFromSuggestions(setSuggestions, value) {
     setSuggestions(prev => prev.filter(s => s !== value));
 }
 
-export default function SiteModal({ isOpen, onClose, site = null, defaultFavorite = false, defaultCategoryId = null, defaultTagId = null }) {
-    const { categories, tags, addSite, updateSite, failedRelationUpdates, retrySiteRelations, addCategory, addTag, user } = useDashboard();
+export default function SiteModal({ isOpen, onClose, site = null, defaultFavorite = false, defaultCategoryId = null, defaultTagId = null, onNeedsSaveConfirm = null, restoreFormData = null }) {
+    const { categories, tags, addSite, updateSite, failedRelationUpdates, retrySiteRelations, addCategory, addTag, user, showToast } = useDashboard();
     const { user: authUser } = useAuth();
     const isEditing = !!site;
     const currentUser = user || authUser;
@@ -207,7 +205,10 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
     // Reset form when modal opens/closes or site changes
     useEffect(() => {
         if (isOpen) {
-            if (site) {
+            // Restore form data if coming back from confirm modal
+            if (restoreFormData) {
+                setFormData(restoreFormData);
+            } else if (site) {
                 const siteCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
                 const siteTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
 
@@ -233,7 +234,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
             setCategorySearch('');
             setTagSearch('');
         }
-    }, [isOpen, site, defaultCategoryId, defaultFavorite, defaultTagId]);
+    }, [isOpen, site, defaultCategoryId, defaultFavorite, defaultTagId, restoreFormData]);
 
     // Auto-suggest categories based on URL
     useEffect(() => {
@@ -345,29 +346,11 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
         }
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const doSave = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            // Validate
-            if (!formData.name.trim()) {
-                throw new Error(VALIDATION_MESSAGES.NAME_REQUIRED);
-            }
-            if (!formData.url.trim()) {
-                throw new Error(VALIDATION_MESSAGES.URL_REQUIRED);
-            }
-            if (formData.categoryIds.length === 0) {
-                throw new Error(VALIDATION_MESSAGES.CATEGORY_REQUIRED);
-            }
-            if (formData.tagIds.length === 0) {
-                throw new Error(VALIDATION_MESSAGES.TAG_REQUIRED);
-            }
-            if (!formData.pricing) {
-                throw new Error(VALIDATION_MESSAGES.PRICING_REQUIRED);
-            }
-
             // Normalize URL
             const url = normalizeUrl(formData.url);
 
@@ -388,12 +371,59 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 await addSite(payload);
             }
 
+            // Show toast warning after save if missing categories/tags
+            const missing = [];
+            if (formData.categoryIds.length === 0) missing.push('categories');
+            if (formData.tagIds.length === 0) missing.push('tags');
+            if (missing.length > 0) {
+                showToast(`⚠️ Saved without ${missing.join(' & ')} — you can add them later`, 'warning', 4000);
+            }
+
             onClose();
         } catch (err) {
             setError(err.message);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleSubmit = async (e) => {
+        e?.preventDefault();
+        setError(null);
+
+        // Validate required fields
+        if (!formData.name.trim()) {
+            setError(VALIDATION_MESSAGES.NAME_REQUIRED);
+            return;
+        }
+        if (!formData.url.trim()) {
+            setError(VALIDATION_MESSAGES.URL_REQUIRED);
+            return;
+        }
+        if (!formData.pricing) {
+            setError(VALIDATION_MESSAGES.PRICING_REQUIRED);
+            return;
+        }
+
+        // Check if missing categories/tags → ask for confirmation via external modal
+        const missing = [];
+        if (formData.categoryIds.length === 0) missing.push('categories');
+        if (formData.tagIds.length === 0) missing.push('tags');
+        if (missing.length > 0 && onNeedsSaveConfirm) {
+            const url = normalizeUrl(formData.url);
+            const payload = {
+                name: formData.name.trim(),
+                url,
+                pricing: formData.pricing,
+                category_ids: formData.categoryIds,
+                tag_ids: formData.tagIds,
+                is_favorite: formData.is_favorite
+            };
+            onNeedsSaveConfirm(payload, missing, !!site, { ...formData });
+            return;
+        }
+
+        await doSave();
     };
 
     return (
@@ -420,7 +450,6 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                         {error}
                     </div>
                 )}
-
                 {/* Retry relations banner (shown when previous update failed to attach categories/tags) */}
                 {isEditing && site?.id && failedRelationUpdates?.[site.id] && (
                     <div className="mb-3 p-3 bg-yellow-900/20 border border-yellow-700 rounded-lg text-yellow-200 text-sm flex items-center justify-between gap-3">
