@@ -397,6 +397,31 @@ export default function Sidebar({ isOpen = false, onClose }) {
                             >
                                 All Categories
                             </button>
+                            {(() => {
+                                const uncatCount = sites.filter(site => {
+                                    const cats = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
+                                    return cats.length === 0;
+                                }).length;
+                                return uncatCount > 0 ? (
+                                    <button
+                                        onClick={() => setSelectedCategory('uncategorized')}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
+                      ${selectedCategory === 'uncategorized'
+                                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
+                                                : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
+                                            }`}
+                                    >
+                                        <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
+                                        <span className="truncate flex-1">Uncategorized</span>
+                                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedCategory === 'uncategorized'
+                                                ? 'bg-amber-500/30 text-amber-400'
+                                                : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
+                                            }`}>
+                                            {uncatCount}
+                                        </span>
+                                    </button>
+                                ) : null;
+                            })()}
                             {categories
                                 .filter(cat => cat?.name?.toLowerCase().includes(categoriesSearchQuery.toLowerCase()))
                                 .sort((a, b) => a.name.localeCompare(b.name))
@@ -459,6 +484,31 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     >
                                         All Tags
                                     </button>
+                                    {(() => {
+                                        const untagCount = sites.filter(site => {
+                                            const t = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
+                                            return t.length === 0;
+                                        }).length;
+                                        return untagCount > 0 ? (
+                                            <button
+                                                onClick={() => setSelectedTag('untagged')}
+                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
+                      ${selectedTag === 'untagged'
+                                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
+                                                        : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
+                                                    }`}
+                                            >
+                                                <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
+                                                <span className="truncate flex-1">Untagged</span>
+                                                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedTag === 'untagged'
+                                                        ? 'bg-amber-500/30 text-amber-400'
+                                                        : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
+                                                    }`}>
+                                                    {untagCount}
+                                                </span>
+                                            </button>
+                                        ) : null;
+                                    })()}
                                     {tags
                                         .filter(tag => tag?.name?.toLowerCase().includes(tagsSearchQuery.toLowerCase()))
                                         .sort((a, b) => a.name.localeCompare(b.name))

@@ -111,6 +111,7 @@ Create `.env.local` in the project root:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+ADMIN_EMAILS=your-email@example.com
 ```
 
 **Where to find these values:**
@@ -572,6 +573,7 @@ colors: {
 | `NEXT_PUBLIC_SUPABASE_URL`      | Your Supabase project URL                    | ✅ Yes   |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key                       | ✅ Yes   |
 | `SUPABASE_SERVICE_ROLE_KEY`     | Supabase service role key (server-side only) | ✅ Yes   |
+| `ADMIN_EMAILS`                  | Comma-separated admin emails for /admin page | No       |
 
 ## 🚢 Deployment
 

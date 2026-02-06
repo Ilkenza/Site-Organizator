@@ -178,6 +178,13 @@ export default function Login() {
 
             if (error) throw error;
 
+            // Detect existing email: Supabase returns a user with empty identities
+            // instead of an error (to prevent email enumeration)
+            if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
+                setError('⚠️ This email address is already registered. Please sign in or use a different email.');
+                return;
+            }
+
             if (data?.user) {
                 // Check if email confirmation is disabled (auto-confirm)
                 if (data.user.confirmed_at || data.session) {
@@ -201,9 +208,12 @@ export default function Login() {
             console.error('SignUp error:', err);
 
             const errorMsg = err?.message || '';
-            
-            // Check for duplicate email
-            if (errorMsg.includes('already registered') || errorMsg.includes('already exists') || errorMsg.includes('User already registered')) {
+            const lowerMsg = errorMsg.toLowerCase();
+
+            // Check for duplicate email (various Supabase error messages)
+            if (lowerMsg.includes('already registered') || lowerMsg.includes('already exists') ||
+                lowerMsg.includes('user already registered') || lowerMsg.includes('email address already') ||
+                lowerMsg.includes('unique constraint') || lowerMsg.includes('duplicate key')) {
                 setError('⚠️ This email address is already registered. Please sign in or use a different email.');
             }
             // Better error message for email confirmation issues
@@ -360,7 +370,7 @@ export default function Login() {
             try {
                 const { data: aalData, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
-              
+
 
                 const shouldShowMfa = aalData?.nextLevel === 'aal2';
 

@@ -57,9 +57,12 @@ function DashboardContent() {
         _loading,
         error,
         deleteSite,
+        addSite,
+        updateSite,
         deleteCategory,
         deleteTag,
         toast,
+        showToast,
         selectedCategory,
         selectedTag,
         multiSelectMode,
@@ -95,6 +98,9 @@ function DashboardContent() {
     const [editingTag, setEditingTag] = useState(null);
     const [commandMenuOpen, setCommandMenuOpen] = useState(false);
     const [undoToast, setUndoToast] = useState(null);
+
+    // Save-without-categories/tags confirmation
+    const [saveConfirm, setSaveConfirm] = useState({ open: false, payload: null, missing: [], isEditing: false, formData: null });
 
     // Delete confirmation
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, type: null, item: null });
@@ -417,11 +423,17 @@ function DashboardContent() {
                 onClose={() => {
                     setSiteModalOpen(false);
                     setEditingSite(null);
+                    setSaveConfirm(prev => ({ ...prev, formData: null }));
                 }}
                 site={editingSite}
                 defaultFavorite={activeTab === 'favorites'}
                 defaultCategoryId={selectedCategory}
                 defaultTagId={selectedTag}
+                restoreFormData={saveConfirm.formData}
+                onNeedsSaveConfirm={(payload, missing, isEditing, formData) => {
+                    setSaveConfirm({ open: true, payload, missing, isEditing, editId: editingSite?.id, formData });
+                    setSiteModalOpen(false);
+                }}
             />
 
             <CategoryModal
@@ -450,6 +462,36 @@ function DashboardContent() {
                 message={`Are you sure you want to delete "${deleteConfirm.item?.name || ''}"? This action cannot be undone.`}
                 confirmText="Delete"
                 loading={deleting}
+            />
+
+            {/* Save without categories/tags confirmation */}
+            <ConfirmModal
+                isOpen={saveConfirm.open}
+                onClose={() => {
+                    const restored = saveConfirm.formData;
+                    setSaveConfirm({ open: false, payload: null, missing: [], isEditing: false, formData: restored });
+                    setSiteModalOpen(true);
+                }}
+                onConfirm={async () => {
+                    const { payload, missing, isEditing, editId } = saveConfirm;
+                    setSaveConfirm({ open: false, payload: null, missing: [], isEditing: false, formData: null });
+                    try {
+                        if (isEditing && editId) {
+                            await updateSite(editId, payload);
+                        } else {
+                            await addSite(payload);
+                        }
+                        setEditingSite(null);
+                        showToast(`⚠️ Saved without ${missing.join(' & ')} — you can add them later`, 'warning', 4000);
+                    } catch (err) {
+                        showToast(`Failed to save: ${err.message}`, 'error');
+                    }
+                }}
+                title="Save without organizing?"
+                message={`This site has no ${saveConfirm.missing?.join(' or ')}. You can always add them later by editing the site.`}
+                confirmText="Save Anyway"
+                cancelText="Go Back"
+                variant="primary"
             />
 
             {/* Command Menu */}

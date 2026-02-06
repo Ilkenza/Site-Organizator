@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import Button from '../ui/Button';
@@ -63,6 +64,14 @@ export default function Header({ onAddClick, onMenuClick }) {
 
     // Use authUser if available, otherwise fallback to localUser
     const user = authUser || localUser;
+    const router = useRouter();
+
+    // Check if current user is an admin
+    const isAdmin = useMemo(() => {
+        if (!user?.email) return false;
+        const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+        return adminEmails.includes(user.email.toLowerCase());
+    }, [user?.email]);
 
     const {
         activeTab,
@@ -735,6 +744,17 @@ export default function Header({ onAddClick, onMenuClick }) {
                                                 </button>
                                             </div>
                                             <div className="p-2">
+                                                {isAdmin && (
+                                                    <button
+                                                        onClick={() => { router.push('/admin'); setUserMenuOpen(false); }}
+                                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-app-text-secondary hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors mb-1"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                                                        </svg>
+                                                        Admin Dashboard
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => { signOut(); setUserMenuOpen(false); }}
                                                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
