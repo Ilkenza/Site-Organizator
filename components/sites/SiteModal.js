@@ -643,6 +643,15 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                         </div>
                         <div className={`bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 ${MAX_LIST_HEIGHT} overflow-y-auto`}>
                             {(() => {
+                                if (categories.length === 0) {
+                                    return (
+                                        <div className="w-full text-center py-4">
+                                            <p className="text-xs text-app-text-muted italic mb-2">📂 No categories exist yet</p>
+                                            <p className="text-[10px] text-app-text-muted">You must first create categories from the Categories tab</p>
+                                        </div>
+                                    );
+                                }
+
                                 const filtered = categories
                                     .filter(cat => cat?.name?.toLowerCase().includes(categorySearch.toLowerCase()));
 
@@ -755,6 +764,15 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                         </div>
                         <div className={`bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 ${MAX_LIST_HEIGHT} overflow-y-auto`}>
                             {(() => {
+                                if (tags.length === 0) {
+                                    return (
+                                        <div className="w-full text-center py-4">
+                                            <p className="text-xs text-app-text-muted italic mb-2">🏷️ No tags exist yet</p>
+                                            <p className="text-[10px] text-app-text-muted">You must first create tags from the Tags tab</p>
+                                        </div>
+                                    );
+                                }
+
                                 const filtered = tags
                                     .filter(tag => tag?.name?.toLowerCase().includes(tagSearch.toLowerCase()));
 

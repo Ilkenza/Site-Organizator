@@ -24,8 +24,13 @@ const APP_CONFIG = {
   }
 };
 
-// Console error filter patterns
-const CONSOLE_FILTER_PATTERNS = ['faviconV2', 't1.gstatic.com'];
+// Console error filter patterns - covers all gstatic favicon CDN subdomains (t0, t1, t2, t3, etc.) and favicon.ico
+const CONSOLE_FILTER_PATTERNS = [
+  'gstatic.com/faviconV2',
+  'gstatic.com/favicon',
+  'favicon.ico',
+  '/favicon.ico'
+];
 
 /**
  * Check if error should be filtered (suppressed)
@@ -33,8 +38,9 @@ const CONSOLE_FILTER_PATTERNS = ['faviconV2', 't1.gstatic.com'];
  * @returns {boolean} True if error should be suppressed
  */
 const shouldFilterError = (message) => {
-  if (!message?.includes) return false;
-  return CONSOLE_FILTER_PATTERNS.some(pattern => message.includes(pattern));
+  if (!message?.includes && typeof message !== 'string') return false;
+  const msg = String(message);
+  return CONSOLE_FILTER_PATTERNS.some(pattern => msg.includes(pattern));
 };
 
 /**
@@ -43,16 +49,27 @@ const shouldFilterError = (message) => {
  */
 const setupConsoleErrorFilter = () => {
   const originalError = console.error;
+  const originalWarn = console.warn;
 
+  // Filter console.error
   console.error = (...args) => {
-    if (shouldFilterError(args[0])) {
+    if (args.some(arg => shouldFilterError(arg))) {
       return; // Silent ignore
     }
     originalError(...args);
   };
 
+  // Filter console.warn
+  console.warn = (...args) => {
+    if (args.some(arg => shouldFilterError(arg))) {
+      return; // Silent ignore
+    }
+    originalWarn(...args);
+  };
+
   return () => {
     console.error = originalError;
+    console.warn = originalWarn;
   };
 };
 
@@ -89,6 +106,38 @@ export default function App({ Component, pageProps }) {
   useEffect(() => {
     const cleanup = setupConsoleErrorFilter();
     return cleanup;
+  }, []);
+
+  // Setup global error handler for favicon network errors (capturing phase)
+  useEffect(() => {
+    const handleError = (e) => {
+      const src = e.target?.src || e.target?.href || '';
+
+      // Check if error is from any favicon-related resource
+      if ((e.target?.tagName === 'IMG' || e.target?.tagName === 'LINK') &&
+        (src.includes('gstatic.com/favicon') || src.includes('favicon.ico'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+      }
+    };
+
+    // Use capturing phase to catch errors before they bubble
+    window.addEventListener('error', handleError, true);
+
+    // Also suppress unhandledrejection for fetch failures
+    const handleRejection = (e) => {
+      if (e.reason?.message && CONSOLE_FILTER_PATTERNS.some(p => e.reason.message.includes(p))) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('unhandledrejection', handleRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError, true);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
   }, []);
 
   // Register service worker

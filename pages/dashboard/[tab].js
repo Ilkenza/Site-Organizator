@@ -76,9 +76,9 @@ function DashboardContent() {
         setSelectedCategories,
         selectedTags: _selectedTags,
         setSelectedTags,
-        setSites,
-        setCategories,
-        setTags
+        _setSites,
+        _setCategories,
+        _setTags
     } = useDashboard();
 
     // Sync activeTab with URL
@@ -239,91 +239,16 @@ function DashboardContent() {
         setTagModalOpen(true);
     };
 
-    // Confirm delete with undo support
+    // Confirm delete
     const handleConfirmDelete = async () => {
         setDeleting(true);
-        // Deep clone the entire item with all nested arrays and properties
-        const deletedItem = JSON.parse(JSON.stringify(deleteConfirm.item));
-        const deletedType = deleteConfirm.type;
-        const deletedId = deleteConfirm.item.id;
-
         try {
-            // Remove from UI immediately (optimistic update)
-            // Item stays in Supabase until timer expires or toast is closed
-            switch (deletedType) {
-                case 'site':
-                    setSites(prev => prev.filter(s => s.id !== deletedId));
-                    break;
-                case 'category':
-                    setCategories(prev => prev.filter(c => c.id !== deletedId));
-                    break;
-                case 'tag':
-                    setTags(prev => prev.filter(t => t.id !== deletedId));
-                    break;
+            const { type, item } = deleteConfirm;
+            switch (type) {
+                case 'site': await deleteSite(item.id); break;
+                case 'category': await deleteCategory(item.id); break;
+                case 'tag': await deleteTag(item.id); break;
             }
-
-            // Set up timeout for actual Supabase deletion (after 5 seconds)
-            const deleteTimeout = setTimeout(async () => {
-                try {
-                    switch (deletedType) {
-                        case 'site':
-                            await deleteSite(deletedId);
-                            break;
-                        case 'category':
-                            await deleteCategory(deletedId);
-                            break;
-                        case 'tag':
-                            await deleteTag(deletedId);
-                            break;
-                    }
-                } catch (err) {
-                    console.error('Failed to delete from database:', err);
-                    await fetchData();
-                }
-            }, 5000);
-
-            // Show undo toast
-            setUndoToast({
-                message: `${deletedType.charAt(0).toUpperCase() + deletedType.slice(1)} deleted`,
-                onUndo: async () => {
-                    // Cancel the deletion timeout and restore item
-                    clearTimeout(deleteTimeout);
-                    // Item is still in Supabase, just restore to UI
-                    switch (deletedType) {
-                        case 'site':
-                            setSites(prev => [...prev, deletedItem].sort((a, b) => a.name.localeCompare(b.name)));
-                            break;
-                        case 'category':
-                            setCategories(prev => [...prev, deletedItem].sort((a, b) => a.name.localeCompare(b.name)));
-                            break;
-                        case 'tag':
-                            setTags(prev => [...prev, deletedItem].sort((a, b) => a.name.localeCompare(b.name)));
-                            break;
-                    }
-                    setUndoToast(null);
-                },
-                onClose: async () => {
-                    // User manually closed toast - delete from Supabase immediately
-                    clearTimeout(deleteTimeout);
-                    try {
-                        switch (deletedType) {
-                            case 'site':
-                                await deleteSite(deletedId);
-                                break;
-                            case 'category':
-                                await deleteCategory(deletedId);
-                                break;
-                            case 'tag':
-                                await deleteTag(deletedId);
-                                break;
-                        }
-                    } catch (err) {
-                        console.error('Failed to delete from database:', err);
-                        await fetchData();
-                    }
-                }
-            });
-
             setDeleteConfirm({ open: false, type: null, item: null });
         } catch (err) {
             alert('Failed to delete: ' + err.message);
@@ -461,6 +386,8 @@ function DashboardContent() {
                 title={`Delete ${deleteConfirm.type}?`}
                 message={`Are you sure you want to delete "${deleteConfirm.item?.name || ''}"? This action cannot be undone.`}
                 confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
                 loading={deleting}
             />
 

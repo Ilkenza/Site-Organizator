@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Badge from '../ui/Badge';
 import InlineEditableName from '../categories/InlineEditableName';
 import { useDashboard } from '../../context/DashboardContext';
@@ -13,8 +13,22 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
     const { selectedSites, setSelectedSites, multiSelectMode, toggleFavorite, togglePinned, activeTab, updateSite } = useDashboard();
 
     // Support multiple possible field names from API
-    const categories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
-    const tags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
+    const allCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
+    const allTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
+
+    // Import source icon from localStorage (no tag needed)
+    const [importSource, setImportSource] = useState(null);
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem('import_sources');
+            if (stored) {
+                const map = JSON.parse(stored);
+                if (map[site.url]) setImportSource(map[site.url]);
+            }
+        } catch { /* ignore */ }
+    }, [site.url]);
+    const categories = allCategories;
+    const tags = allTags;
 
     const formatDate = (dateString) => {
         if (!dateString) return '-';
@@ -100,9 +114,11 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                             onError={() => setImageError(true)}
                         />
                     ) : (
-                        <svg className="w-5 h-5 text-app-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                        </svg>
+                        <div className="w-8 h-8 sm:w-6 sm:h-6 rounded-lg bg-gradient-to-br from-app-accent/20 to-app-accent/5 flex items-center justify-center">
+                            <svg className="w-5 h-5 sm:w-4 sm:h-4 text-app-accent/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                            </svg>
+                        </div>
                     )}
                 </div>
 
@@ -268,7 +284,7 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                 )}
             </div>
 
-            {/* Footer: Pricing and Date */}
+            {/* Footer: Pricing, Import Source and Date */}
             <div className="flex items-center justify-between text-[10px] sm:text-xs text-app-text-secondary pt-2 sm:pt-3 border-t border-app-border/50 mt-auto">
                 {/* Pricing */}
                 <span className={`px-2 py-0.5 rounded-full font-medium ${site.pricing === 'fully_free' ? 'bg-green-950 text-emerald-300' :
@@ -284,8 +300,36 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                                     'Unknown'}
                 </span>
 
-                {/* Date */}
-                <span>{formatDate(site.created_at)}</span>
+                <div className="flex items-center gap-2">
+                    {/* Import source icon */}
+                    {importSource && (
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full font-medium text-[10px] ${importSource === 'bookmarks'
+                                ? 'bg-amber-900/50 text-amber-300 border border-amber-700/50'
+                                : importSource === 'file'
+                                    ? 'bg-purple-900/50 text-purple-300 border border-purple-700/50'
+                                    : 'bg-indigo-900/50 text-indigo-300 border border-indigo-700/50'
+                            }`}
+                            title={`Imported from ${importSource === 'bookmarks' ? 'Bookmarks' : importSource === 'file' ? 'File' : 'Notion'}`}
+                        >
+                            {importSource === 'bookmarks' ? (
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                </svg>
+                            ) : importSource === 'file' ? (
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                            ) : (
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
+                                </svg>
+                            )}
+                        </span>
+                    )}
+
+                    {/* Date */}
+                    <span>{formatDate(site.created_at)}</span>
+                </div>
             </div>
         </div>
     );

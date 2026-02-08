@@ -99,15 +99,27 @@ async function enrichSitesWithRelations(sites, baseUrl, headers) {
   }
 
   const siteIds = sites.map(s => s.id);
-  const encodedInList = encodeURIComponent(siteIds.map(id => `"${id}"`).join(','));
+  const BATCH_SIZE = 100;
 
-  // Fetch site_categories with embedded categories
-  const scUrl = `${baseUrl}/rest/v1/site_categories?select=*,category:categories(*)&site_id=in.(${encodedInList})`;
-  const siteCategories = await fetchJson(scUrl, headers) || [];
+  // Fetch site_categories in batches to avoid URI Too Long
+  let siteCategories = [];
+  for (let i = 0; i < siteIds.length; i += BATCH_SIZE) {
+    const batch = siteIds.slice(i, i + BATCH_SIZE);
+    const encodedInList = encodeURIComponent(batch.map(id => `"${id}"`).join(','));
+    const scUrl = `${baseUrl}/rest/v1/site_categories?select=*,category:categories(*)&site_id=in.(${encodedInList})`;
+    const batchData = await fetchJson(scUrl, headers) || [];
+    siteCategories.push(...batchData);
+  }
 
-  // Fetch site_tags with embedded tags
-  const stUrl = `${baseUrl}/rest/v1/site_tags?select=*,tag:tags(*)&site_id=in.(${encodedInList})`;
-  const siteTags = await fetchJson(stUrl, headers) || [];
+  // Fetch site_tags in batches to avoid URI Too Long
+  let siteTags = [];
+  for (let i = 0; i < siteIds.length; i += BATCH_SIZE) {
+    const batch = siteIds.slice(i, i + BATCH_SIZE);
+    const encodedInList = encodeURIComponent(batch.map(id => `"${id}"`).join(','));
+    const stUrl = `${baseUrl}/rest/v1/site_tags?select=*,tag:tags(*)&site_id=in.(${encodedInList})`;
+    const batchData = await fetchJson(stUrl, headers) || [];
+    siteTags.push(...batchData);
+  }
 
   // Build maps
   const categoriesBySite = new Map();

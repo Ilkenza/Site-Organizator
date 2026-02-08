@@ -254,7 +254,6 @@ export default async function handler(req, res) {
 
   const { rows, userId } = validation;
 
-
   const options = payload.options || { createMissing: true };
   const chunkSize = calculateChunkSize(payload.chunkSize);
 
@@ -579,6 +578,42 @@ export default async function handler(req, res) {
   try {
     await preloadCategoriesAndTags();
 
+    // ── Pre-create ALL categories & tags in parallel before chunk loop ──
+    // This avoids sequential HTTP calls inside the loop (the #1 timeout cause).
+    const allNormRows = rows.map((r, idx) => normalizeImportRow(r, idx));
+
+    // Collect unique category/tag names from ALL rows
+    const allCatInfos = new Map(); // key → {name, color}
+    const allTagInfos = new Map();
+    for (const nr of allNormRows) {
+      for (const c of nr.categories) {
+        const key = (c.name || '').toLowerCase();
+        if (key && !allCatInfos.has(key)) allCatInfos.set(key, c);
+      }
+      for (const t of nr.tags) {
+        const key = (t.name || '').toLowerCase();
+        if (key && !allTagInfos.has(key)) allTagInfos.set(key, t);
+      }
+    }
+
+    // Filter out already-cached, then create in parallel batches
+    const PARALLEL_LIMIT = 15;
+
+    const newCats = Array.from(allCatInfos.values())
+      .filter(c => !catNameToObj.has((c.name || '').toLowerCase()));
+    for (let p = 0; p < newCats.length; p += PARALLEL_LIMIT) {
+      const batch = newCats.slice(p, p + PARALLEL_LIMIT);
+      await Promise.all(batch.map(c => ensureCategoryByName(c.name, c.color)));
+    }
+
+    const newTags = Array.from(allTagInfos.values())
+      .filter(t => !tagNameToObj.has((t.name || '').toLowerCase()));
+    for (let p = 0; p < newTags.length; p += PARALLEL_LIMIT) {
+      const batch = newTags.slice(p, p + PARALLEL_LIMIT);
+      await Promise.all(batch.map(t => ensureTagByName(t.name, t.color)));
+    }
+    // ── All categories & tags now cached — chunk loop needs no HTTP calls ──
+
     // Process in chunks
     for (let i = 0; i < rows.length; i += chunkSize) {
       const chunk = rows.slice(i, i + chunkSize);
@@ -600,22 +635,14 @@ export default async function handler(req, res) {
           continue;
         }
 
-        // Ensure categories/tags exist
-        const cats = [];
-        for (const catInfo of nr.categories) {
-          const c = await ensureCategoryByName(catInfo.name, catInfo.color);
-          if (c) {
-            cats.push(c);
-          }
-        }
+        // Resolve categories/tags from cache (already created above)
+        const cats = nr.categories
+          .map(catInfo => catNameToObj.get((catInfo.name || '').toLowerCase()))
+          .filter(Boolean);
 
-        const tags = [];
-        for (const tagInfo of nr.tags) {
-          const t = await ensureTagByName(tagInfo.name, tagInfo.color);
-          if (t) {
-            tags.push(t);
-          }
-        }
+        const tags = nr.tags
+          .map(tagInfo => tagNameToObj.get((tagInfo.name || '').toLowerCase()))
+          .filter(Boolean);
 
         if (existingSites[nr.url]) {
           // Site exists - prepare for update
@@ -632,16 +659,17 @@ export default async function handler(req, res) {
       }
 
       // Insert new sites in batch
+      // NOTE: Do NOT include 'categories' or 'tags' here — they conflict with
+      // PostgREST's resource embedding (site_categories/site_tags junction tables).
+      // Relations are attached separately via attachSiteCategories/attachSiteTags.
       const siteInserts = toCreateSites.map(x => {
         const row = {
-          name: x.nr.name || '',
+          name: x.nr.name || x.nr.url || '',
           url: x.nr.url,
           pricing: x.nr.pricing || 'freemium',
           is_favorite: x.nr.is_favorite || false,
           is_pinned: x.nr.is_pinned || false,
-          user_id: userId,
-          categories: x.cats.map(c => c.name),
-          tags: x.tags.map(t => t.name)
+          user_id: userId
         };
         // Only include created_at when it has a value — sending null overrides DB DEFAULT
         if (x.nr.created_at) row.created_at = x.nr.created_at;
@@ -668,16 +696,15 @@ export default async function handler(req, res) {
       // Update existing sites
       const updatedSites = [];
       for (const updateItem of toUpdateSites) {
-        const { nr, cats, tags, existingSite } = updateItem;
+        const { nr, existingSite } = updateItem;
         try {
           const updateUrl = buildSupabaseUrl(SUPABASE_URL, `sites?id=eq.${existingSite.id}&user_id=eq.${userId}`);
+          // NOTE: Do NOT include 'categories'/'tags' here — junction tables handle relations.
           const updateBody = {
             name: nr.name || existingSite.name,
             pricing: nr.pricing || existingSite.pricing,
             is_favorite: nr.is_favorite,
-            is_pinned: nr.is_pinned,
-            categories: cats.map(c => c.name),
-            tags: tags.map(t => t.name)
+            is_pinned: nr.is_pinned
           };
 
           const updateResponse = await fetch(updateUrl, {

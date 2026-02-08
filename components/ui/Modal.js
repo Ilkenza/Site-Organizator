@@ -12,10 +12,13 @@ export default function Modal({
     dataTour
 }) {
     const modalRef = useRef(null);
+    const onCloseRef = useRef(onClose);
+    // Sync ref immediately during render (not in useEffect which runs after paint)
+    onCloseRef.current = onClose;
 
     useEffect(() => {
         const handleEscape = (e) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') onCloseRef.current();
         };
 
         if (isOpen) {
@@ -27,7 +30,7 @@ export default function Modal({
             document.removeEventListener('keydown', handleEscape);
             document.body.style.overflow = 'unset';
         };
-    }, [isOpen, onClose]);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -42,7 +45,7 @@ export default function Modal({
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-            onClick={(e) => e.target === e.currentTarget && onClose()}
+            onClick={(e) => e.target === e.currentTarget && onCloseRef.current()}
         >
             <div
                 ref={modalRef}
@@ -56,7 +59,7 @@ export default function Modal({
                     <h2 className="text-lg sm:text-xl font-semibold text-app-text-primary">{title}</h2>
                     {showClose && (
                         <button
-                            onClick={onClose}
+                            onClick={() => onCloseRef.current()}
                             className="p-1 text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light rounded-lg transition-colors"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,6 +97,12 @@ export function ConfirmModal({
     variant = 'danger',
     loading = false
 }) {
+    const onConfirmRef = useRef(onConfirm);
+    const onCloseRef = useRef(onClose);
+    // Sync refs immediately during render
+    onConfirmRef.current = onConfirm;
+    onCloseRef.current = onClose;
+
     // Handle Enter key to confirm
     useEffect(() => {
         if (!isOpen) return;
@@ -101,26 +110,28 @@ export function ConfirmModal({
         const handleKeyDown = (e) => {
             if (e.key === 'Enter' && !loading) {
                 e.preventDefault();
-                onConfirm();
+                onConfirmRef.current();
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, onConfirm, loading]);
+    }, [isOpen, loading]);
 
     return (
         <Modal
             isOpen={isOpen}
-            onClose={onClose}
+            onClose={() => onCloseRef.current()}
             title={title}
             size="sm"
             footer={
                 <>
-                    <Button variant="secondary" onClick={onClose} disabled={loading}>
-                        {cancelText}
-                    </Button>
-                    <Button variant={variant} onClick={onConfirm} loading={loading}>
+                    {cancelText && (
+                        <Button variant="secondary" onClick={() => onCloseRef.current()}>
+                            {cancelText}
+                        </Button>
+                    )}
+                    <Button variant={variant} onClick={() => onConfirmRef.current()} loading={loading}>
                         {confirmText}
                     </Button>
                 </>

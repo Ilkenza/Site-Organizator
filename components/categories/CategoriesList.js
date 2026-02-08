@@ -1,7 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import { ConfirmModal } from '../ui/Modal';
+import Pagination from '../ui/Pagination';
 import InlineEditableName from './InlineEditableName';
+
+const ITEMS_PER_PAGE = 50;
 
 export default function CategoriesList({ onEdit }) {
     const {
@@ -19,6 +22,7 @@ export default function CategoriesList({ onEdit }) {
     const [categoryToDelete, setCategoryToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
     const [editingId, setEditingId] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
 
     const filteredCategories = useMemo(() => {
         if (!searchQuery.trim()) {
@@ -28,6 +32,17 @@ export default function CategoriesList({ onEdit }) {
             cat?.name?.toLowerCase().includes(searchQuery.toLowerCase())
         );
     }, [categories, searchQuery]);
+
+    // Reset to page 1 when search changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery]);
+
+    const totalPages = Math.ceil(filteredCategories.length / ITEMS_PER_PAGE);
+    const paginatedCategories = filteredCategories.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
 
     const handleSelectCategory = (e, categoryId) => {
         e.stopPropagation();
@@ -74,9 +89,7 @@ export default function CategoriesList({ onEdit }) {
     };
 
     const confirmDelete = async () => {
-        if (!categoryToDelete) {
-            return;
-        }
+        if (!categoryToDelete) return;
 
         setDeletingId(categoryToDelete.id);
         try {
@@ -134,9 +147,18 @@ export default function CategoriesList({ onEdit }) {
     return (
         <div className="p-3 sm:p-6">
 
+            {/* Item count */}
+            {filteredCategories.length > ITEMS_PER_PAGE && (
+                <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-app-text-muted">
+                        Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredCategories.length)} of {filteredCategories.length} categories
+                    </span>
+                </div>
+            )}
+
             {/* Categories Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filteredCategories.map((category) => {
+                {paginatedCategories.map((category) => {
                     const siteCount = sites.filter(site =>
                         site.categories_array?.some(c => c?.id === category.id)
                     ).length;
@@ -246,6 +268,13 @@ export default function CategoriesList({ onEdit }) {
                     );
                 })}
             </div>
+
+            {/* Pagination */}
+            <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+            />
 
             {/* Delete Confirmation Modal */}
             <ConfirmModal
