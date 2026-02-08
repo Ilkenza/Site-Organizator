@@ -1,13 +1,13 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
-import { fetchAPI } from '../lib/supabase';
-import { useAuth, supabase } from './AuthContext';
+import { fetchAPI, supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 const DashboardContext = createContext(null);
 
 // Constants
 const AUTH_CLEAR_DELAY = 500;
 const TOAST_DURATION = 3000;
-const SITES_LIMIT = 500;
+const SITES_LIMIT = 5000;
 
 // Helper to check if valid tokens exist in localStorage
 function hasValidTokensInStorage() {
@@ -103,11 +103,188 @@ export function DashboardProvider({ children }) {
     // Toast notification
     const [toast, setToast] = useState(null);
 
+    // ── Link Health Check state (persists across tab switches) ──
+    const [checkingLinks, setCheckingLinks] = useState(false);
+    const [linkCheckResult, setLinkCheckResult] = useState(null);
+    const [linkCheckError, setLinkCheckError] = useState(null);
+    const [linkCheckProgress, setLinkCheckProgress] = useState(null); // { checked, total }
+
+    // Cancellation flag for link check (ref so batches can read it instantly)
+    const linkCheckCancelledRef = useRef(false);
+
+    // Client-driven batched link check — sends small batches to API so cancel
+    // actually stops checking (no orphan serverless functions running).
+    const LINK_CHECK_BATCH = 10;
+
+    const runLinkCheck = useCallback(async () => {
+        if (checkingLinks) return;
+        setCheckingLinks(true);
+        setLinkCheckResult(null);
+        setLinkCheckError(null);
+        setLinkCheckProgress(null);
+        linkCheckCancelledRef.current = false;
+
+        try {
+            const sess = await supabase.auth.getSession();
+            const token = sess?.data?.session?.access_token;
+            if (!token) throw new Error('Not authenticated');
+
+            // Use sites already loaded in context
+            const allSites = sites.map(s => ({ id: s.id, url: s.url, name: s.name }));
+            if (allSites.length === 0) throw new Error('No sites to check');
+
+            const totalSites = allSites.length;
+            const allResults = [];
+            const startTime = Date.now();
+
+            for (let i = 0; i < totalSites; i += LINK_CHECK_BATCH) {
+                // Check cancellation BEFORE sending each batch
+                if (linkCheckCancelledRef.current) {
+                    break;
+                }
+
+                const batch = allSites.slice(i, i + LINK_CHECK_BATCH);
+
+                try {
+                    const r = await fetch('/api/links/check', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ sites: batch })
+                    });
+
+                    if (!r.ok) {
+                        const text = await r.text();
+                        console.warn('Link check batch error:', r.status, text);
+                    } else {
+                        const json = await r.json();
+                        if (json?.results) {
+                            allResults.push(...json.results);
+                        }
+                    }
+                } catch (batchErr) {
+                    console.warn('Link check batch failed:', batchErr.message);
+                }
+
+                // Update progress with ETA
+                const checked = Math.min(i + LINK_CHECK_BATCH, totalSites);
+                const elapsedMs = Date.now() - startTime;
+                const msPerSite = elapsedMs / checked;
+                const remaining = totalSites - checked;
+                const etaMs = Math.round(msPerSite * remaining);
+                setLinkCheckProgress({ checked, total: totalSites, elapsedMs, etaMs });
+            }
+
+            // Build final result (even if cancelled — show partial results)
+            if (linkCheckCancelledRef.current && allResults.length === 0) {
+                // Cancelled before any results
+                setLinkCheckError(null);
+            } else {
+                const broken = allResults.filter(r => !r.ok);
+                setLinkCheckResult({
+                    success: true,
+                    total: allResults.length,
+                    brokenCount: broken.length,
+                    broken,
+                    results: allResults,
+                    partial: linkCheckCancelledRef.current
+                });
+            }
+        } catch (err) {
+            setLinkCheckError(err.message);
+        } finally {
+            setCheckingLinks(false);
+            setLinkCheckProgress(null);
+        }
+    }, [checkingLinks, sites]);
+
+    // Cancel link check — just sets flag, next batch won't be sent
+    const cancelLinkCheck = useCallback(() => {
+        linkCheckCancelledRef.current = true;
+    }, []);
+
+    // ── Import state (persists across tab switches) ──
+    const [importing, setImporting] = useState(false);
+    const [importProgress, setImportProgress] = useState(null); // { current, total, created, errors, elapsedMs, etaMs }
+    const [importResult, setImportResult] = useState(null);
+    const [importError, setImportError] = useState(null);
+    const importAbortRef = useRef(null);
+
+    // Run import with chunked processing
+    const runImport = useCallback(async (sites, options = {}) => {
+        if (importing) return;
+        setImporting(true);
+        setImportProgress(null);
+        setImportResult(null);
+        setImportError(null);
+        const controller = new AbortController();
+        importAbortRef.current = controller;
+
+        try {
+            const { importSites } = await import('../lib/exportImport.js');
+            const result = await importSites(sites, user?.id, (progress) => {
+                setImportProgress(progress);
+            }, { ...options, signal: controller.signal });
+
+            if (result?.cancelled) {
+                const report = result?.result?.report || {};
+                const created = report.created?.length || 0;
+                setImportResult({ cancelled: true, created });
+            } else {
+                const report = result?.result?.report || {};
+                setImportResult({
+                    created: report.created?.length || 0,
+                    updated: report.updated?.length || 0,
+                    errors: report.errors?.length || 0,
+                    report
+                });
+            }
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                setImportResult({ cancelled: true, created: 0 });
+            } else {
+                setImportError(err.message);
+            }
+        } finally {
+            importAbortRef.current = null;
+            setImporting(false);
+            setImportProgress(null);
+        }
+    }, [importing, user?.id]);
+
+    // Cancel import
+    const cancelImport = useCallback(() => {
+        if (importAbortRef.current) {
+            importAbortRef.current.abort();
+        }
+    }, []);
+
+    // Clear import result (so UI can reset)
+    const clearImportResult = useCallback(() => {
+        setImportResult(null);
+        setImportError(null);
+    }, []);
+
+    // Clear import preview (when user cancels or completes)
+    const clearImportPreview = useCallback(() => {
+        setImportPreview(null);
+        setImportSource(null);
+        setUseFoldersAsCategories(true);
+    }, []);
+
     // Filters
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedTag, setSelectedTag] = useState(null);
+    const [selectedImportSource, setSelectedImportSource] = useState(null); // 'bookmarks' | 'notion' | 'file' | null
     const [sortBy, setSortBy] = useState('created_at');
+
+    // Import preview state (persists across tabs)
+    const [importPreview, setImportPreview] = useState(null);
+    const [importSource, setImportSource] = useState(null); // 'notion' | 'bookmarks' | 'file' | null
+    const [useFoldersAsCategories, setUseFoldersAsCategories] = useState(true);
     const [sortOrder, setSortOrder] = useState('desc');
     const [sortByCategories, setSortByCategories] = useState('name');
     const [sortOrderCategories, setSortOrderCategories] = useState('asc');
@@ -531,6 +708,20 @@ export function DashboardProvider({ children }) {
                     if (!siteTags.some(t => t?.id === selectedTag)) return false;
                 }
             }
+            if (selectedImportSource) {
+                // Get import source from localStorage
+                if (typeof window !== 'undefined') {
+                    try {
+                        const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
+                        const siteSource = importSources[site.url];
+                        if (siteSource !== selectedImportSource) return false;
+                    } catch {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
             return true;
         }),
         sortBy,
@@ -565,6 +756,8 @@ export function DashboardProvider({ children }) {
         setSelectedCategory,
         selectedTag,
         setSelectedTag,
+        selectedImportSource,
+        setSelectedImportSource,
         sortBy,
         setSortBy,
         sortOrder,
@@ -607,7 +800,33 @@ export function DashboardProvider({ children }) {
         deleteTag,
         // Failed relation updates map and retry helper
         failedRelationUpdates,
-        retrySiteRelations
+        retrySiteRelations,
+
+        // Link health check (persists across tabs)
+        checkingLinks,
+        linkCheckResult,
+        linkCheckError,
+        linkCheckProgress,
+        runLinkCheck,
+        cancelLinkCheck,
+
+        // Import preview state (persists across tabs)
+        importPreview,
+        setImportPreview,
+        importSource,
+        setImportSource,
+        useFoldersAsCategories,
+        setUseFoldersAsCategories,
+        clearImportPreview,
+
+        // Import (persists across tabs)
+        importing,
+        importProgress,
+        importResult,
+        importError,
+        runImport,
+        cancelImport,
+        clearImportResult
     };
 
     return (

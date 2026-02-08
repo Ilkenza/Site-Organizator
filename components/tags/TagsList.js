@@ -1,7 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import Modal, { ConfirmModal } from '../ui/Modal';
+import Pagination from '../ui/Pagination';
 import InlineEditableName from '../categories/InlineEditableName';
+
+const ITEMS_PER_PAGE = 50;
 
 export default function TagsList({ onEdit }) {
     const { tags, sites, deleteTag, updateTag, loading, searchQuery, multiSelectMode, selectedTags, setSelectedTags } = useDashboard();
@@ -9,6 +12,7 @@ export default function TagsList({ onEdit }) {
     const [tagToDelete, setTagToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
     const [editingId, setEditingId] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
 
     // Filter tags based on search query
     const filteredTags = useMemo(() => {
@@ -17,6 +21,17 @@ export default function TagsList({ onEdit }) {
             tag?.name?.toLowerCase().includes(searchQuery.toLowerCase())
         );
     }, [tags, searchQuery]);
+
+    // Reset to page 1 when search changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery]);
+
+    const totalPages = Math.ceil(filteredTags.length / ITEMS_PER_PAGE);
+    const paginatedTags = filteredTags.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+    );
 
     const handleSelectTag = (e, tagId) => {
         e.stopPropagation();
@@ -139,120 +154,138 @@ export default function TagsList({ onEdit }) {
                     </p>
                 </div>
             ) : (
-                /* Tags Grid */
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {filteredTags.map((tag, _index) => {
-                        // Count sites using this tag
-                        const siteCount = sites.filter(site =>
-                            site.tags_array?.some(t => t?.id === tag.id)
-                        ).length;
+                <>
+                    {/* Item count */}
+                    {filteredTags.length > ITEMS_PER_PAGE && (
+                        <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs text-app-text-muted">
+                                Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredTags.length)} of {filteredTags.length} tags
+                            </span>
+                        </div>
+                    )}
 
-                        return (
-                            <div
-                                key={tag.id}
-                                className={`group relative bg-app-bg-light border rounded-xl p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-app-accent/10 animate-fadeIn ${selectedTags.has(tag.id)
-                                    ? 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
-                                    : 'border-app-border hover:border-app-accent/50'
-                                    }`}
-                            >
-                                {/* Tag Content */}
-                                <div className="flex items-start justify-between gap-2 mb-3">
-                                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        {multiSelectMode && (
-                                            <div className="relative flex-shrink-0">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedTags.has(tag.id)}
-                                                    onChange={(e) => handleSelectTag(e, tag.id)}
-                                                    onMouseDown={(e) => {
-                                                        // Blur immediately after click to allow Delete key
-                                                        setTimeout(() => e.target.blur(), 0);
-                                                    }}
-                                                    className="peer w-5 h-5 rounded border-2 border-app-border bg-app-bg-secondary cursor-pointer appearance-none checked:bg-app-accent checked:border-app-accent hover:border-app-accent/70 transition-all duration-200 flex-shrink-0"
-                                                    title="Select tag for bulk actions"
-                                                    aria-label={`Select ${tag.name}`}
-                                                />
-                                                <svg className="absolute top-0.5 left-0.5 w-4 h-4 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                </svg>
-                                            </div>
-                                        )}
-                                        <div
-                                            className="w-4 h-4 rounded-full flex-shrink-0 transition-transform group-hover:scale-110 group-hover:shadow-md"
-                                            style={{ backgroundColor: tag.color || '#5B8DEE', boxShadow: `0 0 8px ${tag.color || '#5B8DEE'}40` }}
-                                            title={tag.color}
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                            {editingId === tag.id ? (
-                                                <InlineEditableName
-                                                    value={tag.name}
-                                                    onSave={(newName) => handleInlineSave(tag.id, newName)}
-                                                    onCancel={() => setEditingId(null)}
-                                                />
-                                            ) : (
-                                                <h3
-                                                    className="font-semibold text-app-text-primary truncate cursor-pointer hover:text-app-accent transition-colors active:bg-app-accent/10 sm:active:bg-transparent"
-                                                    onDoubleClick={() => setEditingId(tag.id)}
-                                                    onClick={() => {
-                                                        // Mobile: open modal; Desktop: requires double-click for inline edit
-                                                        if (!multiSelectMode && window.innerWidth < 640) {
-                                                            onEdit(tag);
-                                                        }
-                                                    }}
-                                                    title={window.innerWidth < 640 ? "Tap to edit" : "Double-click for inline edit"}
-                                                >
-                                                    {tag.name}
-                                                </h3>
+                    {/* Tags Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {paginatedTags.map((tag, _index) => {
+                            // Count sites using this tag
+                            const siteCount = sites.filter(site =>
+                                site.tags_array?.some(t => t?.id === tag.id)
+                            ).length;
+
+                            return (
+                                <div
+                                    key={tag.id}
+                                    className={`group relative bg-app-bg-light border rounded-xl p-4 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg hover:shadow-app-accent/10 animate-fadeIn ${selectedTags.has(tag.id)
+                                        ? 'border-[#A0D8FF] bg-[#A0D8FF]/10 hover:border-[#A0D8FF]'
+                                        : 'border-app-border hover:border-app-accent/50'
+                                        }`}
+                                >
+                                    {/* Tag Content */}
+                                    <div className="flex items-start justify-between gap-2 mb-3">
+                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                            {multiSelectMode && (
+                                                <div className="relative flex-shrink-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedTags.has(tag.id)}
+                                                        onChange={(e) => handleSelectTag(e, tag.id)}
+                                                        onMouseDown={(e) => {
+                                                            // Blur immediately after click to allow Delete key
+                                                            setTimeout(() => e.target.blur(), 0);
+                                                        }}
+                                                        className="peer w-5 h-5 rounded border-2 border-app-border bg-app-bg-secondary cursor-pointer appearance-none checked:bg-app-accent checked:border-app-accent hover:border-app-accent/70 transition-all duration-200 flex-shrink-0"
+                                                        title="Select tag for bulk actions"
+                                                        aria-label={`Select ${tag.name}`}
+                                                    />
+                                                    <svg className="absolute top-0.5 left-0.5 w-4 h-4 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                </div>
                                             )}
-                                            <p className="text-xs text-app-text-secondary">
-                                                {tag.created_at ? new Date(tag.created_at).toLocaleDateString() : 'N/A'}
-                                            </p>
-                                        </div>
-                                        {/* Actions - visible on mobile, hover on tablet+ */}
-                                        <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
-                                            <button
-                                                onClick={() => onEdit(tag)}
-                                                className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-accent/10 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-app-accent focus:ring-offset-2 focus:ring-offset-app-bg-light"
-                                                title="Edit tag"
-                                                aria-label="Edit tag"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                                </svg>
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteClick(tag)}
-                                                disabled={deletingId === tag.id}
-                                                className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-app-bg-light"
-                                                title="Delete tag"
-                                                aria-label="Delete tag"
-                                            >
-                                                {deletingId === tag.id ? (
-                                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                                    </svg>
+                                            <div
+                                                className="w-4 h-4 rounded-full flex-shrink-0 transition-transform group-hover:scale-110 group-hover:shadow-md"
+                                                style={{ backgroundColor: tag.color || '#5B8DEE', boxShadow: `0 0 8px ${tag.color || '#5B8DEE'}40` }}
+                                                title={tag.color}
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                {editingId === tag.id ? (
+                                                    <InlineEditableName
+                                                        value={tag.name}
+                                                        onSave={(newName) => handleInlineSave(tag.id, newName)}
+                                                        onCancel={() => setEditingId(null)}
+                                                    />
                                                 ) : (
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
+                                                    <h3
+                                                        className="font-semibold text-app-text-primary truncate cursor-pointer hover:text-app-accent transition-colors active:bg-app-accent/10 sm:active:bg-transparent"
+                                                        onDoubleClick={() => setEditingId(tag.id)}
+                                                        onClick={() => {
+                                                            // Mobile: open modal; Desktop: requires double-click for inline edit
+                                                            if (!multiSelectMode && window.innerWidth < 640) {
+                                                                onEdit(tag);
+                                                            }
+                                                        }}
+                                                        title={window.innerWidth < 640 ? "Tap to edit" : "Double-click for inline edit"}
+                                                    >
+                                                        {tag.name}
+                                                    </h3>
                                                 )}
-                                            </button>
+                                                <p className="text-xs text-app-text-secondary">
+                                                    {tag.created_at ? new Date(tag.created_at).toLocaleDateString() : 'N/A'}
+                                                </p>
+                                            </div>
+                                            {/* Actions - visible on mobile, hover on tablet+ */}
+                                            <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                                <button
+                                                    onClick={() => onEdit(tag)}
+                                                    className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-accent/10 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-app-accent focus:ring-offset-2 focus:ring-offset-app-bg-light"
+                                                    title="Edit tag"
+                                                    aria-label="Edit tag"
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteClick(tag)}
+                                                    disabled={deletingId === tag.id}
+                                                    className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-app-bg-light"
+                                                    title="Delete tag"
+                                                    aria-label="Delete tag"
+                                                >
+                                                    {deletingId === tag.id ? (
+                                                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                        </svg>
+                                                    ) : (
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                        </svg>
+                                                    )}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* Site count */}
-                                <div className="flex items-center gap-1 text-xs text-app-text-muted">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                    </svg>
-                                    <span>{siteCount} {siteCount === 1 ? 'site' : 'sites'}</span>
+                                    {/* Site count */}
+                                    <div className="flex items-center gap-1 text-xs text-app-text-muted">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                        </svg>
+                                        <span>{siteCount} {siteCount === 1 ? 'site' : 'sites'}</span>
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Pagination */}
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                    />
+                </>
             )}
 
             {/* Delete Confirmation Modal */}

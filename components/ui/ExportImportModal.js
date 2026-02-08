@@ -1,26 +1,37 @@
 import { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
+import { useDashboard } from '../../context/DashboardContext';
 
 export default function ExportImportModal({ isOpen, onClose, userId, onImportComplete }) {
-    const [importing, setImporting] = useState(false);
+    // Local state for file handling and export
     const [exporting, setExporting] = useState(false);
     const [importFile, setImportFile] = useState(null);
-    const [importPreview, setImportPreview] = useState(null);
-    const [importSource, setImportSource] = useState(null);
     const [message, setMessage] = useState('');
     const [messageType, setMessageType] = useState('info');
+    const [showDuplicates, setShowDuplicates] = useState(false);
+
+    // Import state from context (persists across tab changes)
+    const {
+        importing, importProgress, importResult, importError,
+        runImport, cancelImport, clearImportResult,
+        importPreview, setImportPreview,
+        importSource, setImportSource,
+        useFoldersAsCategories, setUseFoldersAsCategories,
+        clearImportPreview
+    } = useDashboard();
 
     // Reset state when modal closes
     useEffect(() => {
         if (!isOpen) {
             setImportFile(null);
-            setImportPreview(null);
-            setImportSource(null);
+            clearImportPreview();
             setMessage('');
             setMessageType('info');
+            setShowDuplicates(false);
+            clearImportResult();
         }
-    }, [isOpen]);
+    }, [isOpen, clearImportResult, clearImportPreview]);
 
     const handleExport = async (format = 'json') => {
         setExporting(true);
@@ -51,7 +62,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
         if (!file) return;
 
         setImportFile(file);
-        setImportSource(source !== 'auto' ? source : null);
+        setImportSource(source !== 'auto' ? source : 'file');
         setMessage('Parsing file...');
         setMessageType('info');
 
@@ -76,38 +87,57 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
             return;
         }
 
-        setImporting(true);
         setMessage('Importing sites...');
         setMessageType('info');
 
-        try {
-            const { importSites } = await import('../../lib/exportImport.js');
-            const result = await importSites(importPreview.sites, userId);
-            if (result.success) {
-                setMessage(`Successfully imported ${importPreview.sites.length} site(s)!`);
-                setMessageType('success');
-                setImportFile(null);
-                setImportPreview(null);
-
-                // Notify parent to refresh data
-                if (onImportComplete) {
-                    setTimeout(() => {
-                        onImportComplete();
-                    }, 1000);
-                }
-
-                setTimeout(() => onClose(), 2000);
-            } else {
-                setMessage('Import failed: ' + result.error);
-                setMessageType('error');
-            }
-        } catch (error) {
-            setMessage('Import error: ' + error.message);
-            setMessageType('error');
-        } finally {
-            setImporting(false);
-        }
+        await runImport(importPreview.sites, { useFoldersAsCategories, importSource: importSource || undefined });
     };
+
+    // Handle import result changes
+    useEffect(() => {
+        if (!importResult) return;
+
+        if (importResult.cancelled) {
+            setMessage(`Import cancelled. ${importResult.created} site(s) imported before cancellation.`);
+            setMessageType('warning');
+            setImportFile(null);
+            clearImportPreview();
+            if (importResult.created > 0 && onImportComplete) {
+                setTimeout(() => onImportComplete(), 500);
+            }
+            // Clear message after a delay so user can see cancellation
+            setTimeout(() => {
+                setMessage('');
+                clearImportResult();
+            }, 3000);
+        } else if (importResult.created > 0 || importResult.updated > 0) {
+            const parts = [];
+            if (importResult.created > 0) parts.push(`${importResult.created} created`);
+            if (importResult.updated > 0) parts.push(`${importResult.updated} already existed (updated)`);
+            setMessage(`${importResult.created > 0 ? '✅' : '⚠️'} Import complete: ${parts.join(', ')}.${importResult.errors > 0 ? ` ${importResult.errors} error(s).` : ''}`);
+            setMessageType(importResult.created > 0 ? 'success' : 'warning');
+            setImportFile(null);
+            clearImportPreview();
+
+            if (onImportComplete) {
+                setTimeout(() => onImportComplete(), 1000);
+            }
+        } else if (importResult.errors > 0) {
+            const firstErr = importResult.report?.errors?.[0]?.error || 'Unknown error';
+            setMessage(`❌ Import failed: ${importResult.errors} error(s). First error: ${firstErr}`);
+            setMessageType('error');
+        } else {
+            setMessage('Import completed but no sites were created or updated.');
+            setMessageType('error');
+        }
+    }, [importResult, onImportComplete, onClose]);
+
+    useEffect(() => {
+        if (importError) {
+            setMessage('Import error: ' + importError);
+            setMessageType('error');
+        }
+    }, [importError]);
 
     if (!isOpen) return null;
 
@@ -116,7 +146,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
             <div className="space-y-4">
                 {/* Message */}
                 {message && (
-                    <div className={`p-3 rounded-lg text-sm ${messageType === 'success' ? 'bg-success-bg/30 text-success-text' :
+                    <div className={`p-3 rounded-lg text-sm mt-2 ${messageType === 'success' ? 'bg-success-bg/30 text-success-text' :
                         messageType === 'error' ? 'bg-btn-danger/30 text-app-text-primary' :
                             'bg-app-accent/20 text-app-accent'
                         }`}>
@@ -167,10 +197,14 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
                             {/* Notion + Bookmarks buttons */}
                             <div className="grid grid-cols-2 gap-2">
                                 <label className="flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 border-dashed border-app-border hover:border-app-accent/50 hover:bg-app-accent/5 cursor-pointer transition-all group">
-                                    <input type="file" accept=".html,.htm,.json,.csv"
+                                    <input type="file" accept=".html,.htm,.json,.csv,.pdf"
                                         onChange={(e) => handleFileSelect(e, 'notion')}
                                         disabled={exporting || importing} className="hidden" />
-                                    <span className="text-2xl group-hover:scale-110 transition-transform">📝</span>
+                                    <div className="w-10 h-10 rounded-lg bg-app-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <svg className="w-6 h-6 text-app-accent" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
+                                        </svg>
+                                    </div>
                                     <span className="text-xs font-semibold text-app-text-primary">From Notion</span>
                                     <span className="text-[9px] text-app-text-muted text-center leading-tight">HTML export</span>
                                 </label>
@@ -178,7 +212,11 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
                                     <input type="file" accept=".html,.htm"
                                         onChange={(e) => handleFileSelect(e, 'bookmarks')}
                                         disabled={exporting || importing} className="hidden" />
-                                    <span className="text-2xl group-hover:scale-110 transition-transform">🔖</span>
+                                    <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                        </svg>
+                                    </div>
                                     <span className="text-xs font-semibold text-app-text-primary">From Bookmarks</span>
                                     <span className="text-[9px] text-app-text-muted text-center leading-tight">Chrome, Firefox, Edge</span>
                                 </label>
@@ -210,35 +248,142 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
                     ) : (
                         <div className="bg-app-bg-light rounded-lg p-4 space-y-3">
                             <div className="flex items-center gap-2 mb-1">
-                                {importSource === 'notion' && <span className="text-[10px] px-2 py-0.5 bg-app-accent/20 text-app-accent rounded-full">📝 Notion</span>}
-                                {importSource === 'bookmarks' && <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">🔖 Bookmarks</span>}
+                                {importSource === 'notion' && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-app-accent/20 text-app-accent rounded-full">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
+                                        </svg>
+                                        Notion
+                                    </span>
+                                )}
+                                {importSource === 'bookmarks' && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                        </svg>
+                                        Bookmarks
+                                    </span>
+                                )}
+                                {importSource === 'file' && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                        </svg>
+                                        File
+                                    </span>
+                                )}
                             </div>
                             <div className="text-sm">
                                 <p className="text-app-text-secondary">File: <span className="text-app-text-primary font-medium">{importFile?.name}</span></p>
-                                <p className="text-app-text-secondary">Sites to import: <span className="text-app-text-primary font-medium">{importPreview.sites?.length || 0}</span></p>
+                                <p className="text-app-text-secondary">Sites to import: <span className="text-app-text-primary font-medium">{importPreview.uniqueCount || importPreview.sites?.length || 0}</span>
+                                    {importPreview.duplicates > 0 && (
+                                        <>
+                                            <span className="text-app-text-muted text-xs ml-1">({importPreview.duplicates} duplicate{importPreview.duplicates !== 1 ? 's' : ''} removed)</span>
+                                            <button
+                                                onClick={() => setShowDuplicates(!showDuplicates)}
+                                                className="ml-2 text-xs text-app-accent hover:underline"
+                                            >
+                                                {showDuplicates ? 'Hide' : 'Show'} duplicates
+                                            </button>
+                                        </>
+                                    )}
+                                </p>
                             </div>
+
+                            {/* Duplicates list */}
+                            {showDuplicates && importPreview.duplicateGroups?.length > 0 && (
+                                <div className="mt-3 p-3 bg-app-bg-primary rounded-lg border border-app-border max-h-48 overflow-y-auto">
+                                    <p className="text-xs font-semibold text-app-text-primary mb-2">Duplicate URLs (will be merged):</p>
+                                    <div className="space-y-2">
+                                        {importPreview.duplicateGroups.map((group, idx) => (
+                                            <div key={idx} className="text-xs">
+                                                <p className="text-app-text-secondary truncate">
+                                                    <span className="text-app-accent font-medium">{group.count}×</span> {group.name}
+                                                </p>
+                                                <p className="text-app-text-muted truncate text-[10px]">{group.url}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Use folders as categories checkbox */}
+                            {importSource === 'bookmarks' && (
+                                <label className="flex items-center gap-2 cursor-pointer select-none py-1">
+                                    <input
+                                        type="checkbox"
+                                        checked={useFoldersAsCategories}
+                                        onChange={(e) => setUseFoldersAsCategories(e.target.checked)}
+                                        disabled={importing}
+                                        className="w-4 h-4 rounded border-app-border text-app-accent focus:ring-app-accent/50 bg-app-bg-primary"
+                                    />
+                                    <span className="text-sm text-app-text-secondary">
+                                        📁 Use bookmark folders as categories
+                                    </span>
+                                </label>
+                            )}
+
+                            {/* Progress bar */}
+                            {importing && importProgress && (
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs text-app-text-muted">
+                                        <span>{importProgress.created} created{importProgress.errors > 0 ? `, ${importProgress.errors} errors` : ''}</span>
+                                        <span>
+                                            {importProgress.etaMs > 0
+                                                ? importProgress.etaMs >= 60000
+                                                    ? `~${Math.ceil(importProgress.etaMs / 60000)} min left`
+                                                    : `~${Math.ceil(importProgress.etaMs / 1000)}s left`
+                                                : importProgress.current >= importProgress.total
+                                                    ? 'Finishing...'
+                                                    : 'Calculating...'}
+                                        </span>
+                                    </div>
+                                    <div className="w-full h-2.5 bg-app-bg-primary rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-app-accent rounded-full transition-all duration-500 ease-out"
+                                            style={{ width: `${Math.round((importProgress.current / importProgress.total) * 100)}%` }}
+                                        />
+                                    </div>
+                                    <div className="text-center text-[10px] text-app-text-muted">
+                                        {Math.round((importProgress.current / importProgress.total) * 100)}% — {importProgress.current}/{importProgress.total} processed
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex gap-2">
                                 <Button
                                     onClick={() => {
                                         setImportFile(null);
-                                        setImportPreview(null);
-                                        setImportSource(null);
+                                        clearImportPreview();
                                         setMessage('');
                                     }}
                                     variant="secondary"
-                                    className="flex-1"
-                                >
-                                    Change File
-                                </Button>
-                                <Button
-                                    onClick={handleImport}
+                                    className="flex-1 inline-flex items-center justify-center gap-1.5"
                                     disabled={importing}
-                                    variant="primary"
-                                    className="flex-1"
                                 >
-                                    {importing ? 'Importing...' : '� Import Sites'}
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                    </svg>
+                                    Back
                                 </Button>
+                                {importing ? (
+                                    <Button
+                                        onClick={cancelImport}
+                                        variant="danger"
+                                        className="flex-1"
+                                    >
+                                        ❌ Cancel Import
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        onClick={handleImport}
+                                        disabled={importing}
+                                        variant="primary"
+                                        className="flex-1"
+                                    >
+                                        📥 Import Sites
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     )}

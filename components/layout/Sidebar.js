@@ -13,6 +13,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
         setSelectedCategory,
         selectedTag,
         setSelectedTag,
+        selectedImportSource,
+        setSelectedImportSource,
         activeTab,
         setActiveTab,
         sites,
@@ -34,6 +36,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
 
     const [categoriesSearchQuery, setCategoriesSearchQuery] = useState('');
     const [tagsSearchQuery, setTagsSearchQuery] = useState('');
+    const [isImportSourceOpen, setIsImportSourceOpen] = useState(false);
 
     // Count favorite sites
     const favoriteCount = sites.filter(s => s.is_favorite).length;
@@ -43,23 +46,68 @@ export default function Sidebar({ isOpen = false, onClose }) {
         return '/dashboard/sites';
     };
 
+    // Calculate import source counts
+    const importSourceCounts = useMemo(() => {
+        const counts = { bookmarks: 0, notion: 0, file: 0, manual: 0 };
+        try {
+            const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
+            sites.forEach(site => {
+                const source = importSources[site.url];
+                if (source && Object.prototype.hasOwnProperty.call(counts, source)) {
+                    counts[source]++;
+                } else if (!source) {
+                    // No import source means manually added
+                    counts.manual++;
+                }
+            });
+        } catch (e) {
+            console.warn('Failed to parse import sources:', e);
+        }
+        return counts;
+    }, [sites]);
+
     // Calculate filtered counts with memoization
     const { filteredSiteCount, filteredFavoriteCount } = useMemo(() => {
-        if (!selectedCategory && !selectedTag) {
+        if (!selectedCategory && !selectedTag && !selectedImportSource) {
             return { filteredSiteCount: null, filteredFavoriteCount: null };
         }
 
         // Filter all sites
         let filtered = sites;
-        if (selectedCategory) {
-            filtered = filtered.filter(s =>
-                s.categories_array?.some(cat => cat?.id === selectedCategory)
-            );
+
+        if (selectedImportSource) {
+            try {
+                const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
+                filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
+            } catch (e) {
+                console.warn('Failed to filter by import source:', e);
+            }
         }
+
+        if (selectedCategory) {
+            if (selectedCategory === 'uncategorized') {
+                filtered = filtered.filter(s => {
+                    const cats = s.categories_array || s.categories || s.site_categories?.map(sc => sc.category) || [];
+                    return cats.length === 0;
+                });
+            } else {
+                filtered = filtered.filter(s =>
+                    s.categories_array?.some(cat => cat?.id === selectedCategory)
+                );
+            }
+        }
+
         if (selectedTag) {
-            filtered = filtered.filter(s =>
-                s.tags_array?.some(tag => tag?.id === selectedTag)
-            );
+            if (selectedTag === 'untagged') {
+                filtered = filtered.filter(s => {
+                    const t = s.tags_array || s.tags || s.site_tags?.map(st => st.tag) || [];
+                    return t.length === 0;
+                });
+            } else {
+                filtered = filtered.filter(s =>
+                    s.tags_array?.some(tag => tag?.id === selectedTag)
+                );
+            }
         }
 
         // Filter favorites only
@@ -69,7 +117,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
             filteredSiteCount: filtered.length,
             filteredFavoriteCount: favFiltered.length
         };
-    }, [sites, selectedCategory, selectedTag]);
+    }, [sites, selectedCategory, selectedTag, selectedImportSource]);
 
     return (
         <>
@@ -193,7 +241,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     </span>
                                     {tab.count !== null && (
                                         <span className="flex items-center gap-1">
-                                            {tab.filteredCount !== null && tab.filteredCount !== undefined && (tab.id === 'sites' || tab.id === 'favorites') && (selectedCategory || selectedTag) && activeTab === tab.id ? (
+                                            {tab.filteredCount !== null && tab.filteredCount !== undefined && (tab.id === 'sites' || tab.id === 'favorites') && (selectedCategory || selectedTag || selectedImportSource) && activeTab === tab.id ? (
                                                 <>
                                                     <span className={`text-xs px-1.5 py-0.5 rounded-full bg-app-accent text-app-bg-primary`}>
                                                         {tab.filteredCount}
@@ -371,6 +419,24 @@ export default function Sidebar({ isOpen = false, onClose }) {
                 {/* Categories Filter */}
                 {(activeTab === 'sites' || activeTab === 'favorites') && (
                     <div className="p-3 sm:p-4 flex-1 overflow-y-auto  sm:max-h-none" data-tour="filters">
+                        {/* Reset All Filters Button */}
+                        {(selectedCategory || selectedTag || selectedImportSource) && (
+                            <button
+                                onClick={() => {
+                                    setSelectedCategory(null);
+                                    setSelectedTag(null);
+                                    setSelectedImportSource(null);
+                                }}
+                                className="w-full mb-4 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Reset All Filters
+                            </button>
+                        )}
+
+                        {/* Categories */}
                         <h3 className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 flex items-center gap-2">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -398,11 +464,51 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                 All Categories
                             </button>
                             {(() => {
+                                // Total uncategorized count
                                 const uncatCount = sites.filter(site => {
                                     const cats = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
                                     return cats.length === 0;
                                 }).length;
-                                return uncatCount > 0 ? (
+
+                                // Filtered uncategorized count (when tag or import source is selected)
+                                const hasOtherFilter = selectedTag || selectedImportSource;
+                                let filteredUncatCount = uncatCount;
+
+                                if (hasOtherFilter) {
+                                    let filtered = sites.filter(site => {
+                                        const cats = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
+                                        return cats.length === 0;
+                                    });
+
+                                    if (selectedImportSource) {
+                                        try {
+                                            const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
+                                            filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
+                                        } catch (e) { /* ignore */ }
+                                    }
+
+                                    if (selectedTag) {
+                                        if (selectedTag === 'untagged') {
+                                            filtered = filtered.filter(s => {
+                                                const t = s.tags_array || s.tags || s.site_tags?.map(st => st.tag) || [];
+                                                return t.length === 0;
+                                            });
+                                        } else {
+                                            filtered = filtered.filter(s =>
+                                                s.tags_array?.some(tag => tag?.id === selectedTag)
+                                            );
+                                        }
+                                    }
+
+                                    filteredUncatCount = filtered.length;
+                                }
+
+                                // Format count: show "filtered/total" only in sites tab, otherwise just filtered count
+                                const displayCount = (activeTab === 'sites' && hasOtherFilter)
+                                    ? `${filteredUncatCount}/${uncatCount}`
+                                    : (hasOtherFilter ? filteredUncatCount : uncatCount);
+
+                                return (
                                     <button
                                         onClick={() => setSelectedCategory('uncategorized')}
                                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
@@ -414,21 +520,60 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
                                         <span className="truncate flex-1">Uncategorized</span>
                                         <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedCategory === 'uncategorized'
-                                                ? 'bg-amber-500/30 text-amber-400'
-                                                : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
+                                            ? 'bg-amber-500/30 text-amber-400'
+                                            : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
                                             }`}>
-                                            {uncatCount}
+                                            {displayCount}
                                         </span>
                                     </button>
-                                ) : null;
+                                );
                             })()}
                             {categories
                                 .filter(cat => cat?.name?.toLowerCase().includes(categoriesSearchQuery.toLowerCase()))
                                 .sort((a, b) => a.name.localeCompare(b.name))
                                 .map(cat => {
+                                    // Total count for this category
                                     const siteCount = sites.filter(site =>
                                         site.categories_array?.some(c => c?.id === cat.id)
                                     ).length;
+
+                                    // Filtered count when other filters are active
+                                    const hasOtherFilter = selectedTag || selectedImportSource;
+                                    let filteredCount = siteCount;
+
+                                    if (hasOtherFilter) {
+                                        let filtered = sites.filter(site =>
+                                            site.categories_array?.some(c => c?.id === cat.id)
+                                        );
+
+                                        if (selectedImportSource) {
+                                            try {
+                                                const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
+                                                filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
+                                            } catch (e) { /* ignore */ }
+                                        }
+
+                                        if (selectedTag) {
+                                            if (selectedTag === 'untagged') {
+                                                filtered = filtered.filter(s => {
+                                                    const t = s.tags_array || s.tags || s.site_tags?.map(st => st.tag) || [];
+                                                    return t.length === 0;
+                                                });
+                                            } else {
+                                                filtered = filtered.filter(s =>
+                                                    s.tags_array?.some(tag => tag?.id === selectedTag)
+                                                );
+                                            }
+                                        }
+
+                                        filteredCount = filtered.length;
+                                    }
+
+                                    // Format count: show "filtered/total" only in sites tab, otherwise just filtered count
+                                    const displayCount = (activeTab === 'sites' && hasOtherFilter)
+                                        ? `${filteredCount}/${siteCount}`
+                                        : (hasOtherFilter ? filteredCount : siteCount);
+
                                     return (
                                         <button
                                             key={cat.id}
@@ -448,7 +593,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 ? 'bg-app-accent/30 text-app-accent'
                                                 : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
                                                 }`}>
-                                                {siteCount}
+                                                {displayCount}
                                             </span>
                                         </button>
                                     );
@@ -456,92 +601,281 @@ export default function Sidebar({ isOpen = false, onClose }) {
                         </div>
 
                         {/* Tags Filter */}
-                        {(activeTab === 'sites' || activeTab === 'favorites') && (
-                            <>
-                                <h3 className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 mt-6 flex items-center gap-2">
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                                    </svg>
-                                    Filter by Tag
-                                </h3>
-                                <div className="mb-3 relative">
-                                    <input
-                                        type="text"
-                                        placeholder="Search..."
-                                        value={tagsSearchQuery}
-                                        onChange={(e) => setTagsSearchQuery(e.target.value)}
-                                        className="w-full px-2 py-1.5 bg-app-bg-light border border-app-border rounded text-xs text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-1 focus:ring-app-accent"
-                                    />
-                                </div>
-                                <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
-                                    <button
-                                        onClick={() => setSelectedTag(null)}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all font-medium
+                        <h3 className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 mt-6 flex items-center gap-2">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                            Filter by Tag
+                        </h3>
+                        <div className="mb-3 relative">
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={tagsSearchQuery}
+                                onChange={(e) => setTagsSearchQuery(e.target.value)}
+                                className="w-full px-2 py-1.5 bg-app-bg-light border border-app-border rounded text-xs text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-1 focus:ring-app-accent"
+                            />
+                        </div>
+                        <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
+                            <button
+                                onClick={() => setSelectedTag(null)}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all font-medium
                       ${!selectedTag
-                                                ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
-                                                : 'text-app-text-secondary hover:bg-app-bg-light/50 hover:text-app-text-primary border border-transparent'
+                                        ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light/50 hover:text-app-text-primary border border-transparent'
+                                    }`}
+                            >
+                                All Tags
+                            </button>
+                            {(() => {
+                                // Total untagged count
+                                const untagCount = sites.filter(site => {
+                                    const t = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
+                                    return t.length === 0;
+                                }).length;
+
+                                // Filtered untagged count (when category or import source is selected)
+                                const hasOtherFilter = selectedCategory || selectedImportSource;
+                                let filteredUntagCount = untagCount;
+
+                                if (hasOtherFilter) {
+                                    let filtered = sites.filter(site => {
+                                        const t = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
+                                        return t.length === 0;
+                                    });
+
+                                    if (selectedImportSource) {
+                                        try {
+                                            const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
+                                            filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
+                                        } catch (e) { /* ignore */ }
+                                    }
+
+                                    if (selectedCategory) {
+                                        if (selectedCategory === 'uncategorized') {
+                                            filtered = filtered.filter(s => {
+                                                const cats = s.categories_array || s.categories || s.site_categories?.map(sc => sc.category) || [];
+                                                return cats.length === 0;
+                                            });
+                                        } else {
+                                            filtered = filtered.filter(s =>
+                                                s.categories_array?.some(cat => cat?.id === selectedCategory)
+                                            );
+                                        }
+                                    }
+
+                                    filteredUntagCount = filtered.length;
+                                }
+
+                                // Format count: show "filtered/total" only in sites tab, otherwise just filtered count
+                                const displayCount = (activeTab === 'sites' && hasOtherFilter)
+                                    ? `${filteredUntagCount}/${untagCount}`
+                                    : (hasOtherFilter ? filteredUntagCount : untagCount);
+
+                                return (
+                                    <button
+                                        onClick={() => setSelectedTag('untagged')}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
+                      ${selectedTag === 'untagged'
+                                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
+                                                : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
                                             }`}
                                     >
-                                        All Tags
+                                        <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
+                                        <span className="truncate flex-1">Untagged</span>
+                                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedTag === 'untagged'
+                                            ? 'bg-amber-500/30 text-amber-400'
+                                            : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
+                                            }`}>
+                                            {displayCount}
+                                        </span>
                                     </button>
-                                    {(() => {
-                                        const untagCount = sites.filter(site => {
-                                            const t = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
-                                            return t.length === 0;
-                                        }).length;
-                                        return untagCount > 0 ? (
-                                            <button
-                                                onClick={() => setSelectedTag('untagged')}
-                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
-                      ${selectedTag === 'untagged'
-                                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
-                                                        : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
-                                                    }`}
-                                            >
-                                                <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
-                                                <span className="truncate flex-1">Untagged</span>
-                                                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedTag === 'untagged'
-                                                        ? 'bg-amber-500/30 text-amber-400'
-                                                        : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
-                                                    }`}>
-                                                    {untagCount}
-                                                </span>
-                                            </button>
-                                        ) : null;
-                                    })()}
-                                    {tags
-                                        .filter(tag => tag?.name?.toLowerCase().includes(tagsSearchQuery.toLowerCase()))
-                                        .sort((a, b) => a.name.localeCompare(b.name))
-                                        .map(tag => {
-                                            const siteCount = sites.filter(site =>
-                                                site.tags_array?.some(t => t?.id === tag.id)
-                                            ).length;
-                                            return (
-                                                <button
-                                                    key={tag.id}
-                                                    onClick={() => setSelectedTag(selectedTag === tag.id ? null : tag.id)}
-                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
+                                );
+                            })()}
+                            {tags
+                                .filter(tag => tag?.name?.toLowerCase().includes(tagsSearchQuery.toLowerCase()))
+                                .sort((a, b) => a.name.localeCompare(b.name))
+                                .map(tag => {
+                                    // Total count for this tag
+                                    const siteCount = sites.filter(site =>
+                                        site.tags_array?.some(t => t?.id === tag.id)
+                                    ).length;
+
+                                    // Filtered count when other filters are active
+                                    const hasOtherFilter = selectedCategory || selectedImportSource;
+                                    let filteredCount = siteCount;
+
+                                    if (hasOtherFilter) {
+                                        let filtered = sites.filter(site =>
+                                            site.tags_array?.some(t => t?.id === tag.id)
+                                        );
+
+                                        if (selectedImportSource) {
+                                            try {
+                                                const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
+                                                filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
+                                            } catch (e) { /* ignore */ }
+                                        }
+
+                                        if (selectedCategory) {
+                                            if (selectedCategory === 'uncategorized') {
+                                                filtered = filtered.filter(s => {
+                                                    const cats = s.categories_array || s.categories || s.site_categories?.map(sc => sc.category) || [];
+                                                    return cats.length === 0;
+                                                });
+                                            } else {
+                                                filtered = filtered.filter(s =>
+                                                    s.categories_array?.some(cat => cat?.id === selectedCategory)
+                                                );
+                                            }
+                                        }
+
+                                        filteredCount = filtered.length;
+                                    }
+
+                                    // Format count: show "filtered/total" only in sites tab, otherwise just filtered count
+                                    const displayCount = (activeTab === 'sites' && hasOtherFilter)
+                                        ? `${filteredCount}/${siteCount}`
+                                        : (hasOtherFilter ? filteredCount : siteCount);
+
+                                    return (
+                                        <button
+                                            key={tag.id}
+                                            onClick={() => setSelectedTag(selectedTag === tag.id ? null : tag.id)}
+                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
                       ${selectedTag === tag.id
-                                                            ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm backdrop-blur-sm'
-                                                            : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
-                                                        }`}
-                                                >
-                                                    <span
-                                                        className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 transition-transform group-hover:scale-110"
-                                                        style={{ backgroundColor: tag.color || '#5B8DEE' }}
-                                                    />
-                                                    <span className="truncate flex-1">{tag.name}</span>
-                                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedTag === tag.id
-                                                        ? 'bg-app-accent/30 text-app-accent'
-                                                        : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
-                                                        }`}>
-                                                        {siteCount}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                </div>
-                            </>
+                                                    ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm backdrop-blur-sm'
+                                                    : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
+                                                }`}
+                                        >
+                                            <span
+                                                className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 transition-transform group-hover:scale-110"
+                                                style={{ backgroundColor: tag.color || '#5B8DEE' }}
+                                            />
+                                            <span className="truncate flex-1">{tag.name}</span>
+                                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedTag === tag.id
+                                                ? 'bg-app-accent/30 text-app-accent'
+                                                : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
+                                                }`}>
+                                                {displayCount}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                        </div>
+
+                        {/* Import Source Filter */}
+                        <button
+                            onClick={() => setIsImportSourceOpen(!isImportSourceOpen)}
+                            className="w-full text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 mt-6 flex items-center justify-between gap-2 hover:text-app-text-secondary transition-colors"
+                        >
+                            <span className="flex items-center gap-2">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                                Import Source
+                            </span>
+                            <svg
+                                className={`w-4 h-4 transition-transform ${isImportSourceOpen ? 'rotate-180' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        {isImportSourceOpen && (
+                            <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
+                                <button
+                                    onClick={() => setSelectedImportSource(null)}
+                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${!selectedImportSource
+                                        ? 'bg-app-accent/10 text-app-accent border border-app-accent/30'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
+                                        }`}
+                                >
+                                    <span>All Sources</span>
+                                </button>
+                                <button
+                                    onClick={() => setSelectedImportSource('manual')}
+                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${selectedImportSource === 'manual'
+                                        ? 'bg-green-500/10 text-green-400 border border-green-500/30'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        <span>Manual</span>
+                                    </span>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedImportSource === 'manual'
+                                        ? 'bg-green-500/30 text-green-400'
+                                        : 'bg-app-bg-light text-app-text-muted'
+                                        }`}>
+                                        {importSourceCounts.manual}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => setSelectedImportSource('bookmarks')}
+                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${selectedImportSource === 'bookmarks'
+                                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                        </svg>
+                                        <span>Bookmarks</span>
+                                    </span>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedImportSource === 'bookmarks'
+                                        ? 'bg-amber-500/30 text-amber-400'
+                                        : 'bg-app-bg-light text-app-text-muted'
+                                        }`}>
+                                        {importSourceCounts.bookmarks}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => setSelectedImportSource('notion')}
+                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${selectedImportSource === 'notion'
+                                        ? 'bg-app-accent/10 text-app-accent border border-app-accent/30'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
+                                        </svg>
+                                        <span>Notion</span>
+                                    </span>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedImportSource === 'notion'
+                                        ? 'bg-app-accent/30 text-app-accent'
+                                        : 'bg-app-bg-light text-app-text-muted'
+                                        }`}>
+                                        {importSourceCounts.notion}
+                                    </span>
+                                </button>
+                                <button
+                                    onClick={() => setSelectedImportSource('file')}
+                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${selectedImportSource === 'file'
+                                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
+                                        }`}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                        </svg>
+                                        <span>File</span>
+                                    </span>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedImportSource === 'file'
+                                        ? 'bg-purple-500/30 text-purple-400'
+                                        : 'bg-app-bg-light text-app-text-muted'
+                                        }`}>
+                                        {importSourceCounts.file}
+                                    </span>
+                                </button>
+                            </div>
                         )}
                     </div>
                 )}

@@ -111,6 +111,8 @@ export default function Header({ onAddClick, onMenuClick }) {
     // Bulk delete modal state
     const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
     const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [bulkDeleteProgress, setBulkDeleteProgress] = useState({ done: 0, total: 0 });
+    const bulkDeleteCancelledRef = useRef(false);
     const [usageWarning, setUsageWarning] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -333,26 +335,38 @@ export default function Header({ onAddClick, onMenuClick }) {
 
     const confirmBulkDelete = async () => {
         const selectedIds = getSelectedIds();
-        const itemName = activeTab.slice(0, -1); // Remove 's' from end
+        const itemName = activeTab.slice(0, -1);
+        const total = selectedIds.size;
 
         setBulkDeleting(true);
+        setBulkDeleteProgress({ done: 0, total });
+        bulkDeleteCancelledRef.current = false;
+
         try {
             const deleteFunc = activeTab === 'sites' ? deleteSite : activeTab === 'categories' ? deleteCategory : deleteTag;
             let successCount = 0;
 
             for (const id of selectedIds) {
+                // Check if user cancelled
+                if (bulkDeleteCancelledRef.current) {
+                    showToast(`⏹ Stopped — deleted ${successCount}/${total} ${itemName}(s)`, 'info');
+                    break;
+                }
                 try {
                     await deleteFunc(id);
                     successCount++;
+                    setBulkDeleteProgress({ done: successCount, total });
                 } catch (err) {
                     console.error(`Failed to delete ${itemName}:`, err);
                 }
             }
 
-            if (successCount === selectedIds.size) {
-                showToast(`✓ Deleted ${successCount} ${itemName}(s) successfully`, 'success');
-            } else {
-                showToast(`⚠ Deleted ${successCount}/${selectedIds.size} ${itemName}(s)`, 'warning');
+            if (!bulkDeleteCancelledRef.current) {
+                if (successCount === total) {
+                    showToast(`✓ Deleted ${successCount} ${itemName}(s) successfully`, 'success');
+                } else {
+                    showToast(`⚠ Deleted ${successCount}/${total} ${itemName}(s)`, 'warning');
+                }
             }
 
             // Clear selection
@@ -365,6 +379,16 @@ export default function Header({ onAddClick, onMenuClick }) {
             showToast(`✗ Failed to delete items: ${err.message}`, 'error');
         } finally {
             setBulkDeleting(false);
+            setBulkDeleteProgress({ done: 0, total: 0 });
+        }
+    };
+
+    const cancelBulkDelete = () => {
+        if (bulkDeleting) {
+            // Signal the loop to stop
+            bulkDeleteCancelledRef.current = true;
+        } else {
+            setBulkDeleteModalOpen(false);
         }
     };
 
@@ -841,14 +865,16 @@ export default function Header({ onAddClick, onMenuClick }) {
 
             <ConfirmModal
                 isOpen={bulkDeleteModalOpen}
-                onClose={() => setBulkDeleteModalOpen(false)}
-                onConfirm={confirmBulkDelete}
-                title="Delete Selected Items"
-                message={`Are you sure you want to delete ${getSelectedIds().size} ${activeTab.slice(0, -1)}(s)? This action cannot be undone.`}
-                confirmText="Delete"
-                cancelText="Cancel"
-                variant="danger"
-                loading={bulkDeleting}
+                onClose={cancelBulkDelete}
+                onConfirm={bulkDeleting ? cancelBulkDelete : confirmBulkDelete}
+                title={bulkDeleting ? `Deleting... ${bulkDeleteProgress.done}/${bulkDeleteProgress.total}` : 'Delete Selected Items'}
+                message={bulkDeleting
+                    ? `Deleting ${activeTab.slice(0, -1)}(s)... ${bulkDeleteProgress.done} of ${bulkDeleteProgress.total} done. Press Stop, ESC or ✕ to stop.`
+                    : `Are you sure you want to delete ${getSelectedIds().size} ${activeTab.slice(0, -1)}(s)? This action cannot be undone.`
+                }
+                confirmText={bulkDeleting ? 'Stop' : 'Delete'}
+                cancelText={bulkDeleting ? '' : 'Cancel'}
+                variant={bulkDeleting ? 'secondary' : 'danger'}
             />
         </>
     );

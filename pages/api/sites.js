@@ -25,7 +25,7 @@ const ERROR_MESSAGES = {
 // Configuration
 const QUERY_CONFIG = {
   DEFAULT_LIMIT: 100,
-  MAX_LIMIT: 500,
+  MAX_LIMIT: 5000,
   DEFAULT_PAGE: 1,
   ALLOWED_POST_FIELDS: ['name', 'url', 'pricing', 'user_id']
 };
@@ -438,7 +438,7 @@ const fetchSites = async (url, anonKey, authKey) => {
 };
 
 /**
- * Fetch site categories with relations
+ * Fetch site categories with relations (in batches to avoid URI Too Long error)
  * @param {string} baseUrl - Supabase base URL
  * @param {string} anonKey - Anon key
  * @param {string} relKey - Service role key
@@ -446,51 +446,56 @@ const fetchSites = async (url, anonKey, authKey) => {
  * @returns {Promise<Object>} Categories data and debug info
  */
 const fetchSiteCategories = async (baseUrl, anonKey, relKey, siteIds) => {
-  const rawInList = siteIds.map(id => `"${id}"`).join(',');
-  const encodedInList = encodeURIComponent(rawInList);
-  const scUrl = `${baseUrl}/rest/v1/site_categories?select=*,category:categories(*)&site_id=in.(${encodedInList})`;
-
+  const BATCH_SIZE = 100; // Limit to avoid 414 URI Too Long
   let siteCategories = [];
-  let scDebug = null;
+  let scDebug = [];
 
-  try {
-    const scRes = await fetch(scUrl, {
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${relKey}`,
-        Accept: 'application/json'
+  // Process in batches
+  for (let i = 0; i < siteIds.length; i += BATCH_SIZE) {
+    const batch = siteIds.slice(i, i + BATCH_SIZE);
+    const rawInList = batch.map(id => `"${id}"`).join(',');
+    const encodedInList = encodeURIComponent(rawInList);
+    const scUrl = `${baseUrl}/rest/v1/site_categories?select=*,category:categories(*)&site_id=in.(${encodedInList})`;
+
+    try {
+      const scRes = await fetch(scUrl, {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${relKey}`,
+          Accept: 'application/json'
+        }
+      });
+
+      const scText = await scRes.text();
+      const batchDebug = {
+        batch: Math.floor(i / BATCH_SIZE) + 1,
+        ok: scRes.ok,
+        status: scRes.status,
+        statusText: scRes.statusText
+      };
+
+      if (scRes.ok) {
+        try {
+          const batchData = JSON.parse(scText);
+          siteCategories.push(...batchData);
+        } catch (e) {
+          batchDebug.parseError = String(e);
+        }
+      } else {
+        console.warn(`site_categories batch ${batchDebug.batch} failed`, batchDebug);
+        scDebug.push(batchDebug);
       }
-    });
-
-    const scText = await scRes.text();
-    scDebug = {
-      ok: scRes.ok,
-      status: scRes.status,
-      statusText: scRes.statusText,
-      body: scText,
-      url: scUrl
-    };
-
-    if (scRes.ok) {
-      try {
-        siteCategories = JSON.parse(scText);
-      } catch (e) {
-        siteCategories = [];
-        scDebug.parseError = String(e);
-      }
-    } else {
-      console.warn('site_categories fetch failed', scDebug);
+    } catch (err) {
+      console.warn(`site_categories batch error at ${i}`, err);
+      scDebug.push({ error: String(err), index: i });
     }
-  } catch (err) {
-    console.warn('site_categories fetch error', err);
-    scDebug = { error: String(err) };
   }
 
-  return { siteCategories, scDebug };
+  return { siteCategories, scDebug: scDebug.length > 0 ? scDebug : null };
 };
 
 /**
- * Fetch site tags with relations
+ * Fetch site tags with relations (in batches to avoid URI Too Long error)
  * @param {string} baseUrl - Supabase base URL
  * @param {string} anonKey - Anon key
  * @param {string} relKey - Service role key
@@ -498,47 +503,52 @@ const fetchSiteCategories = async (baseUrl, anonKey, relKey, siteIds) => {
  * @returns {Promise<Object>} Tags data and debug info
  */
 const fetchSiteTags = async (baseUrl, anonKey, relKey, siteIds) => {
-  const rawInList = siteIds.map(id => `"${id}"`).join(',');
-  const encodedInList = encodeURIComponent(rawInList);
-  const stUrl = `${baseUrl}/rest/v1/site_tags?select=*,tag:tags(*)&site_id=in.(${encodedInList})`;
-
+  const BATCH_SIZE = 100; // Limit to avoid 414 URI Too Long
   let siteTags = [];
-  let stDebug = null;
+  let stDebug = [];
 
-  try {
-    const stRes = await fetch(stUrl, {
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${relKey}`,
-        Accept: 'application/json'
+  // Process in batches
+  for (let i = 0; i < siteIds.length; i += BATCH_SIZE) {
+    const batch = siteIds.slice(i, i + BATCH_SIZE);
+    const rawInList = batch.map(id => `"${id}"`).join(',');
+    const encodedInList = encodeURIComponent(rawInList);
+    const stUrl = `${baseUrl}/rest/v1/site_tags?select=*,tag:tags(*)&site_id=in.(${encodedInList})`;
+
+    try {
+      const stRes = await fetch(stUrl, {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${relKey}`,
+          Accept: 'application/json'
+        }
+      });
+
+      const stText = await stRes.text();
+      const batchDebug = {
+        batch: Math.floor(i / BATCH_SIZE) + 1,
+        ok: stRes.ok,
+        status: stRes.status,
+        statusText: stRes.statusText
+      };
+
+      if (stRes.ok) {
+        try {
+          const batchData = JSON.parse(stText);
+          siteTags.push(...batchData);
+        } catch (e) {
+          batchDebug.parseError = String(e);
+        }
+      } else {
+        console.warn(`site_tags batch ${batchDebug.batch} failed`, batchDebug);
+        stDebug.push(batchDebug);
       }
-    });
-
-    const stText = await stRes.text();
-    stDebug = {
-      ok: stRes.ok,
-      status: stRes.status,
-      statusText: stRes.statusText,
-      body: stText,
-      url: stUrl
-    };
-
-    if (stRes.ok) {
-      try {
-        siteTags = JSON.parse(stText);
-      } catch (e) {
-        siteTags = [];
-        stDebug.parseError = String(e);
-      }
-    } else {
-      console.warn('site_tags fetch failed', stDebug);
+    } catch (err) {
+      console.warn(`site_tags batch error at ${i}`, err);
+      stDebug.push({ error: String(err), index: i });
     }
-  } catch (err) {
-    console.warn('site_tags fetch error', err);
-    stDebug = { error: String(err) };
   }
 
-  return { siteTags, stDebug };
+  return { siteTags, stDebug: stDebug.length > 0 ? stDebug : null };
 };
 
 /**

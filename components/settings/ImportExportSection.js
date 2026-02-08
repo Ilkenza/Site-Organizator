@@ -1,10 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useDashboard } from '../../context/DashboardContext';
 
 export default function ImportExportSection({ user, fetchData, showToast }) {
-    const [importPreview, setImportPreview] = useState(null);
     const [importMessage, setImportMessage] = useState(null);
-    const [importLoading, setImportLoading] = useState(false);
-    const [importSource, setImportSource] = useState(null); // 'notion' | 'bookmarks' | null
+    const [showDuplicates, setShowDuplicates] = useState(false);
+
+    // Import state from context (persists across tab changes)
+    const {
+        importing, importProgress, importResult, importError,
+        runImport, cancelImport, clearImportResult,
+        importPreview, setImportPreview,
+        importSource, setImportSource,
+        useFoldersAsCategories, setUseFoldersAsCategories,
+        clearImportPreview
+    } = useDashboard();
 
     // Export
     const handleExport = async (format = 'json') => {
@@ -48,52 +57,45 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
             return;
         }
 
-        setImportLoading(true);
-        try {
-            const { importSites } = await import('../../lib/exportImport.js');
-            const result = await importSites(importPreview.sites, user?.id);
+        await runImport(importPreview.sites, { useFoldersAsCategories, importSource: importSource || undefined });
+    };
 
-            // Show detailed report
-            const report = result?.result?.report || {};
-            const created = report.created?.length || 0;
-            const updated = report.updated?.length || 0;
-            const skipped = report.skipped?.length || 0;
-            const errors = report.errors?.length || 0;
+    // Handle import result changes
+    useEffect(() => {
+        if (!importResult) return;
 
-
-            if (created > 0 || updated > 0) {
-                const parts = [];
-                if (created > 0) parts.push(`${created} created`);
-                if (updated > 0) parts.push(`${updated} updated`);
-                setImportMessage({
-                    type: 'success',
-                    text: `✅ Import successful: ${parts.join(', ')}. ${errors > 0 ? `${errors} error(s).` : ''}`
-                });
-            } else if (skipped > 0) {
-                setImportMessage({
-                    type: 'warning',
-                    text: `⚠️ All ${skipped} site(s) skipped. ${errors > 0 ? `${errors} error(s).` : ''}`
-                });
-            } else {
-                setImportMessage({
-                    type: 'error',
-                    text: `❌ No sites imported. ${errors > 0 ? `${errors} error(s) occurred.` : 'Check console for details.'}`
-                });
-            }
-
+        if (importResult.cancelled) {
+            setImportMessage({ type: 'warning', text: `Import cancelled. ${importResult.created} site(s) imported before cancellation.` });
+            setImportPreview(null);
+            setImportSource(null);
+            if (importResult.created > 0) setTimeout(() => fetchData(), 500);
+        } else if (importResult.created > 0 || importResult.updated > 0) {
+            const parts = [];
+            if (importResult.created > 0) parts.push(`${importResult.created} created`);
+            if (importResult.updated > 0) parts.push(`${importResult.updated} already existed (updated)`);
+            setImportMessage({
+                type: importResult.created > 0 ? 'success' : 'warning',
+                text: `${importResult.created > 0 ? '✅' : '⚠️'} Import complete: ${parts.join(', ')}. ${importResult.errors > 0 ? `${importResult.errors} error(s).` : ''}`
+            });
             setImportPreview(null);
             setTimeout(() => {
-                if (created > 0) {
+                if (importResult.created > 0) {
                     fetchData();
                 }
             }, 2000);
-        } catch (err) {
-            console.error('Import error:', err);
-            setImportMessage({ type: 'error', text: err.message });
-        } finally {
-            setImportLoading(false);
+        } else if (importResult.errors > 0) {
+            setImportMessage({
+                type: 'error',
+                text: `❌ No sites imported. ${importResult.errors} error(s) occurred.`
+            });
         }
-    };
+    }, [importResult, fetchData]);
+
+    useEffect(() => {
+        if (importError) {
+            setImportMessage({ type: 'error', text: importError });
+        }
+    }, [importError]);
 
     return (
         <>
@@ -151,7 +153,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                             <div className="relative">
                                 <input
                                     type="file"
-                                    accept=".html,.htm,.json,.csv"
+                                    accept=".html,.htm,.json,.csv,.pdf"
                                     onChange={(e) => {
                                         handleFileSelect(e.target.files?.[0], 'notion');
                                         setImportSource('notion');
@@ -164,7 +166,11 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                     htmlFor="import-notion-input"
                                     className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-app-border hover:border-app-accent/50 hover:bg-app-accent/5 cursor-pointer transition-all duration-200 group"
                                 >
-                                    <span className="text-3xl group-hover:scale-110 transition-transform">📝</span>
+                                    <div className="w-12 h-12 rounded-lg bg-app-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <svg className="w-7 h-7 text-app-accent" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
+                                        </svg>
+                                    </div>
                                     <span className="text-sm font-semibold text-app-text-primary">Import from Notion</span>
                                     <span className="text-[10px] text-app-text-muted text-center">Export your Notion page as HTML and upload it here</span>
                                 </label>
@@ -187,7 +193,11 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                     htmlFor="import-bookmarks-input"
                                     className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-app-border hover:border-amber-500/50 hover:bg-amber-500/5 cursor-pointer transition-all duration-200 group"
                                 >
-                                    <span className="text-3xl group-hover:scale-110 transition-transform">🔖</span>
+                                    <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <svg className="w-7 h-7 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                        </svg>
+                                    </div>
                                     <span className="text-sm font-semibold text-app-text-primary">Import from Bookmarks</span>
                                     <span className="text-[10px] text-app-text-muted text-center">Chrome, Firefox, Edge, Safari — export bookmarks as HTML</span>
                                 </label>
@@ -206,7 +216,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                 accept=".json,.csv,.html,.htm"
                                 onChange={(e) => {
                                     handleFileSelect(e.target.files?.[0], 'auto');
-                                    setImportSource(null);
+                                    setImportSource('file');
                                     e.target.value = '';
                                 }}
                                 className="hidden"
@@ -229,22 +239,119 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                 {importPreview && (
                     <div className="mb-4 p-3 bg-app-bg-primary rounded-lg border border-app-border">
                         <div className="flex items-center gap-2 mb-2">
-                            {importSource === 'notion' && <span className="text-xs px-2 py-0.5 bg-app-accent/20 text-app-accent rounded-full">📝 Notion</span>}
-                            {importSource === 'bookmarks' && <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">🔖 Bookmarks</span>}
-                            {!importSource && <span className="text-xs px-2 py-0.5 bg-app-bg-light text-app-text-muted rounded-full">📄 File</span>}
+                            {importSource === 'notion' && (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-app-accent/20 text-app-accent rounded-full">
+                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
+                                    </svg>
+                                    Notion
+                                </span>
+                            )}
+                            {importSource === 'bookmarks' && (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                    </svg>
+                                    Bookmarks
+                                </span>
+                            )}
+                            {importSource === 'file' && (
+                                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                    File
+                                </span>
+                            )}
                         </div>
                         <p className="text-sm text-app-text-secondary mb-3">
-                            <strong>{importPreview.sites?.length || 0}</strong> site{importPreview.sites?.length !== 1 ? 's' : ''} ready to import
+                            <strong>{importPreview.uniqueCount || importPreview.sites?.length || 0}</strong> site{(importPreview.uniqueCount || importPreview.sites?.length) !== 1 ? 's' : ''} ready to import
+                            {importPreview.duplicates > 0 && (
+                                <>
+                                    <span className="text-app-text-muted text-xs ml-1">({importPreview.duplicates} duplicate{importPreview.duplicates !== 1 ? 's' : ''} removed)</span>
+                                    <button
+                                        onClick={() => setShowDuplicates(!showDuplicates)}
+                                        className="ml-2 text-xs text-app-accent hover:underline"
+                                    >
+                                        {showDuplicates ? 'Hide' : 'Show'} duplicates
+                                    </button>
+                                </>
+                            )}
                         </p>
+
+                        {/* Duplicates list */}
+                        {showDuplicates && importPreview.duplicateGroups?.length > 0 && (
+                            <div className="mb-3 p-3 bg-app-bg-secondary rounded-lg border border-app-border max-h-48 overflow-y-auto">
+                                <p className="text-xs font-semibold text-app-text-primary mb-2">Duplicate URLs (will be merged):</p>
+                                <div className="space-y-2">
+                                    {importPreview.duplicateGroups.map((group, idx) => (
+                                        <div key={idx} className="text-xs">
+                                            <p className="text-app-text-secondary truncate">
+                                                <span className="text-app-accent font-medium">{group.count}×</span> {group.name}
+                                            </p>
+                                            <p className="text-app-text-muted truncate text-[10px]">{group.url}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Use folders as categories checkbox */}
+                        {importSource === 'bookmarks' && (
+                            <label className="flex items-center gap-2 cursor-pointer select-none py-1 mb-3">
+                                <input
+                                    type="checkbox"
+                                    checked={useFoldersAsCategories}
+                                    onChange={(e) => setUseFoldersAsCategories(e.target.checked)}
+                                    disabled={importing}
+                                    className="w-4 h-4 rounded border-app-border text-app-accent focus:ring-app-accent/50 bg-app-bg-primary"
+                                />
+                                <span className="text-sm text-app-text-secondary">
+                                    📁 Use bookmark folders as categories
+                                </span>
+                            </label>
+                        )}
+
+                        {/* Progress bar */}
+                        {importing && importProgress && (
+                            <div className="space-y-1.5 mb-3">
+                                <div className="flex justify-between text-xs text-app-text-muted">
+                                    <span>{importProgress.created} created{importProgress.errors > 0 ? `, ${importProgress.errors} errors` : ''}</span>
+                                    <span>
+                                        {importProgress.etaMs > 0
+                                            ? importProgress.etaMs >= 60000
+                                                ? `~${Math.ceil(importProgress.etaMs / 60000)} min left`
+                                                : `~${Math.ceil(importProgress.etaMs / 1000)}s left`
+                                            : importProgress.current >= importProgress.total
+                                                ? 'Finishing...'
+                                                : 'Calculating...'}
+                                    </span>
+                                </div>
+                                <div className="w-full h-2.5 bg-app-bg-light rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-app-accent rounded-full transition-all duration-500 ease-out"
+                                        style={{ width: `${Math.round((importProgress.current / importProgress.total) * 100)}%` }}
+                                    />
+                                </div>
+                                <div className="text-center text-[10px] text-app-text-muted">
+                                    {Math.round((importProgress.current / importProgress.total) * 100)}% — {importProgress.current}/{importProgress.total} processed
+                                </div>
+                            </div>
+                        )}
+
                         <button
                             onClick={() => {
-                                setImportPreview(null);
+                                clearImportPreview();
                                 setImportMessage(null);
-                                setImportSource(null);
+                                clearImportResult();
                             }}
-                            className="text-sm text-app-accent hover:underline"
+                            className="inline-flex items-center gap-1 text-sm text-app-accent hover:underline disabled:opacity-50"
+                            disabled={importing}
                         >
-                            Choose different file
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                            Back to import options
                         </button>
                     </div>
                 )}
@@ -252,29 +359,42 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                 {/* Message */}
                 {importMessage && (
                     <div
-                        className={`mb-4 p-3 rounded-lg text-sm ${importMessage.type === 'success'
+                        className={`mb-4 mt-2 p-3 rounded-lg text-sm ${importMessage.type === 'success'
                             ? 'bg-green-500/20 text-green-400'
                             : importMessage.type === 'error'
                                 ? 'bg-red-500/20 text-red-400'
-                                : 'bg-blue-500/20 text-blue-400'
+                                : importMessage.type === 'warning'
+                                    ? 'bg-amber-500/20 text-amber-400'
+                                    : 'bg-blue-500/20 text-blue-400'
                             }`}
                     >
                         {importMessage.text}
                     </div>
                 )}
 
-                {/* Import Button */}
+                {/* Import / Cancel Buttons */}
                 {importPreview && (
-                    <button
-                        onClick={handleImport}
-                        disabled={importLoading}
-                        className="flex items-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] disabled:opacity-50 font-medium transition-colors"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        {importLoading ? 'Importing...' : 'Import Sites'}
-                    </button>
+                    <div className="flex gap-2">
+                        {importing ? (
+                            <button
+                                onClick={cancelImport}
+                                className="flex items-center gap-2 px-4 py-2 bg-red-900/40 border border-red-700/50 text-red-400 hover:bg-red-900/60 hover:text-red-300 rounded-lg font-medium transition-colors"
+                            >
+                                ❌ Cancel Import
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleImport}
+                                disabled={importing}
+                                className="flex items-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] disabled:opacity-50 font-medium transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Import Sites
+                            </button>
+                        )}
+                    </div>
                 )}
             </div>
         </>

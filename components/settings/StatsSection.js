@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useDashboard } from '../../context/DashboardContext';
 
 export default function StatsSection({ user, activeTab, showToast }) {
     const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0 });
     const [loadingStats, setLoadingStats] = useState(false);
-    const [checkingLinks, setCheckingLinks] = useState(false);
-    const [linkCheckResult, setLinkCheckResult] = useState(null);
-    const [linkCheckError, setLinkCheckError] = useState(null);
+
+    // Link check state from context — survives tab switches
+    const { checkingLinks, linkCheckResult, linkCheckError, linkCheckProgress, runLinkCheck, cancelLinkCheck } = useDashboard();
 
     // Ignored/broken link handling (persisted in localStorage per user)
     const [ignoredLinks, setIgnoredLinks] = useState(new Set());
@@ -72,47 +73,29 @@ export default function StatsSection({ user, activeTab, showToast }) {
             : linkCheckResult.broken.filter(b => !ignoredLinks.has(b.id)))
         : [];
 
-    // Run broken-link health check for user's sites
-    const runLinkCheck = async () => {
-        setCheckingLinks(true);
-        setLinkCheckResult(null);
-        setLinkCheckError(null);
-        try {
-            const sess = await supabase.auth.getSession();
-            const token = sess?.data?.session?.access_token;
-            const r = await fetch('/api/links/check', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' }
-            });
-
-            // Read text first to avoid unexpected end of JSON errors
-            const text = await r.text();
-            let json = null;
-            if (text && text.trim()) {
-                try { json = JSON.parse(text); } catch (e) { json = null; }
-            }
-
-            if (!r.ok) {
-                const errMsg = json?.error || text || `HTTP ${r.status}`;
-                console.error('Link check failed upstream:', r.status, errMsg);
-                setLinkCheckError(errMsg);
-                showToast && showToast(`Link check failed: ${errMsg}`, 'error');
-            } else if (!json || !json.success) {
-                const errMsg = json?.error || 'Invalid response from link check';
-                setLinkCheckError(errMsg);
-                showToast && showToast(`Link check failed: ${errMsg}`, 'error');
-            } else {
-                setLinkCheckResult(json);
-                showToast && showToast(`Link check complete — ${json.brokenCount} broken`, json.brokenCount ? 'warning' : 'success');
-            }
-        } catch (err) {
-            console.error('Link check client error:', err);
-            setLinkCheckError(err.message);
-            showToast && showToast(`Link check failed: ${err.message}`, 'error');
-        } finally {
-            setCheckingLinks(false);
-        }
+    // Wrap context runLinkCheck with toast notifications
+    const handleRunLinkCheck = async () => {
+        await runLinkCheck();
     };
+
+    // Show toast when link check completes (result or error changes)
+    useEffect(() => {
+        if (linkCheckResult && activeTab === 'settings') {
+            const msg = linkCheckResult.partial
+                ? `Link check cancelled — ${linkCheckResult.total} checked, ${linkCheckResult.brokenCount} broken`
+                : `Link check complete — ${linkCheckResult.brokenCount} broken`;
+            showToast && showToast(
+                msg,
+                linkCheckResult.brokenCount ? 'warning' : 'success'
+            );
+        }
+    }, [linkCheckResult]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+        if (linkCheckError && activeTab === 'settings') {
+            showToast && showToast(`Link check failed: ${linkCheckError}`, 'error');
+        }
+    }, [linkCheckError]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Auto-refresh stats when opening settings
     useEffect(() => {
@@ -171,29 +154,51 @@ export default function StatsSection({ user, activeTab, showToast }) {
                     </label>
                 </div>
                 <div className="space-y-3">
-                    <button
-                        onClick={runLinkCheck}
-                        disabled={checkingLinks}
-                        className="w-full px-4 py-2.5 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF] rounded-lg disabled:opacity-50 transition-all font-medium flex items-center justify-center gap-2"
-                    >
-                        {checkingLinks ? (
-                            <>
-                                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <circle cx="12" cy="12" r="10" strokeWidth="2" strokeLinecap="round" strokeDasharray="32" strokeDashoffset="32">
-                                        <animate attributeName="stroke-dashoffset" values="32;0" dur="1s" repeatCount="indefinite" />
-                                    </circle>
-                                </svg>
-                                Checking...
-                            </>
-                        ) : (
-                            <>
+                    {checkingLinks ? (
+                        <div className="space-y-2">
+                            <button
+                                onClick={cancelLinkCheck}
+                                className="w-full px-4 py-2.5 bg-red-900/30 border border-red-700/40 text-red-400 hover:bg-red-900/50 hover:text-red-300 rounded-lg transition-all font-medium flex items-center justify-center gap-2"
+                            >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
-                                Check Links
-                            </>
-                        )}
-                    </button>
+                                Cancel Check
+                            </button>
+                            {linkCheckProgress && (
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-xs text-app-text-muted">
+                                        <span>{linkCheckProgress.checked}/{linkCheckProgress.total} checked</span>
+                                        <span>
+                                            {linkCheckProgress.etaMs > 0
+                                                ? linkCheckProgress.etaMs >= 60000
+                                                    ? `~${Math.ceil(linkCheckProgress.etaMs / 60000)} min left`
+                                                    : `~${Math.ceil(linkCheckProgress.etaMs / 1000)}s left`
+                                                : linkCheckProgress.checked >= linkCheckProgress.total
+                                                    ? 'Finishing…'
+                                                    : 'Calculating…'}
+                                        </span>
+                                    </div>
+                                    <div className="w-full h-2 bg-app-bg-primary rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-app-accent rounded-full transition-all duration-500 ease-out"
+                                            style={{ width: `${Math.round((linkCheckProgress.checked / linkCheckProgress.total) * 100)}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleRunLinkCheck}
+                            className="w-full px-4 py-2.5 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF] rounded-lg transition-all font-medium flex items-center justify-center gap-2"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                            Check Links
+                        </button>
+                    )}
 
                     {linkCheckResult && (
                         <div className="text-sm text-app-text-secondary bg-app-bg-secondary rounded-lg p-3 border border-app-border">
@@ -202,7 +207,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <span className="font-medium">
-                                    {linkCheckResult.total} checked · <span className={linkCheckResult.brokenCount > 0 ? 'text-red-400 font-semibold' : 'text-green-400'}>{linkCheckResult.brokenCount} broken</span>
+                                    {linkCheckResult.total} checked{linkCheckResult.partial ? ' (partial)' : ''} · <span className={linkCheckResult.brokenCount > 0 ? 'text-red-400 font-semibold' : 'text-green-400'}>{linkCheckResult.brokenCount} broken</span>
                                 </span>
                             </div>
                             {typeof displayedBroken !== 'undefined' && (

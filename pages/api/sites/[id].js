@@ -483,13 +483,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'DELETE') {
     try {
-      // Delete relations first (ignore errors)
-      await Promise.allSettled([
-        deleteRelations(id, SUPABASE_TABLES.SITE_CATEGORIES, config.url, authToken),
-        deleteRelations(id, SUPABASE_TABLES.SITE_TAGS, config.url, authToken),
-      ]);
-
-      // Delete the site itself
+      // Just delete the site — DB ON DELETE CASCADE cleans up site_categories & site_tags
       const url = `${config.url}/rest/v1/${SUPABASE_TABLES.SITES}?id=eq.${id}`;
       const headers = buildHeaders(config.anonKey, userToken);
       const response = await fetch(url, { method: 'DELETE', headers });
