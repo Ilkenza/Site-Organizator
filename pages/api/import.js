@@ -253,6 +253,7 @@ export default async function handler(req, res) {
   }
 
   const { rows, userId } = validation;
+  const importSource = payload.importSource || 'manual';
 
   const options = payload.options || { createMissing: true };
   const chunkSize = calculateChunkSize(payload.chunkSize);
@@ -669,7 +670,8 @@ export default async function handler(req, res) {
           pricing: x.nr.pricing || 'freemium',
           is_favorite: x.nr.is_favorite || false,
           is_pinned: x.nr.is_pinned || false,
-          user_id: userId
+          user_id: userId,
+          import_source: importSource
         };
         // Only include created_at when it has a value — sending null overrides DB DEFAULT
         if (x.nr.created_at) row.created_at = x.nr.created_at;

@@ -27,7 +27,7 @@ const QUERY_CONFIG = {
   DEFAULT_LIMIT: 100,
   MAX_LIMIT: 5000,
   DEFAULT_PAGE: 1,
-  ALLOWED_POST_FIELDS: ['name', 'url', 'pricing', 'user_id']
+  ALLOWED_POST_FIELDS: ['name', 'url', 'pricing', 'user_id', 'import_source']
 };
 
 /**
@@ -401,7 +401,7 @@ const parsePaginationParams = (query) => {
  * @returns {string} Complete URL
  */
 const buildSitesListUrl = (baseUrl, limit, offset, filters = {}) => {
-  const { searchQuery, categoryId, tagId, sortBy, sortOrder, favoritesOnly, isUncategorized, isUntagged } = filters;
+  const { searchQuery, categoryId, tagId, sortBy, sortOrder, favoritesOnly, isUncategorized, isUntagged, importSource } = filters;
 
   // Build select with appropriate joins
   let select = '*';
@@ -445,6 +445,11 @@ const buildSitesListUrl = (baseUrl, limit, offset, filters = {}) => {
     const qEsc = encodeURIComponent(searchQuery.replace(/%/g, '%25'));
     const orFilter = `or=(name.ilike.*${qEsc}*,url.ilike.*${qEsc}*,description.ilike.*${qEsc}*)`;
     url += `&${orFilter}`;
+  }
+
+  // Import source filter
+  if (importSource) {
+    url += `&import_source=eq.${encodeURIComponent(importSource)}`;
   }
 
   return url;
@@ -941,6 +946,7 @@ const handleGetRequest = async (req, res, baseUrl, anonKey, authKey, relKey) => 
   const sortBy = req.query?.sort_by || 'created_at';
   const sortOrder = req.query?.sort_order || 'desc';
   const favoritesOnly = req.query?.favorites === 'true';
+  const importSource = req.query?.import_source || null;
   const { limit, offset } = parsePaginationParams(req.query);
 
   // Build URL with filters — use left join + is.null for uncategorized/untagged
@@ -952,7 +958,8 @@ const handleGetRequest = async (req, res, baseUrl, anonKey, authKey, relKey) => 
     sortOrder,
     favoritesOnly,
     isUncategorized: categoryId === 'uncategorized',
-    isUntagged: tagId === 'untagged'
+    isUntagged: tagId === 'untagged',
+    importSource
   };
   const url = buildSitesListUrl(baseUrl, limit, offset, filters);
   const fieldsMode = req.query?.fields || null;
@@ -976,6 +983,29 @@ const handleGetRequest = async (req, res, baseUrl, anonKey, authKey, relKey) => 
       success: true,
       data: minimalSites,
       totalCount: totalCount || minimalSites.length
+    });
+  }
+
+  // IDs mode: fetch junction table data only (no name lookups or full normalization)
+  // Used for fast cross-filter counts in sidebar — returns category_ids and tag_ids per site
+  if (fieldsMode === 'ids') {
+    if (!Array.isArray(sites) || sites.length === 0) {
+      return res.status(HTTP_STATUS.OK).json({ success: true, data: [], totalCount: totalCount || 0 });
+    }
+    const siteIds = sites.map(s => s.id);
+    const { siteCategories: scData } = await fetchSiteCategories(baseUrl, anonKey, relKey, siteIds);
+    const { siteTags: stData } = await fetchSiteTags(baseUrl, anonKey, relKey, siteIds);
+    const { categoriesBySite: cbsMap, tagsBySite: tbsMap } = buildRelationMaps(scData, stData);
+    const idsSites = sites.map(site => ({
+      id: site.id,
+      url: site.url,
+      category_ids: (cbsMap.get(site.id) || []).map(c => c.id).filter(Boolean),
+      tag_ids: (tbsMap.get(site.id) || []).map(t => t.id).filter(Boolean)
+    }));
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: idsSites,
+      totalCount: totalCount || idsSites.length
     });
   }
 

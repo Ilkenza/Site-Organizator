@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Badge from '../ui/Badge';
 import InlineEditableName from '../categories/InlineEditableName';
 import { useDashboard } from '../../context/DashboardContext';
@@ -16,17 +16,8 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
     const allCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
     const allTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
 
-    // Import source icon from localStorage
-    const [importSource, setImportSource] = useState(null);
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem('import_sources');
-            if (stored) {
-                const map = JSON.parse(stored);
-                if (map[site.url]) setImportSource(map[site.url]);
-            }
-        } catch { /* ignore */ }
-    }, [site.url]);
+    // Import source from DB column (synced across devices)
+    const importSource = site.import_source && site.import_source !== 'manual' ? site.import_source : null;
     const categories = allCategories;
     const tags = allTags;
 
@@ -304,10 +295,10 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                     {/* Import source icon */}
                     {importSource && (
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full font-medium text-[10px] ${importSource === 'bookmarks'
-                                ? 'bg-amber-900/50 text-amber-300 border border-amber-700/50'
-                                : importSource === 'file'
-                                    ? 'bg-purple-900/50 text-purple-300 border border-purple-700/50'
-                                    : 'bg-indigo-900/50 text-indigo-300 border border-indigo-700/50'
+                            ? 'bg-amber-900/50 text-amber-300 border border-amber-700/50'
+                            : importSource === 'file'
+                                ? 'bg-purple-900/50 text-purple-300 border border-purple-700/50'
+                                : 'bg-indigo-900/50 text-indigo-300 border border-indigo-700/50'
                             }`}
                             title={`Imported from ${importSource === 'bookmarks' ? 'Bookmarks' : importSource === 'file' ? 'File' : 'Notion'}`}
                         >

@@ -199,8 +199,8 @@ function GrowthChart({ data, period, onPeriodChange }) {
                     <button key={p.key}
                         onClick={() => onPeriodChange(p.key)}
                         className={`px-2 py-2.5 sm:py-2 rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 ${period === p.key
-                                ? 'bg-gradient-to-r from-app-accent to-blue-500 text-white shadow-lg'
-                                : 'text-app-text-muted hover:text-app-text-primary hover:bg-app-bg-light'
+                            ? 'bg-gradient-to-r from-app-accent to-blue-500 text-white shadow-lg'
+                            : 'text-app-text-muted hover:text-app-text-primary hover:bg-app-bg-light'
                             }`}>
                         <span className="text-sm">{p.icon}</span>
                         <span className="text-xs sm:text-sm">{p.short}</span>
@@ -216,7 +216,7 @@ function GrowthChart({ data, period, onPeriodChange }) {
                     const bSites = getBarSites(d);
                     const userPct = (bUsers / maxVal) * 100;
                     const sitePct = (bSites / maxVal) * 100;
-                    
+
                     const hasData = d.users > 0 || d.sites > 0;
                     return (
                         <div key={i} className="group">
@@ -235,14 +235,14 @@ function GrowthChart({ data, period, onPeriodChange }) {
                             {hasData && (<>
                                 {/* Users Bar */}
                                 <div className="w-full bg-white/5 rounded-full h-3 sm:h-3.5 mb-1 overflow-hidden">
-                                    <div 
+                                    <div
                                         className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-500 group-hover:from-blue-500 group-hover:to-blue-300"
                                         style={{ width: `${Math.max(userPct, bUsers > 0 ? 3 : 0)}%` }}>
                                     </div>
                                 </div>
                                 {/* Sites Bar */}
                                 <div className="w-full bg-white/5 rounded-full h-3 sm:h-3.5 overflow-hidden">
-                                    <div 
+                                    <div
                                         className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-500 group-hover:from-emerald-500 group-hover:to-emerald-300"
                                         style={{ width: `${Math.max(sitePct, bSites > 0 ? 3 : 0)}%` }}>
                                     </div>
@@ -251,7 +251,7 @@ function GrowthChart({ data, period, onPeriodChange }) {
                         </div>
                     );
                 })}
-                
+
                 {/* Legend */}
                 <div className="flex items-center justify-center gap-6 pt-3 border-t border-app-border/30">
                     <div className="flex items-center gap-2">
@@ -297,14 +297,14 @@ function GrowthChart({ data, period, onPeriodChange }) {
                                     <div key={i} className="flex-1 flex items-end gap-0.5 h-full group relative">
                                         {/* Users bar */}
                                         <div className="flex-1 flex flex-col justify-end h-full">
-                                            <div 
+                                            <div
                                                 className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-md transition-all duration-300 group-hover:from-blue-500 group-hover:to-blue-300 group-hover:shadow-lg group-hover:shadow-blue-500/30"
                                                 style={{ height: `${Math.max(userPct, bUsers > 0 ? 2 : 0)}%` }}>
                                             </div>
                                         </div>
                                         {/* Sites bar */}
                                         <div className="flex-1 flex flex-col justify-end h-full">
-                                            <div 
+                                            <div
                                                 className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-md transition-all duration-300 group-hover:from-emerald-500 group-hover:to-emerald-300 group-hover:shadow-lg group-hover:shadow-emerald-500/30"
                                                 style={{ height: `${Math.max(sitePct, bSites > 0 ? 2 : 0)}%` }}>
                                             </div>
@@ -337,11 +337,10 @@ function GrowthChart({ data, period, onPeriodChange }) {
                     <div className="flex-1 flex">
                         {chartData.map((d, i) => (
                             <div key={i} className="flex-1 text-center">
-                                <span className={`text-app-text-muted font-semibold ${
-                                    period === 'hourly' ? 'text-[10px]' : 
-                                    period === 'daily' ? 'text-[10px]' : 
-                                    'text-[11px]'
-                                }`}>{d.label}</span>
+                                <span className={`text-app-text-muted font-semibold ${period === 'hourly' ? 'text-[10px]' :
+                                        period === 'daily' ? 'text-[10px]' :
+                                            'text-[11px]'
+                                    }`}>{d.label}</span>
                             </div>
                         ))}
                     </div>
