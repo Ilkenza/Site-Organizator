@@ -375,7 +375,11 @@ export function DashboardProvider({ children }) {
     const [totalSitesCount, setTotalSitesCount] = useState(0);
     const totalPages = Math.ceil(totalSitesCount / SITES_PAGE_SIZE) || 1;
 
-    // Build query string for current filters (server-side: category, tag, search, sort, favorites)
+    // Cross-filter counts: when multiple filter dimensions are active,
+    // shows per-category and per-tag counts intersected with other active filters
+    const [crossFilterCounts, setCrossFilterCounts] = useState({ categories: {}, tags: {} });
+
+    // Build query string for current filters (all server-side including import_source)
     const buildSitesQuery = useCallback((page = 1) => {
         const params = new URLSearchParams();
         params.set('limit', SITES_PAGE_SIZE);
@@ -386,84 +390,33 @@ export function DashboardProvider({ children }) {
         if (sortBy) params.set('sort_by', sortBy);
         if (sortOrder) params.set('sort_order', sortOrder);
         if (activeTab === 'favorites') params.set('favorites', 'true');
+        if (selectedImportSource) params.set('import_source', selectedImportSource);
         return params.toString();
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource]);
 
-    // Cache for import-source-filtered data (avoids re-fetching all sites on every page change)
-    const importSourceCacheRef = useRef({ source: null, filters: null, data: [], total: 0 });
-
-    // Fetch a single page of sites from server
+    // Fetch a single page of sites from server (all filters are server-side now)
     const fetchSitesPage = useCallback(async (page = 1) => {
         try {
-            // When import source filter is active, we must fetch ALL sites and filter client-side
-            // (import source lives in localStorage, not in DB)
-            if (selectedImportSource && typeof window !== 'undefined') {
-                // Build a cache key from all server-side filters so cache invalidates on filter change
-                const filterKey = `${searchQuery}|${selectedCategory}|${selectedTag}|${sortBy}|${sortOrder}|${activeTab}`;
-                let allFiltered;
-                if (importSourceCacheRef.current.source === selectedImportSource &&
-                    importSourceCacheRef.current.filters === filterKey) {
-                    allFiltered = importSourceCacheRef.current.data;
-                } else {
-                    // Fetch all sites matching server-side filters in minimal mode (fast)
-                    const allParams = new URLSearchParams();
-                    allParams.set('limit', '5000');
-                    allParams.set('page', '1');
-                    allParams.set('fields', 'minimal');
-                    if (searchQuery) allParams.set('q', searchQuery);
-                    if (selectedCategory) allParams.set('category_id', selectedCategory);
-                    if (selectedTag) allParams.set('tag_id', selectedTag);
-                    if (sortBy) allParams.set('sort_by', sortBy);
-                    if (sortOrder) allParams.set('sort_order', sortOrder);
-                    if (activeTab === 'favorites') allParams.set('favorites', 'true');
-                    
-                    const allRes = await fetchAPI(`/sites?${allParams.toString()}`);
-                    const allData = Array.isArray(allRes) ? allRes : (allRes?.data || []);
-                    
-                    const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
-                    allFiltered = allData.filter(s => {
-                        const src = importSources[s.url];
-                        return selectedImportSource === 'manual' ? !src : src === selectedImportSource;
-                    });
-                    
-                    importSourceCacheRef.current = {
-                        source: selectedImportSource,
-                        filters: filterKey,
-                        data: allFiltered,
-                        total: allFiltered.length
-                    };
-                }
-                
-                // Client-side pagination
-                const startIdx = (page - 1) * SITES_PAGE_SIZE;
-                const pageData = allFiltered.slice(startIdx, startIdx + SITES_PAGE_SIZE);
-                
-                setSites(pageData);
-                setTotalSitesCount(allFiltered.length);
-                setCurrentPage(page);
-                return;
-            }
-            
-            // Normal server-side pagination (no import source filter)
             const query = buildSitesQuery(page);
             const sitesRes = await fetchAPI(`/sites?${query}`);
             const sitesData = Array.isArray(sitesRes) ? sitesRes : (sitesRes?.data || []);
             const total = sitesRes?.totalCount ?? sitesData.length;
-            
+
             setSites(sitesData);
             setTotalSitesCount(total);
             setCurrentPage(page);
         } catch (err) {
             console.error('Failed to fetch sites page:', err);
         }
-    }, [buildSitesQuery, selectedImportSource, searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab]);
+    }, [buildSitesQuery]);
 
     // Fetch initial data (categories, tags, first page of sites, sidebar counts)
     const fetchData = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const [sitesRes, categoriesRes, tagsRes, favRes, uncatRes, untagRes, totalRes] = await Promise.all([
+            const [sitesRes, categoriesRes, tagsRes, favRes, uncatRes, untagRes, totalRes,
+                   manualRes, bookmarksRes, notionRes, fileRes] = await Promise.all([
                 fetchAPI(`/sites?${buildSitesQuery(1)}`),
                 fetchAPI('/categories'),
                 fetchAPI('/tags'),
@@ -472,7 +425,12 @@ export function DashboardProvider({ children }) {
                 fetchAPI('/sites?category_id=uncategorized&limit=1&page=1').catch(() => null),
                 fetchAPI('/sites?tag_id=untagged&limit=1&page=1').catch(() => null),
                 // Always fetch unfiltered total for accurate sidebar counts
-                fetchAPI('/sites?limit=1&page=1').catch(() => null)
+                fetchAPI('/sites?limit=1&page=1').catch(() => null),
+                // Import source counts from DB
+                fetchAPI('/sites?import_source=manual&limit=1&page=1').catch(() => null),
+                fetchAPI('/sites?import_source=bookmarks&limit=1&page=1').catch(() => null),
+                fetchAPI('/sites?import_source=notion&limit=1&page=1').catch(() => null),
+                fetchAPI('/sites?import_source=file&limit=1&page=1').catch(() => null)
             ]);
 
             const categoriesData = Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []);
@@ -499,7 +457,13 @@ export function DashboardProvider({ children }) {
                 tags: tagsData.length,
                 favorites: favoritesCount,
                 uncategorized: uncategorizedCount,
-                untagged: untaggedCount
+                untagged: untaggedCount,
+                importSources: {
+                    manual: manualRes?.totalCount ?? 0,
+                    bookmarks: bookmarksRes?.totalCount ?? 0,
+                    notion: notionRes?.totalCount ?? 0,
+                    file: fileRes?.totalCount ?? 0
+                }
             });
         } catch (err) {
             setError(err.message);
@@ -580,6 +544,137 @@ export function DashboardProvider({ children }) {
         }, delay);
         return () => clearTimeout(timer);
     }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, selectedImportSource, activeTab]);
+
+    // Compute cross-filter counts when multiple filter dimensions are active
+    // This lets ALL categories/tags in the sidebar show "intersection / ownTotal"
+    // Debounced to avoid multiple rapid API calls on quick filter changes
+    const crossFilterTimerRef = useRef(null);
+    useEffect(() => {
+        if (!dataLoadedRef.current || !user) return;
+
+        const hasOtherForCategories = selectedTag || selectedImportSource;
+        const hasOtherForTags = selectedCategory || selectedImportSource;
+        const hasOtherForImportSources = selectedCategory || selectedTag;
+
+        if (!hasOtherForCategories && !hasOtherForTags && !hasOtherForImportSources) {
+            setCrossFilterCounts({ categories: {}, tags: {}, importSources: {} });
+            return;
+        }
+
+        let cancelled = false;
+
+        // Debounce to prevent hammering API on rapid filter clicks
+        if (crossFilterTimerRef.current) clearTimeout(crossFilterTimerRef.current);
+        crossFilterTimerRef.current = setTimeout(async () => {
+            const newCounts = { categories: {}, tags: {}, importSources: {} };
+
+            // Helper: build cross-filter params
+            const addBaseParams = (p) => {
+                p.set('limit', '5000'); p.set('page', '1');
+                if (searchQuery) p.set('q', searchQuery);
+                if (activeTab === 'favorites') p.set('favorites', 'true');
+            };
+
+            // Shared fetch helper — category and tag cross-counts can share the same fetch
+            // when both need "no category + no tag" base (only import source active)
+            const needBothFromSameBase = hasOtherForCategories && hasOtherForTags
+                && !selectedCategory && !selectedTag && selectedImportSource;
+
+            if (needBothFromSameBase) {
+                // Single fetch: get all sites filtered by import source, count per category AND per tag
+                try {
+                    const p = new URLSearchParams();
+                    p.set('fields', 'ids');
+                    addBaseParams(p);
+                    if (selectedImportSource) p.set('import_source', selectedImportSource);
+                    const res = await fetchAPI(`/sites?${p.toString()}`);
+                    const data = Array.isArray(res) ? res : (res?.data || []);
+                    const catCounts = {}; let uncatCount = 0;
+                    const tagCounts = {}; let untagCount = 0;
+                    data.forEach(site => {
+                        const cids = site.category_ids || [];
+                        const tids = site.tag_ids || [];
+                        if (cids.length === 0) { uncatCount++; } else { cids.forEach(id => { catCounts[id] = (catCounts[id] || 0) + 1; }); }
+                        if (tids.length === 0) { untagCount++; } else { tids.forEach(id => { tagCounts[id] = (tagCounts[id] || 0) + 1; }); }
+                    });
+                    catCounts['uncategorized'] = uncatCount;
+                    tagCounts['untagged'] = untagCount;
+                    newCounts.categories = catCounts;
+                    newCounts.tags = tagCounts;
+                } catch (e) { console.warn('Cross-filter shared counts failed:', e); }
+            } else {
+                // 1. Category cross-counts: fetch sites matching tag + import source (WITHOUT category filter)
+                if (hasOtherForCategories) {
+                    try {
+                        const p = new URLSearchParams();
+                        p.set('fields', 'ids');
+                        addBaseParams(p);
+                        if (selectedTag) p.set('tag_id', selectedTag);
+                        if (selectedImportSource) p.set('import_source', selectedImportSource);
+                        const res = await fetchAPI(`/sites?${p.toString()}`);
+                        const data = Array.isArray(res) ? res : (res?.data || []);
+                        const catCounts = {}; let uncatCount = 0;
+                        data.forEach(site => {
+                            const cids = site.category_ids || [];
+                            if (cids.length === 0) { uncatCount++; } else { cids.forEach(id => { catCounts[id] = (catCounts[id] || 0) + 1; }); }
+                        });
+                        catCounts['uncategorized'] = uncatCount;
+                        newCounts.categories = catCounts;
+                    } catch (e) { console.warn('Cross-filter category counts failed:', e); }
+                }
+
+                // 2. Tag cross-counts: fetch sites matching category + import source (WITHOUT tag filter)
+                if (hasOtherForTags) {
+                    try {
+                        const p = new URLSearchParams();
+                        p.set('fields', 'ids');
+                        addBaseParams(p);
+                        if (selectedCategory) p.set('category_id', selectedCategory);
+                        if (selectedImportSource) p.set('import_source', selectedImportSource);
+                        const res = await fetchAPI(`/sites?${p.toString()}`);
+                        const data = Array.isArray(res) ? res : (res?.data || []);
+                        const tagCounts = {}; let untagCount = 0;
+                        data.forEach(site => {
+                            const tids = site.tag_ids || [];
+                            if (tids.length === 0) { untagCount++; } else { tids.forEach(id => { tagCounts[id] = (tagCounts[id] || 0) + 1; }); }
+                        });
+                        tagCounts['untagged'] = untagCount;
+                        newCounts.tags = tagCounts;
+                    } catch (e) { console.warn('Cross-filter tag counts failed:', e); }
+                }
+            }
+
+            // 3. Import source cross-counts: fetch sites matching category + tag (WITHOUT import source filter)
+            if (hasOtherForImportSources) {
+                try {
+                    const p = new URLSearchParams();
+                    p.set('fields', 'minimal');
+                    addBaseParams(p);
+                    if (selectedCategory) p.set('category_id', selectedCategory);
+                    if (selectedTag) p.set('tag_id', selectedTag);
+                    const res = await fetchAPI(`/sites?${p.toString()}`);
+                    const data = Array.isArray(res) ? res : (res?.data || []);
+                    const srcCounts = { manual: 0, bookmarks: 0, notion: 0, file: 0 };
+                    data.forEach(site => {
+                        const src = site.import_source || 'manual';
+                        if (Object.prototype.hasOwnProperty.call(srcCounts, src)) {
+                            srcCounts[src]++;
+                        } else {
+                            srcCounts.manual++;
+                        }
+                    });
+                    newCounts.importSources = srcCounts;
+                } catch (e) { console.warn('Cross-filter import source counts failed:', e); }
+            }
+
+            if (!cancelled) setCrossFilterCounts(newCounts);
+        }, 400);
+
+        return () => {
+            cancelled = true;
+            if (crossFilterTimerRef.current) clearTimeout(crossFilterTimerRef.current);
+        };
+    }, [selectedCategory, selectedTag, selectedImportSource, searchQuery, activeTab, user]);
 
     useEffect(() => {
         if (!supabase || !user) return;
@@ -665,7 +760,7 @@ export function DashboardProvider({ children }) {
             setTotalSitesCount(prev => Math.max(0, prev - 1));
             showToast('✓ Site deleted successfully', 'success');
             // Re-fetch current page to fill the gap
-            fetchSitesPage(currentPage).catch(() => {});
+            fetchSitesPage(currentPage).catch(() => { });
         } catch (err) {
             showToast(`✗ Failed to delete site: ${err.message}`, 'error');
             throw err;
@@ -851,6 +946,9 @@ export function DashboardProvider({ children }) {
         totalPages,
         fetchSitesPage,
         SITES_PAGE_SIZE,
+
+        // Cross-filter counts for sidebar stacked display
+        crossFilterCounts,
 
         // Filters
         searchQuery,

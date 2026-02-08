@@ -32,7 +32,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
         sortByTags,
         setSortByTags,
         sortOrderTags,
-        setSortOrderTags
+        setSortOrderTags,
+        crossFilterCounts
     } = useDashboard();
 
     const [categoriesSearchQuery, setCategoriesSearchQuery] = useState('');
@@ -57,24 +58,37 @@ export default function Sidebar({ isOpen = false, onClose }) {
         return '/dashboard/sites';
     };
 
-    // Import source counts — computed from ALL localStorage entries (not just current page)
-    const importSourceCounts = useMemo(() => {
-        const counts = { bookmarks: 0, notion: 0, file: 0, manual: 0 };
-        try {
-            const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
-            Object.values(importSources).forEach(source => {
-                if (source && Object.prototype.hasOwnProperty.call(counts, source)) {
-                    counts[source]++;
-                }
-            });
-            // Manual = total sites minus all sites with a recorded import source
-            const totalImported = counts.bookmarks + counts.notion + counts.file;
-            counts.manual = Math.max(0, (stats.sites || 0) - totalImported);
-        } catch (e) {
-            console.warn('Failed to parse import sources:', e);
-        }
-        return counts;
-    }, [stats.sites]);
+    // Import source counts from DB (synced across devices)
+    const importSourceCounts = useMemo(() => ({
+        manual: stats.importSources?.manual || 0,
+        bookmarks: stats.importSources?.bookmarks || 0,
+        notion: stats.importSources?.notion || 0,
+        file: stats.importSources?.file || 0
+    }), [stats.importSources]);
+
+    // Cross-filter count helpers: show "crossCount / ownCount" for ALL items when another dimension is active
+    const hasOtherCategoryFilter = selectedTag || selectedImportSource;
+    const hasOtherTagFilter = selectedCategory || selectedImportSource;
+
+    const getCategoryCount = (catId, ownCount) => {
+        if (!hasOtherCategoryFilter) return ownCount;
+        const crossCount = crossFilterCounts.categories[catId] ?? 0;
+        return `${crossCount} / ${ownCount}`;
+    };
+
+    const getTagCount = (tagId, ownCount) => {
+        if (!hasOtherTagFilter) return ownCount;
+        const crossCount = crossFilterCounts.tags[tagId] ?? 0;
+        return `${crossCount} / ${ownCount}`;
+    };
+
+    const hasOtherImportSourceFilter = selectedCategory || selectedTag;
+
+    const getImportSourceCount = (sourceKey, ownCount) => {
+        if (!hasOtherImportSourceFilter) return ownCount;
+        const crossCount = crossFilterCounts.importSources?.[sourceKey] ?? 0;
+        return `${crossCount} / ${ownCount}`;
+    };
 
     return (
         <>
@@ -420,7 +434,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     ? 'bg-amber-500/30 text-amber-400'
                                     : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
                                     }`}>
-                                    {uncategorizedCount}
+                                    {getCategoryCount('uncategorized', uncategorizedCount)}
                                 </span>
                             </button>
                             {categories
@@ -449,7 +463,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 ? 'bg-app-accent/30 text-app-accent'
                                                 : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
                                                 }`}>
-                                                {siteCount}
+                                                {getCategoryCount(cat.id, siteCount)}
                                             </span>
                                         </button>
                                     );
@@ -497,7 +511,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     ? 'bg-amber-500/30 text-amber-400'
                                     : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
                                     }`}>
-                                    {untaggedCount}
+                                    {getTagCount('untagged', untaggedCount)}
                                 </span>
                             </button>
                             {tags
@@ -526,7 +540,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 ? 'bg-app-accent/30 text-app-accent'
                                                 : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
                                                 }`}>
-                                                {siteCount}
+                                                {getTagCount(tag.id, siteCount)}
                                             </span>
                                         </button>
                                     );
@@ -581,7 +595,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         ? 'bg-green-500/30 text-green-400'
                                         : 'bg-app-bg-light text-app-text-muted'
                                         }`}>
-                                        {importSourceCounts.manual}
+                                        {getImportSourceCount('manual', importSourceCounts.manual)}
                                     </span>
                                 </button>
                                 <button
@@ -601,7 +615,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         ? 'bg-amber-500/30 text-amber-400'
                                         : 'bg-app-bg-light text-app-text-muted'
                                         }`}>
-                                        {importSourceCounts.bookmarks}
+                                        {getImportSourceCount('bookmarks', importSourceCounts.bookmarks)}
                                     </span>
                                 </button>
                                 <button
@@ -621,7 +635,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         ? 'bg-app-accent/30 text-app-accent'
                                         : 'bg-app-bg-light text-app-text-muted'
                                         }`}>
-                                        {importSourceCounts.notion}
+                                        {getImportSourceCount('notion', importSourceCounts.notion)}
                                     </span>
                                 </button>
                                 <button
@@ -641,28 +655,11 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         ? 'bg-purple-500/30 text-purple-400'
                                         : 'bg-app-bg-light text-app-text-muted'
                                         }`}>
-                                        {importSourceCounts.file}
+                                        {getImportSourceCount('file', importSourceCounts.file)}
                                     </span>
                                 </button>
                             </div>
-                            {/* Clear import source data if corrupted */}
-                            {(importSourceCounts.bookmarks > 0 || importSourceCounts.notion > 0 || importSourceCounts.file > 0) && (
-                                <button
-                                    onClick={() => {
-                                        if (confirm('This will mark all sites as manually added. Are you sure?')) {
-                                            localStorage.removeItem('import_sources');
-                                            setSelectedImportSource(null);
-                                            window.location.reload();
-                                        }
-                                    }}
-                                    className="w-full mt-2 px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all flex items-center justify-center gap-1.5 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20"
-                                >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    Reset import source data
-                                </button>
-                            )}
+
                         </>
                         )}
                     </div>
