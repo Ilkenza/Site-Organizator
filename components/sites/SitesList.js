@@ -1,45 +1,22 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import SiteCard from './SiteCard';
 import CategoryColorIndicator from '../layout/CategoryColorIndicator';
 import Pagination from '../ui/Pagination';
 
-const ITEMS_PER_PAGE = 30;
-
 export default function SitesList({ onEdit, onDelete }) {
-    const router = useRouter();
-    const { filteredSites, loading, searchQuery, selectedCategory, selectedTag, categories } = useDashboard();
+    const {
+        filteredSites, loading, searchQuery, selectedCategory, selectedTag, categories,
+        currentPage, totalPages, totalSitesCount, fetchSitesPage, SITES_PAGE_SIZE
+    } = useDashboard();
 
-    // Get current page from URL or default to 1
-    const currentPage = parseInt(router.query.page) || 1;
+    // Calculate display indices
+    const startIndex = (currentPage - 1) * SITES_PAGE_SIZE;
+    const endIndex = startIndex + filteredSites.length;
 
-    // Calculate pagination
-    const totalItems = filteredSites.length;
-    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedSites = filteredSites.slice(startIndex, endIndex);
-
-    // Reset to page 1 when filters change
-    useEffect(() => {
-        if (currentPage > 1 && (searchQuery || selectedCategory || selectedTag)) {
-            router.push({
-                pathname: router.pathname,
-                query: { ...router.query, page: 1 }
-            }, undefined, { shallow: true });
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchQuery, selectedCategory, selectedTag]);
-
-    // Handle page change
+    // Handle page change — fetch new page from server
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) {
-            router.push({
-                pathname: router.pathname,
-                query: { ...router.query, page: newPage }
-            }, undefined, { shallow: true });
-            // Scroll to top
+            fetchSitesPage(newPage);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
@@ -95,14 +72,14 @@ export default function SitesList({ onEdit, onDelete }) {
     return (
         <div>
             {/* Results count */}
-            {totalItems > 0 && (
-                <div className="px-3 sm:px-6 pt-3 sm:pt-4 text-sm text-app-text-secondary">
-                    Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} sites
+            {totalSitesCount > 0 && (
+                <div className="px-3 sm:px-6 pt-3 sm:pt-4 flex items-center gap-3 text-sm text-app-text-secondary">
+                    <span>Showing {startIndex + 1}-{Math.min(endIndex, totalSitesCount)} of {totalSitesCount} sites</span>
                 </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-6">
-                {paginatedSites.map((site, index) => (
+                {filteredSites.map((site, index) => (
                     <div key={site.id || `site-${index}`} data-tour={index === 0 ? 'site-card' : undefined}>
                         <SiteCard
                             site={site}
