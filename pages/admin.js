@@ -163,55 +163,92 @@ function GrowthChart({ data, period, onPeriodChange }) {
 
     return (
         <div>
-            {/* Period toggle */}
-            <div className="flex flex-col xs:flex-row flex-wrap items-start xs:items-center justify-between gap-2 mb-4">
-                <div className="flex items-center gap-3 sm:gap-4">
-                    <span className="flex items-center gap-1.5 text-[10px] sm:text-xs text-app-text-muted">
-                        <span className="w-3 h-2 rounded-sm bg-blue-500" /> Users ({totalUsers})
-                    </span>
-                    <span className="flex items-center gap-1.5 text-[10px] sm:text-xs text-app-text-muted">
-                        <span className="w-3 h-2 rounded-sm bg-emerald-500" /> Sites ({totalSites})
-                    </span>
+            {/* Period toggle - Full width on mobile, auto on desktop */}
+            <div className="flex flex-col gap-3 mb-4">
+                {/* Stats Row */}
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                        <span className="flex items-center gap-1.5 text-[10px] sm:text-xs text-app-text-muted">
+                            <span className="w-3 h-2 rounded-sm bg-blue-500" />
+                            <span className="hidden xs:inline">Users</span>
+                            <span className="xs:hidden">U</span>
+                            <span className="font-semibold text-app-text-primary">({totalUsers})</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 text-[10px] sm:text-xs text-app-text-muted">
+                            <span className="w-3 h-2 rounded-sm bg-emerald-500" />
+                            <span className="hidden xs:inline">Sites</span>
+                            <span className="xs:hidden">S</span>
+                            <span className="font-semibold text-app-text-primary">({totalSites})</span>
+                        </span>
+                    </div>
                 </div>
-                <div className="flex bg-app-bg-primary rounded-lg p-0.5 border border-app-border/50 w-full xs:w-auto">
+
+                {/* Period Buttons - Stack on mobile */}
+                <div className="grid grid-cols-2 xs:flex gap-1.5 xs:gap-1 bg-app-bg-primary rounded-lg p-1 border border-app-border/50">
                     {GROWTH_PERIODS.map(p => (
                         <button key={p.key}
                             onClick={() => onPeriodChange(p.key)}
-                            className={`flex-1 xs:flex-none px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] rounded-md transition-all font-medium ${period === p.key
-                                    ? 'bg-app-accent text-white shadow-sm'
-                                    : 'text-app-text-muted hover:text-app-text-primary'
+                            className={`px-2.5 sm:px-3 py-1.5 sm:py-1 text-[10px] sm:text-[11px] rounded-md transition-all font-medium flex items-center justify-center gap-1 ${period === p.key
+                                ? 'bg-app-accent text-white shadow-sm'
+                                : 'text-app-text-muted hover:text-app-text-primary hover:bg-app-bg-light'
                                 }`}>
-                            {p.icon} <span className="hidden sm:inline">{p.label}</span><span className="sm:hidden">{p.short}</span>
+                            <span className="text-xs sm:text-sm">{p.icon}</span>
+                            <span className="hidden sm:inline">{p.label}</span>
+                            <span className="sm:hidden">{p.short}</span>
                         </button>
                     ))}
                 </div>
             </div>
 
-            {/* Bar chart */}
-            <div className="flex items-end gap-[2px] h-44 pt-8 relative">
-                {chartData.map((d, i) => (
-                    <div key={i} className="flex-1 min-w-0 flex flex-col items-center gap-0.5 group relative">
-                        <div className="w-full flex gap-0.5 items-end justify-center" style={{ height: '110px' }}>
-                            <div className="w-[40%] bg-blue-500/80 rounded-t-sm transition-all group-hover:bg-blue-400"
-                                style={{ height: `${Math.max((d.users / maxVal) * 100, d.users > 0 ? 4 : 0)}%` }}
-                                title={`${d.users} users`} />
-                            <div className="w-[40%] bg-emerald-500/80 rounded-t-sm transition-all group-hover:bg-emerald-400"
-                                style={{ height: `${Math.max((d.sites / maxVal) * 100, d.sites > 0 ? 4 : 0)}%` }}
-                                title={`${d.sites} sites`} />
-                        </div>
-                        <span className={`text-app-text-muted truncate w-full text-center ${period === 'hourly' || period === 'daily' ? 'text-[7px]' : 'text-[9px]'
-                            }`}>{d.label}</span>
-                        {/* Tooltip */}
-                        <div className="absolute bottom-full mb-1 hidden group-hover:block z-50 pointer-events-none"
-                            style={{ left: '50%', transform: 'translateX(-50%)' }}>
-                            <div className="bg-app-bg-secondary border border-app-border rounded-lg px-2.5 py-1.5 shadow-lg text-[10px] whitespace-nowrap">
-                                <p className="font-medium text-app-text-muted mb-0.5">{d.label}</p>
-                                <p className="text-blue-400 font-medium">{d.users} users</p>
-                                <p className="text-emerald-400 font-medium">{d.sites} sites</p>
+            {/* Bar chart - Responsive height and spacing */}
+            <div className="relative">
+                {/* Mobile: Horizontal scroll, Desktop: Full width */}
+                <div className="overflow-x-auto -mx-2 px-2 pb-2">
+                    <div className="flex items-end gap-[3px] sm:gap-[2px] h-36 xs:h-44 pt-6 sm:pt-8 min-w-max sm:min-w-0">
+                        {chartData.map((d, i) => (
+                            <div key={i}
+                                className="flex-1 min-w-[20px] xs:min-w-[24px] sm:min-w-0 flex flex-col items-center gap-1 group relative"
+                                style={{ minWidth: chartData.length > 20 ? '16px' : chartData.length > 12 ? '20px' : '' }}
+                            >
+                                <div className="w-full flex gap-[2px] items-end justify-center" style={{ height: '100px' }}>
+                                    <div className="w-[40%] bg-blue-500/80 rounded-t-sm transition-all group-hover:bg-blue-400 group-hover:scale-y-105"
+                                        style={{ height: `${Math.max((d.users / maxVal) * 100, d.users > 0 ? 4 : 0)}%` }}
+                                        title={`${d.users} users`} />
+                                    <div className="w-[40%] bg-emerald-500/80 rounded-t-sm transition-all group-hover:bg-emerald-400 group-hover:scale-y-105"
+                                        style={{ height: `${Math.max((d.sites / maxVal) * 100, d.sites > 0 ? 4 : 0)}%` }}
+                                        title={`${d.sites} sites`} />
+                                </div>
+                                <span className={`text-app-text-muted truncate w-full text-center font-medium ${period === 'hourly' ? 'text-[6px] xs:text-[7px]' :
+                                        period === 'daily' ? 'text-[7px] xs:text-[8px]' :
+                                            'text-[8px] xs:text-[9px]'
+                                    }`}>{d.label}</span>
+
+                                {/* Tooltip - Better positioning for mobile */}
+                                <div className="absolute bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none"
+                                    style={{ left: '50%', transform: 'translateX(-50%)' }}>
+                                    <div className="bg-gray-900 border border-app-border rounded-lg px-2.5 py-1.5 shadow-xl text-[10px] sm:text-xs whitespace-nowrap">
+                                        <p className="font-semibold text-app-text-primary mb-1">{d.label}</p>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-1">
+                                                <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
+                                                <span className="text-blue-400 font-medium">{d.users}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <span className="w-2 h-2 rounded-sm bg-emerald-500"></span>
+                                                <span className="text-emerald-400 font-medium">{d.sites}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
-                ))}
+                </div>
+
+                {/* Scroll hint for mobile */}
+                {chartData.length > 12 && (
+                    <div className="sm:hidden absolute right-0 top-0 bottom-8 w-8 bg-gradient-to-l from-app-bg-secondary to-transparent pointer-events-none"></div>
+                )}
             </div>
         </div>
     );
@@ -662,8 +699,8 @@ export default function AdminDashboard() {
                 { col: 'created_at', label: 'Joined' }, { col: 'last_sign_in', label: 'Active' }].map(s => (
                     <button key={s.col} onClick={() => handleSort(s.col)}
                         className={`px-2.5 py-1 text-[10px] rounded-full whitespace-nowrap border transition-colors flex-shrink-0 ${sortBy === s.col
-                                ? 'bg-app-accent/20 border-app-accent/50 text-app-accent'
-                                : 'bg-app-bg-secondary border-app-border/30 text-app-text-muted'
+                            ? 'bg-app-accent/20 border-app-accent/50 text-app-accent'
+                            : 'bg-app-bg-secondary border-app-border/30 text-app-text-muted'
                             }`}>
                         {s.label} {sortBy === s.col ? (sortDir === 'desc' ? '↓' : '↑') : ''}
                     </button>
