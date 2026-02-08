@@ -229,7 +229,8 @@ export default async function handler(req, res) {
     }
 
     try {
-      const url = `${config.url}/rest/v1/${SUPABASE_TABLES.CATEGORIES}?select=*`;
+      // Fetch categories with site count using left join
+      const url = `${config.url}/rest/v1/${SUPABASE_TABLES.CATEGORIES}?select=*,site_categories(count)`;
       const headers = buildHeaders(config.anonKey, userToken);
       const response = await fetch(url, { headers });
 
@@ -242,7 +243,13 @@ export default async function handler(req, res) {
         });
       }
 
-      const data = await response.json();
+      const raw = await response.json();
+      // Flatten count: [{ ..., site_categories: [{ count: 5 }] }] → { ..., site_count: 5 }
+      const data = raw.map(cat => {
+        const count = cat.site_categories?.[0]?.count ?? 0;
+        const { site_categories: _sc, ...rest } = cat;
+        return { ...rest, site_count: count };
+      });
       return res.status(HTTP_STATUS.OK).json({ success: true, data });
     } catch (err) {
       return res.status(HTTP_STATUS.INTERNAL_ERROR).json({

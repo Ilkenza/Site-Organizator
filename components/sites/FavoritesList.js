@@ -1,104 +1,26 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import SiteCard from './SiteCard';
 import Pagination from '../ui/Pagination';
 
-const ITEMS_PER_PAGE = 30;
-
 export default function FavoritesList({ onEdit, onDelete }) {
-    const router = useRouter();
     const {
-        sites,
+        filteredSites,
         loading,
-        searchQuery,
-        sortBy,
-        sortOrder,
-        selectedCategory,
-        selectedTag
+        currentPage,
+        totalPages,
+        totalSitesCount,
+        fetchSitesPage,
+        SITES_PAGE_SIZE
     } = useDashboard();
 
-    // Get current page from URL or default to 1
-    const currentPage = parseInt(router.query.page) || 1;
+    // Calculate display indices
+    const startIndex = (currentPage - 1) * SITES_PAGE_SIZE;
+    const endIndex = startIndex + filteredSites.length;
 
-    // Filter only favorite sites
-    const favoriteSites = sites.filter(site => site.is_favorite);
-
-    // Filter by search, category, and tag
-    const filteredSites = favoriteSites.filter(site => {
-        const matchesSearch = !searchQuery ||
-            site.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            site.url?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        // Category filter
-        if (selectedCategory) {
-            const siteCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
-            if (!siteCategories.some(c => c?.id === selectedCategory)) return false;
-        }
-
-        // Tag filter
-        if (selectedTag) {
-            const siteTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
-            if (!siteTags.some(t => t?.id === selectedTag)) return false;
-        }
-
-        return matchesSearch;
-    }).sort((a, b) => {
-        // PINNED SITES FIRST - primary sort key
-        const aIsPinned = a.is_pinned ? 1 : 0;
-        const bIsPinned = b.is_pinned ? 1 : 0;
-        if (aIsPinned !== bIsPinned) {
-            return bIsPinned - aIsPinned; // true (1) comes before false (0)
-        }
-
-        // If both pinned or both unpinned, apply secondary sorting by selected field
-        let aVal = a[sortBy];
-        let bVal = b[sortBy];
-
-        if (sortBy === 'created_at' || sortBy === 'updated_at') {
-            aVal = new Date(aVal || 0).getTime();
-            bVal = new Date(bVal || 0).getTime();
-        } else if (sortBy === 'pricing') {
-            const pricingOrder = { fully_free: 0, freemium: 1, free_trial: 2, paid: 3 };
-            aVal = pricingOrder[aVal] ?? 4;
-            bVal = pricingOrder[bVal] ?? 4;
-        } else {
-            aVal = (aVal || '').toString().toLowerCase();
-            bVal = (bVal || '').toString().toLowerCase();
-        }
-
-        if (sortOrder === 'asc') {
-            return aVal > bVal ? 1 : -1;
-        }
-        return aVal < bVal ? 1 : -1;
-    });
-
-    // Calculate pagination
-    const totalItems = filteredSites.length;
-    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedSites = filteredSites.slice(startIndex, endIndex);
-
-    // Reset to page 1 when filters change
-    useEffect(() => {
-        if (currentPage > 1 && (searchQuery || selectedCategory || selectedTag)) {
-            router.push({
-                pathname: router.pathname,
-                query: { ...router.query, page: 1 }
-            }, undefined, { shallow: true });
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchQuery, selectedCategory, selectedTag]);
-
-    // Handle page change
+    // Handle page change — fetch new page from server
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) {
-            router.push({
-                pathname: router.pathname,
-                query: { ...router.query, page: newPage }
-            }, undefined, { shallow: true });
-            // Scroll to top
+            fetchSitesPage(newPage);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
@@ -116,7 +38,7 @@ export default function FavoritesList({ onEdit, onDelete }) {
         );
     }
 
-    if (favoriteSites.length === 0) {
+    if (filteredSites.length === 0 && totalSitesCount === 0) {
         return (
             <div className="flex flex-col items-center justify-center py-8 sm:py-16 px-4">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-app-bg-light flex items-center justify-center mb-3 sm:mb-4">
@@ -151,14 +73,14 @@ export default function FavoritesList({ onEdit, onDelete }) {
     return (
         <div>
             {/* Results count */}
-            {totalItems > 0 && (
+            {totalSitesCount > 0 && (
                 <div className="px-3 sm:px-6 pt-3 sm:pt-4 text-sm text-app-text-secondary">
-                    Showing {startIndex + 1}-{Math.min(endIndex, totalItems)} of {totalItems} favorite sites
+                    Showing {startIndex + 1}-{Math.min(endIndex, totalSitesCount)} of {totalSitesCount} favorite sites
                 </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-6">
-                {paginatedSites.map((site, index) => (
+                {filteredSites.map((site, index) => (
                     <SiteCard
                         key={site.id || `site-${index}`}
                         site={site}

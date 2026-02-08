@@ -136,7 +136,7 @@ const handleDuplicateTag = async (baseUrl, anonKey, serviceKey, tagName, errorTe
  * @returns {Promise<Array>} Tags array
  */
 const fetchAllTags = async (baseUrl, anonKey, readToken) => {
-  const url = `${baseUrl}/rest/v1/tags?select=*`;
+  const url = `${baseUrl}/rest/v1/tags?select=*,site_tags(count)`;
   const response = await fetch(url, {
     headers: {
       apikey: anonKey,
@@ -150,7 +150,13 @@ const fetchAllTags = async (baseUrl, anonKey, readToken) => {
     throw new Error(text);
   }
 
-  return await response.json();
+  const raw = await response.json();
+  // Flatten count: [{ ..., site_tags: [{ count: 3 }] }] → { ..., site_count: 3 }
+  return raw.map(tag => {
+    const count = tag.site_tags?.[0]?.count ?? 0;
+    const { site_tags: _st, ...rest } = tag;
+    return { ...rest, site_count: count };
+  });
 };
 
 /**

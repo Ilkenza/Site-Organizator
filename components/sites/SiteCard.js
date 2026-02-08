@@ -16,7 +16,7 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
     const allCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
     const allTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
 
-    // Import source icon from localStorage (no tag needed)
+    // Import source icon from localStorage
     const [importSource, setImportSource] = useState(null);
     useEffect(() => {
         try {

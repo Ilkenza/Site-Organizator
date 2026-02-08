@@ -7,7 +7,7 @@ const DashboardContext = createContext(null);
 // Constants
 const AUTH_CLEAR_DELAY = 500;
 const TOAST_DURATION = 3000;
-const SITES_LIMIT = 5000;
+const SITES_PAGE_SIZE = 30; // Sites per page (matches UI display)
 
 // Helper to check if valid tokens exist in localStorage
 function hasValidTokensInStorage() {
@@ -370,29 +370,136 @@ export function DashboardProvider({ children }) {
         }
     }, [sites, showToast]);
 
-    // Fetch all data
+    // Server-side pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalSitesCount, setTotalSitesCount] = useState(0);
+    const totalPages = Math.ceil(totalSitesCount / SITES_PAGE_SIZE) || 1;
+
+    // Build query string for current filters (server-side: category, tag, search, sort, favorites)
+    const buildSitesQuery = useCallback((page = 1) => {
+        const params = new URLSearchParams();
+        params.set('limit', SITES_PAGE_SIZE);
+        params.set('page', page);
+        if (searchQuery) params.set('q', searchQuery);
+        if (selectedCategory) params.set('category_id', selectedCategory);
+        if (selectedTag) params.set('tag_id', selectedTag);
+        if (sortBy) params.set('sort_by', sortBy);
+        if (sortOrder) params.set('sort_order', sortOrder);
+        if (activeTab === 'favorites') params.set('favorites', 'true');
+        return params.toString();
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab]);
+
+    // Cache for import-source-filtered data (avoids re-fetching all sites on every page change)
+    const importSourceCacheRef = useRef({ source: null, filters: null, data: [], total: 0 });
+
+    // Fetch a single page of sites from server
+    const fetchSitesPage = useCallback(async (page = 1) => {
+        try {
+            // When import source filter is active, we must fetch ALL sites and filter client-side
+            // (import source lives in localStorage, not in DB)
+            if (selectedImportSource && typeof window !== 'undefined') {
+                // Build a cache key from all server-side filters so cache invalidates on filter change
+                const filterKey = `${searchQuery}|${selectedCategory}|${selectedTag}|${sortBy}|${sortOrder}|${activeTab}`;
+                let allFiltered;
+                if (importSourceCacheRef.current.source === selectedImportSource &&
+                    importSourceCacheRef.current.filters === filterKey) {
+                    allFiltered = importSourceCacheRef.current.data;
+                } else {
+                    // Fetch all sites matching server-side filters in minimal mode (fast)
+                    const allParams = new URLSearchParams();
+                    allParams.set('limit', '5000');
+                    allParams.set('page', '1');
+                    allParams.set('fields', 'minimal');
+                    if (searchQuery) allParams.set('q', searchQuery);
+                    if (selectedCategory) allParams.set('category_id', selectedCategory);
+                    if (selectedTag) allParams.set('tag_id', selectedTag);
+                    if (sortBy) allParams.set('sort_by', sortBy);
+                    if (sortOrder) allParams.set('sort_order', sortOrder);
+                    if (activeTab === 'favorites') allParams.set('favorites', 'true');
+                    
+                    const allRes = await fetchAPI(`/sites?${allParams.toString()}`);
+                    const allData = Array.isArray(allRes) ? allRes : (allRes?.data || []);
+                    
+                    const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
+                    allFiltered = allData.filter(s => {
+                        const src = importSources[s.url];
+                        return selectedImportSource === 'manual' ? !src : src === selectedImportSource;
+                    });
+                    
+                    importSourceCacheRef.current = {
+                        source: selectedImportSource,
+                        filters: filterKey,
+                        data: allFiltered,
+                        total: allFiltered.length
+                    };
+                }
+                
+                // Client-side pagination
+                const startIdx = (page - 1) * SITES_PAGE_SIZE;
+                const pageData = allFiltered.slice(startIdx, startIdx + SITES_PAGE_SIZE);
+                
+                setSites(pageData);
+                setTotalSitesCount(allFiltered.length);
+                setCurrentPage(page);
+                return;
+            }
+            
+            // Normal server-side pagination (no import source filter)
+            const query = buildSitesQuery(page);
+            const sitesRes = await fetchAPI(`/sites?${query}`);
+            const sitesData = Array.isArray(sitesRes) ? sitesRes : (sitesRes?.data || []);
+            const total = sitesRes?.totalCount ?? sitesData.length;
+            
+            setSites(sitesData);
+            setTotalSitesCount(total);
+            setCurrentPage(page);
+        } catch (err) {
+            console.error('Failed to fetch sites page:', err);
+        }
+    }, [buildSitesQuery, selectedImportSource, searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab]);
+
+    // Fetch initial data (categories, tags, first page of sites, sidebar counts)
     const fetchData = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const [sitesRes, categoriesRes, tagsRes] = await Promise.all([
-                fetchAPI(`/sites?limit=${SITES_LIMIT}`),
+            const [sitesRes, categoriesRes, tagsRes, favRes, uncatRes, untagRes, totalRes] = await Promise.all([
+                fetchAPI(`/sites?${buildSitesQuery(1)}`),
                 fetchAPI('/categories'),
-                fetchAPI('/tags')
+                fetchAPI('/tags'),
+                // Lightweight count queries for sidebar (non-blocking)
+                fetchAPI('/sites?favorites=true&limit=1&page=1').catch(() => null),
+                fetchAPI('/sites?category_id=uncategorized&limit=1&page=1').catch(() => null),
+                fetchAPI('/sites?tag_id=untagged&limit=1&page=1').catch(() => null),
+                // Always fetch unfiltered total for accurate sidebar counts
+                fetchAPI('/sites?limit=1&page=1').catch(() => null)
             ]);
 
-            // Handle both direct array and { data: [...] } response formats
-            const sitesData = Array.isArray(sitesRes) ? sitesRes : (sitesRes?.data || []);
             const categoriesData = Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []);
             const tagsData = Array.isArray(tagsRes) ? tagsRes : (tagsRes?.data || []);
-
-            setSites(sitesData);
             setCategories(categoriesData);
             setTags(tagsData);
+
+            const sitesData = Array.isArray(sitesRes) ? sitesRes : (sitesRes?.data || []);
+            const totalCount = sitesRes?.totalCount ?? sitesData.length;
+
+            setSites(sitesData);
+            setTotalSitesCount(totalCount);
+            setCurrentPage(1);
+
+            // Sidebar counts
+            const favoritesCount = favRes?.totalCount ?? 0;
+            const uncategorizedCount = uncatRes?.totalCount ?? 0;
+            const untaggedCount = untagRes?.totalCount ?? 0;
+            const totalAllSites = totalRes?.totalCount ?? totalCount;
+
             setStats({
-                sites: sitesData.length,
+                sites: totalAllSites,
                 categories: categoriesData.length,
-                tags: tagsData.length
+                tags: tagsData.length,
+                favorites: favoritesCount,
+                uncategorized: uncategorizedCount,
+                untagged: untaggedCount
             });
         } catch (err) {
             setError(err.message);
@@ -400,7 +507,7 @@ export function DashboardProvider({ children }) {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [buildSitesQuery]);
 
     // Track which user ID we already fetched for to prevent duplicate fetches
     const fetchedForUserRef = useRef(null);
@@ -449,6 +556,30 @@ export function DashboardProvider({ children }) {
     useEffect(() => {
         fetchDataRef.current = fetchData;
     }, [fetchData]);
+
+    // Ref for fetchSitesPage (used in effects that shouldn't re-trigger on identity change)
+    const fetchSitesPageRef = useRef(fetchSitesPage);
+    useEffect(() => {
+        fetchSitesPageRef.current = fetchSitesPage;
+    }, [fetchSitesPage]);
+
+    // Track whether initial data has been loaded
+    const dataLoadedRef = useRef(false);
+    useEffect(() => {
+        if (!loading && user && sites.length >= 0 && fetchedForUserRef.current === user.id) {
+            dataLoadedRef.current = true;
+        }
+    }, [loading, user, sites.length]);
+
+    // Re-fetch page 1 when filters change (debounced for search)
+    useEffect(() => {
+        if (!dataLoadedRef.current) return;
+        const delay = searchQuery ? 300 : 0;
+        const timer = setTimeout(() => {
+            fetchSitesPageRef.current(1);
+        }, delay);
+        return () => clearTimeout(timer);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, selectedImportSource, activeTab]);
 
     useEffect(() => {
         if (!supabase || !user) return;
@@ -528,15 +659,18 @@ export function DashboardProvider({ children }) {
 
     const deleteSite = useCallback(async (id) => {
         try {
-            const _response = await fetchAPI(`/sites/${id}`, { method: 'DELETE' });
+            await fetchAPI(`/sites/${id}`, { method: 'DELETE' });
             setSites(prev => prev.filter(s => s.id !== id));
             setStats(prev => ({ ...prev, sites: prev.sites - 1 }));
+            setTotalSitesCount(prev => Math.max(0, prev - 1));
             showToast('✓ Site deleted successfully', 'success');
+            // Re-fetch current page to fill the gap
+            fetchSitesPage(currentPage).catch(() => {});
         } catch (err) {
             showToast(`✗ Failed to delete site: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast]);
+    }, [showToast, fetchSitesPage, currentPage]);
 
     // Retry failed relation updates for a site (requires service role key configured)
     const retrySiteRelations = useCallback(async (id) => {
@@ -682,52 +816,13 @@ export function DashboardProvider({ children }) {
         }
     }, [showToast]);
 
-    // Filtered and sorted sites
-    const filteredSites = sortItems(
-        sites.filter(site => {
-            if (searchQuery) {
-                const query = searchQuery.toLowerCase();
-                const matchesName = site.name?.toLowerCase().includes(query);
-                const matchesUrl = site.url?.toLowerCase().includes(query);
-                const matchesDescription = site.description?.toLowerCase().includes(query);
-                if (!matchesName && !matchesUrl && !matchesDescription) return false;
-            }
-            if (selectedCategory) {
-                const siteCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
-                if (selectedCategory === 'uncategorized') {
-                    if (siteCategories.length > 0) return false;
-                } else {
-                    if (!siteCategories.some(c => c?.id === selectedCategory)) return false;
-                }
-            }
-            if (selectedTag) {
-                const siteTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
-                if (selectedTag === 'untagged') {
-                    if (siteTags.length > 0) return false;
-                } else {
-                    if (!siteTags.some(t => t?.id === selectedTag)) return false;
-                }
-            }
-            if (selectedImportSource) {
-                // Get import source from localStorage
-                if (typeof window !== 'undefined') {
-                    try {
-                        const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
-                        const siteSource = importSources[site.url];
-                        if (siteSource !== selectedImportSource) return false;
-                    } catch {
-                        return false;
-                    }
-                } else {
-                    return false;
-                }
-            }
-            return true;
-        }),
-        sortBy,
-        sortOrder,
-        true // isPinnedPrimary
-    );
+    // Sites are already filtered and sorted by the server
+    // Only apply pinned-first ordering on the current page
+    const filteredSites = sites.slice().sort((a, b) => {
+        const aPin = a.is_pinned ? 1 : 0;
+        const bPin = b.is_pinned ? 1 : 0;
+        return bPin - aPin;
+    });
 
     // Sorted and filtered categories
     const filteredCategories = sortItems(categories, sortByCategories, sortOrderCategories);
@@ -748,6 +843,14 @@ export function DashboardProvider({ children }) {
         filteredSites,
         toast,
         showToast,
+
+        // Server-side pagination
+        currentPage,
+        setCurrentPage,
+        totalSitesCount,
+        totalPages,
+        fetchSitesPage,
+        SITES_PAGE_SIZE,
 
         // Filters
         searchQuery,

@@ -145,110 +145,218 @@ function PricingChart({ data }) {
 }
 
 // ========================================
-// Growth Chart (Bar chart — daily / monthly / yearly)
+// Growth Chart
 // ========================================
 const GROWTH_PERIODS = [
-    { key: 'hourly', label: 'Hourly (24h)', short: '24h', icon: '🕐' },
-    { key: 'daily', label: 'Daily (30d)', short: '30d', icon: '📅' },
-    { key: 'monthly', label: 'Monthly (12m)', short: '12m', icon: '📆' },
-    { key: 'yearly', label: 'Yearly', short: 'Year', icon: '📊' },
+    { key: 'hourly', label: '24 Hours', short: '24h', icon: '🕐' },
+    { key: 'daily', label: '30 Days', short: '30d', icon: '📅' },
+    { key: 'monthly', label: '12 Months', short: '12m', icon: '📊' },
+    { key: 'yearly', label: 'All Years', short: 'All', icon: '📈' },
 ];
 
 function GrowthChart({ data, period, onPeriodChange }) {
     const chartData = data?.[period] || [];
     if (!chartData.length) return <p className="text-app-text-muted text-sm">No data</p>;
-    const maxVal = Math.max(...chartData.map(d => Math.max(d.users, d.sites)), 1);
-    const totalUsers = chartData.reduce((s, d) => s + d.users, 0);
-    const totalSites = chartData.reduce((s, d) => s + d.sites, 0);
+    // Use cumulative totals for chart bars (real growth curve)
+    const hasCumulative = chartData[0]?.totalUsers !== undefined;
+    const maxVal = hasCumulative
+        ? Math.max(...chartData.map(d => Math.max(d.totalUsers || 0, d.totalSites || 0)), 1)
+        : Math.max(...chartData.map(d => Math.max(d.users, d.sites)), 1);
+    const newUsers = chartData.reduce((s, d) => s + d.users, 0);
+    const newSites = chartData.reduce((s, d) => s + d.sites, 0);
+    const lastEntry = chartData[chartData.length - 1];
+    const cumulativeUsers = lastEntry?.totalUsers ?? newUsers;
+    const cumulativeSites = lastEntry?.totalSites ?? newSites;
+    // Helper to get bar values
+    const getBarUsers = (d) => hasCumulative ? (d.totalUsers || 0) : d.users;
+    const getBarSites = (d) => hasCumulative ? (d.totalSites || 0) : d.sites;
 
     return (
-        <div>
-            {/* Period toggle - Full width on mobile, auto on desktop */}
-            <div className="flex flex-col gap-3 mb-4">
-                {/* Stats Row */}
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-3 sm:gap-4">
-                        <span className="flex items-center gap-1.5 text-[10px] sm:text-xs text-app-text-muted">
-                            <span className="w-3 h-2 rounded-sm bg-blue-500" />
-                            <span className="hidden xs:inline">Users</span>
-                            <span className="xs:hidden">U</span>
-                            <span className="font-semibold text-app-text-primary">({totalUsers})</span>
-                        </span>
-                        <span className="flex items-center gap-1.5 text-[10px] sm:text-xs text-app-text-muted">
-                            <span className="w-3 h-2 rounded-sm bg-emerald-500" />
-                            <span className="hidden xs:inline">Sites</span>
-                            <span className="xs:hidden">S</span>
-                            <span className="font-semibold text-app-text-primary">({totalSites})</span>
-                        </span>
+        <div className="space-y-4">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gradient-to-br from-blue-500/20 to-blue-900/10 border border-blue-500/30 rounded-xl p-3 sm:p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-lg">👥</span>
+                        <span className="text-blue-400/70 text-[11px] font-semibold uppercase tracking-wide">Users Adding Sites</span>
                     </div>
+                    <p className="text-3xl sm:text-4xl font-bold text-blue-400">{cumulativeUsers.toLocaleString()}</p>
+                    {newUsers > 0 && <p className="text-xs text-blue-400/60 mt-1">{newUsers} users added sites this period</p>}
                 </div>
-
-                {/* Period Buttons - Stack on mobile */}
-                <div className="grid grid-cols-2 xs:flex gap-1.5 xs:gap-1 bg-app-bg-primary rounded-lg p-1 border border-app-border/50">
-                    {GROWTH_PERIODS.map(p => (
-                        <button key={p.key}
-                            onClick={() => onPeriodChange(p.key)}
-                            className={`px-2.5 sm:px-3 py-1.5 sm:py-1 text-[10px] sm:text-[11px] rounded-md transition-all font-medium flex items-center justify-center gap-1 ${period === p.key
-                                ? 'bg-app-accent text-white shadow-sm'
-                                : 'text-app-text-muted hover:text-app-text-primary hover:bg-app-bg-light'
-                                }`}>
-                            <span className="text-xs sm:text-sm">{p.icon}</span>
-                            <span className="hidden sm:inline">{p.label}</span>
-                            <span className="sm:hidden">{p.short}</span>
-                        </button>
-                    ))}
+                <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-900/10 border border-emerald-500/30 rounded-xl p-3 sm:p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-lg">🌐</span>
+                        <span className="text-emerald-400/70 text-[11px] font-semibold uppercase tracking-wide">Total Sites</span>
+                    </div>
+                    <p className="text-3xl sm:text-4xl font-bold text-emerald-400">{cumulativeSites.toLocaleString()}</p>
+                    {newSites > 0 && <p className="text-xs text-emerald-400/60 mt-1">+{newSites} sites added this period</p>}
                 </div>
             </div>
 
-            {/* Bar chart - Responsive height and spacing */}
-            <div className="relative">
-                {/* Mobile: Horizontal scroll, Desktop: Full width */}
-                <div className="overflow-x-auto -mx-2 px-2 pb-2">
-                    <div className="flex items-end gap-[3px] sm:gap-[2px] h-36 xs:h-44 pt-6 sm:pt-8 min-w-max sm:min-w-0">
-                        {chartData.map((d, i) => (
-                            <div key={i}
-                                className="flex-1 min-w-[20px] xs:min-w-[24px] sm:min-w-0 flex flex-col items-center gap-1 group relative"
-                                style={{ minWidth: chartData.length > 20 ? '16px' : chartData.length > 12 ? '20px' : '' }}
-                            >
-                                <div className="w-full flex gap-[2px] items-end justify-center" style={{ height: '100px' }}>
-                                    <div className="w-[40%] bg-blue-500/80 rounded-t-sm transition-all group-hover:bg-blue-400 group-hover:scale-y-105"
-                                        style={{ height: `${Math.max((d.users / maxVal) * 100, d.users > 0 ? 4 : 0)}%` }}
-                                        title={`${d.users} users`} />
-                                    <div className="w-[40%] bg-emerald-500/80 rounded-t-sm transition-all group-hover:bg-emerald-400 group-hover:scale-y-105"
-                                        style={{ height: `${Math.max((d.sites / maxVal) * 100, d.sites > 0 ? 4 : 0)}%` }}
-                                        title={`${d.sites} sites`} />
-                                </div>
-                                <span className={`text-app-text-muted truncate w-full text-center font-medium ${period === 'hourly' ? 'text-[6px] xs:text-[7px]' :
-                                        period === 'daily' ? 'text-[7px] xs:text-[8px]' :
-                                            'text-[8px] xs:text-[9px]'
-                                    }`}>{d.label}</span>
+            {/* Period Selector */}
+            <div className="grid grid-cols-4 gap-1.5 bg-app-bg-primary rounded-xl p-1.5 border border-app-border/50">
+                {GROWTH_PERIODS.map(p => (
+                    <button key={p.key}
+                        onClick={() => onPeriodChange(p.key)}
+                        className={`px-2 py-2.5 sm:py-2 rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 ${period === p.key
+                                ? 'bg-gradient-to-r from-app-accent to-blue-500 text-white shadow-lg'
+                                : 'text-app-text-muted hover:text-app-text-primary hover:bg-app-bg-light'
+                            }`}>
+                        <span className="text-sm">{p.icon}</span>
+                        <span className="text-xs sm:text-sm">{p.short}</span>
+                    </button>
+                ))}
+            </div>
 
-                                {/* Tooltip - Better positioning for mobile */}
-                                <div className="absolute bottom-full mb-2 hidden group-hover:block z-50 pointer-events-none"
-                                    style={{ left: '50%', transform: 'translateX(-50%)' }}>
-                                    <div className="bg-gray-900 border border-app-border rounded-lg px-2.5 py-1.5 shadow-xl text-[10px] sm:text-xs whitespace-nowrap">
-                                        <p className="font-semibold text-app-text-primary mb-1">{d.label}</p>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex items-center gap-1">
-                                                <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
-                                                <span className="text-blue-400 font-medium">{d.users}</span>
+            {/* Horizontal Bar Chart - works on ALL screen sizes */}
+            {/* Mobile/Tablet: Horizontal Bars */}
+            <div className="lg:hidden bg-gradient-to-br from-app-bg-primary to-app-bg-light rounded-xl p-3 sm:p-5 border border-app-border/50 space-y-2">
+                {chartData.map((d, i) => {
+                    const bUsers = getBarUsers(d);
+                    const bSites = getBarSites(d);
+                    const userPct = (bUsers / maxVal) * 100;
+                    const sitePct = (bSites / maxVal) * 100;
+                    
+                    const hasData = d.users > 0 || d.sites > 0;
+                    return (
+                        <div key={i} className="group">
+                            {/* Label Row */}
+                            <div className="flex items-center justify-between mb-1">
+                                <span className={`text-[11px] sm:text-xs font-semibold truncate max-w-[40%] ${hasData ? 'text-app-text-secondary' : 'text-app-text-muted/50'}`}>{d.label}</span>
+                                {hasData ? (
+                                    <div className="flex items-center gap-3 text-[10px] sm:text-[11px]">
+                                        <span className="text-blue-400 font-bold">👥 {d.users}</span>
+                                        <span className="text-emerald-400 font-bold">🌐 {d.sites}</span>
+                                    </div>
+                                ) : (
+                                    <span className="text-[10px] text-app-text-muted/40">—</span>
+                                )}
+                            </div>
+                            {hasData && (<>
+                                {/* Users Bar */}
+                                <div className="w-full bg-white/5 rounded-full h-3 sm:h-3.5 mb-1 overflow-hidden">
+                                    <div 
+                                        className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-500 group-hover:from-blue-500 group-hover:to-blue-300"
+                                        style={{ width: `${Math.max(userPct, bUsers > 0 ? 3 : 0)}%` }}>
+                                    </div>
+                                </div>
+                                {/* Sites Bar */}
+                                <div className="w-full bg-white/5 rounded-full h-3 sm:h-3.5 overflow-hidden">
+                                    <div 
+                                        className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-500 group-hover:from-emerald-500 group-hover:to-emerald-300"
+                                        style={{ width: `${Math.max(sitePct, bSites > 0 ? 3 : 0)}%` }}>
+                                    </div>
+                                </div>
+                            </>)}
+                        </div>
+                    );
+                })}
+                
+                {/* Legend */}
+                <div className="flex items-center justify-center gap-6 pt-3 border-t border-app-border/30">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-600 to-blue-400"></div>
+                        <span className="text-xs font-medium text-app-text-secondary">Users Adding Sites</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400"></div>
+                        <span className="text-xs font-medium text-app-text-secondary">Sites Added</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Desktop: Classic Vertical Bar Chart */}
+            <div className="hidden lg:block bg-gradient-to-br from-app-bg-primary to-app-bg-light rounded-xl p-5 border border-app-border/50">
+                {/* Y-axis labels + bars area */}
+                <div className="flex gap-3" style={{ height: '320px' }}>
+                    {/* Y-axis */}
+                    <div className="flex flex-col justify-between text-[11px] text-app-text-muted font-medium w-8 text-right py-1">
+                        {[maxVal, Math.round(maxVal * 0.75), Math.round(maxVal * 0.5), Math.round(maxVal * 0.25), 0].map((v, i) => (
+                            <span key={i}>{v}</span>
+                        ))}
+                    </div>
+                    {/* Bars grid */}
+                    <div className="flex-1 relative">
+                        {/* Grid lines */}
+                        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                            {[0, 1, 2, 3, 4].map(i => (
+                                <div key={i} className="w-full border-t border-white/5"></div>
+                            ))}
+                        </div>
+                        {/* Bars */}
+                        <div className="relative h-full flex items-end gap-1">
+                            {chartData.map((d, i) => {
+                                const bUsers = getBarUsers(d);
+                                const bSites = getBarSites(d);
+                                const userPct = (bUsers / maxVal) * 100;
+                                const sitePct = (bSites / maxVal) * 100;
+                                if (d.users === 0 && d.sites === 0) {
+                                    return <div key={i} className="flex-1 h-full"></div>;
+                                }
+                                return (
+                                    <div key={i} className="flex-1 flex items-end gap-0.5 h-full group relative">
+                                        {/* Users bar */}
+                                        <div className="flex-1 flex flex-col justify-end h-full">
+                                            <div 
+                                                className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-md transition-all duration-300 group-hover:from-blue-500 group-hover:to-blue-300 group-hover:shadow-lg group-hover:shadow-blue-500/30"
+                                                style={{ height: `${Math.max(userPct, bUsers > 0 ? 2 : 0)}%` }}>
                                             </div>
-                                            <div className="flex items-center gap-1">
-                                                <span className="w-2 h-2 rounded-sm bg-emerald-500"></span>
-                                                <span className="text-emerald-400 font-medium">{d.sites}</span>
+                                        </div>
+                                        {/* Sites bar */}
+                                        <div className="flex-1 flex flex-col justify-end h-full">
+                                            <div 
+                                                className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-md transition-all duration-300 group-hover:from-emerald-500 group-hover:to-emerald-300 group-hover:shadow-lg group-hover:shadow-emerald-500/30"
+                                                style={{ height: `${Math.max(sitePct, bSites > 0 ? 2 : 0)}%` }}>
+                                            </div>
+                                        </div>
+                                        {/* Tooltip */}
+                                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                            <div className="bg-gray-900 border border-app-border rounded-lg px-3 py-2 shadow-2xl whitespace-nowrap">
+                                                <p className="text-xs font-bold text-app-text-primary mb-1.5">{d.label}</p>
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2.5 h-2.5 rounded bg-blue-500"></div>
+                                                        <span className="text-xs text-blue-400 font-semibold">{d.users} {d.users === 1 ? 'user' : 'users'} added sites</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2.5 h-2.5 rounded bg-emerald-500"></div>
+                                                        <span className="text-xs text-emerald-400 font-semibold">{d.sites} {d.sites === 1 ? 'site' : 'sites'} added</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+                {/* X-axis labels */}
+                <div className="flex gap-3 mt-2">
+                    <div className="w-8"></div>
+                    <div className="flex-1 flex">
+                        {chartData.map((d, i) => (
+                            <div key={i} className="flex-1 text-center">
+                                <span className={`text-app-text-muted font-semibold ${
+                                    period === 'hourly' ? 'text-[10px]' : 
+                                    period === 'daily' ? 'text-[10px]' : 
+                                    'text-[11px]'
+                                }`}>{d.label}</span>
                             </div>
                         ))}
                     </div>
                 </div>
-
-                {/* Scroll hint for mobile */}
-                {chartData.length > 12 && (
-                    <div className="sm:hidden absolute right-0 top-0 bottom-8 w-8 bg-gradient-to-l from-app-bg-secondary to-transparent pointer-events-none"></div>
-                )}
+                {/* Legend */}
+                <div className="flex items-center justify-center gap-6 mt-4 pt-4 border-t border-app-border/30">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3.5 h-3.5 rounded bg-gradient-to-t from-blue-600 to-blue-400"></div>
+                        <span className="text-sm font-medium text-app-text-secondary">Users Adding Sites</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-3.5 h-3.5 rounded bg-gradient-to-t from-emerald-600 to-emerald-400"></div>
+                        <span className="text-sm font-medium text-app-text-secondary">Sites Added</span>
+                    </div>
+                </div>
             </div>
         </div>
     );

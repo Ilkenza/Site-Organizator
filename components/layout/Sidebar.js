@@ -20,6 +20,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
         sites,
         selectedSites,
         setSelectedSites,
+        totalSitesCount,
         sortBy,
         setSortBy,
         sortOrder,
@@ -38,86 +39,42 @@ export default function Sidebar({ isOpen = false, onClose }) {
     const [tagsSearchQuery, setTagsSearchQuery] = useState('');
     const [isImportSourceOpen, setIsImportSourceOpen] = useState(false);
 
-    // Count favorite sites
-    const favoriteCount = sites.filter(s => s.is_favorite).length;
+    // Counts from API (loaded with categories/tags)
+    const favoriteCount = stats.favorites || 0;
+    const uncategorizedCount = stats.uncategorized || 0;
+    const untaggedCount = stats.untagged || 0;
+
+    // Whether any site filter is active
+    const hasActiveFilter = selectedCategory || selectedTag || selectedImportSource;
+
+    // Sites tab count: show "filtered / total" when a filter is active
+    const sitesTabCount = hasActiveFilter
+        ? `${totalSitesCount} / ${stats.sites}`
+        : stats.sites;
 
     // Logo always goes to Sites page
     const buildDashboardUrl = () => {
         return '/dashboard/sites';
     };
 
-    // Calculate import source counts
+    // Import source counts — computed from ALL localStorage entries (not just current page)
     const importSourceCounts = useMemo(() => {
         const counts = { bookmarks: 0, notion: 0, file: 0, manual: 0 };
         try {
             const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
-            sites.forEach(site => {
-                const source = importSources[site.url];
+            Object.values(importSources).forEach(source => {
                 if (source && Object.prototype.hasOwnProperty.call(counts, source)) {
                     counts[source]++;
-                } else if (!source) {
-                    // No import source means manually added
-                    counts.manual++;
                 }
             });
+            // Manual = total sites minus all sites with a recorded import source
+            const totalImported = counts.bookmarks + counts.notion + counts.file;
+            counts.manual = Math.max(0, (stats.sites || 0) - totalImported);
         } catch (e) {
             console.warn('Failed to parse import sources:', e);
         }
         return counts;
-    }, [sites]);
-
-    // Calculate filtered counts with memoization
-    const { filteredSiteCount, filteredFavoriteCount } = useMemo(() => {
-        if (!selectedCategory && !selectedTag && !selectedImportSource) {
-            return { filteredSiteCount: null, filteredFavoriteCount: null };
-        }
-
-        // Filter all sites
-        let filtered = sites;
-
-        if (selectedImportSource) {
-            try {
-                const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
-                filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
-            } catch (e) {
-                console.warn('Failed to filter by import source:', e);
-            }
-        }
-
-        if (selectedCategory) {
-            if (selectedCategory === 'uncategorized') {
-                filtered = filtered.filter(s => {
-                    const cats = s.categories_array || s.categories || s.site_categories?.map(sc => sc.category) || [];
-                    return cats.length === 0;
-                });
-            } else {
-                filtered = filtered.filter(s =>
-                    s.categories_array?.some(cat => cat?.id === selectedCategory)
-                );
-            }
-        }
-
-        if (selectedTag) {
-            if (selectedTag === 'untagged') {
-                filtered = filtered.filter(s => {
-                    const t = s.tags_array || s.tags || s.site_tags?.map(st => st.tag) || [];
-                    return t.length === 0;
-                });
-            } else {
-                filtered = filtered.filter(s =>
-                    s.tags_array?.some(tag => tag?.id === selectedTag)
-                );
-            }
-        }
-
-        // Filter favorites only
-        const favFiltered = filtered.filter(s => s.is_favorite);
-
-        return {
-            filteredSiteCount: filtered.length,
-            filteredFavoriteCount: favFiltered.length
-        };
-    }, [sites, selectedCategory, selectedTag, selectedImportSource]);
+    }, [stats.sites]);
 
     return (
         <>
@@ -167,10 +124,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
                 <div className="p-1.5 sm:p-2 border-b border-app-border">
                     <nav className="space-y-0.5 sm:space-y-1">
                         {[
-                            { id: 'sites', label: 'Sites', icon: 'sites', count: stats.sites, filteredCount: filteredSiteCount },
+                            { id: 'sites', label: 'Sites', icon: 'sites', count: sitesTabCount },
                             { id: 'categories', label: 'Categories', icon: 'categories', count: stats.categories },
                             { id: 'tags', label: 'Tags', icon: 'tags', count: stats.tags },
-                            { id: 'favorites', label: 'Favorites', icon: 'favorites', count: favoriteCount, filteredCount: filteredFavoriteCount },
+                            { id: 'favorites', label: 'Favorites', icon: 'favorites', count: favoriteCount },
                             { id: 'settings', label: 'Settings', icon: 'settings', count: null }
                         ].map(tab => {
                             const iconMap = {
@@ -240,23 +197,9 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         {tab.label}
                                     </span>
                                     {tab.count !== null && (
-                                        <span className="flex items-center gap-1">
-                                            {tab.filteredCount !== null && tab.filteredCount !== undefined && (tab.id === 'sites' || tab.id === 'favorites') && (selectedCategory || selectedTag || selectedImportSource) && activeTab === tab.id ? (
-                                                <>
-                                                    <span className={`text-xs px-1.5 py-0.5 rounded-full bg-app-accent text-app-bg-primary`}>
-                                                        {tab.filteredCount}
-                                                    </span>
-                                                    <span className="text-xs text-app-text-muted">/</span>
-                                                    <span className={`text-xs text-app-text-muted`}>
-                                                        {tab.count}
-                                                    </span>
-                                                </>
-                                            ) : (
-                                                <span className={`text-xs px-1.5 py-0.5 rounded-full 
-                                                    ${activeTab === tab.id ? 'bg-app-accent text-app-bg-primary' : 'bg-app-bg-light text-app-text-secondary'}`}>
-                                                    {tab.count}
-                                                </span>
-                                            )}
+                                        <span className={`text-xs px-1.5 py-0.5 rounded-full 
+                                            ${activeTab === tab.id ? 'bg-app-accent text-app-bg-primary' : 'bg-app-bg-light text-app-text-secondary'}`}>
+                                            {tab.count}
                                         </span>
                                     )}
                                 </button>
@@ -463,116 +406,29 @@ export default function Sidebar({ isOpen = false, onClose }) {
                             >
                                 All Categories
                             </button>
-                            {(() => {
-                                // Total uncategorized count
-                                const uncatCount = sites.filter(site => {
-                                    const cats = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
-                                    return cats.length === 0;
-                                }).length;
-
-                                // Filtered uncategorized count (when tag or import source is selected)
-                                const hasOtherFilter = selectedTag || selectedImportSource;
-                                let filteredUncatCount = uncatCount;
-
-                                if (hasOtherFilter) {
-                                    let filtered = sites.filter(site => {
-                                        const cats = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
-                                        return cats.length === 0;
-                                    });
-
-                                    if (selectedImportSource) {
-                                        try {
-                                            const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
-                                            filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
-                                        } catch (e) { /* ignore */ }
-                                    }
-
-                                    if (selectedTag) {
-                                        if (selectedTag === 'untagged') {
-                                            filtered = filtered.filter(s => {
-                                                const t = s.tags_array || s.tags || s.site_tags?.map(st => st.tag) || [];
-                                                return t.length === 0;
-                                            });
-                                        } else {
-                                            filtered = filtered.filter(s =>
-                                                s.tags_array?.some(tag => tag?.id === selectedTag)
-                                            );
-                                        }
-                                    }
-
-                                    filteredUncatCount = filtered.length;
-                                }
-
-                                // Format count: show "filtered/total" only in sites tab, otherwise just filtered count
-                                const displayCount = (activeTab === 'sites' && hasOtherFilter)
-                                    ? `${filteredUncatCount}/${uncatCount}`
-                                    : (hasOtherFilter ? filteredUncatCount : uncatCount);
-
-                                return (
-                                    <button
-                                        onClick={() => setSelectedCategory('uncategorized')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
+                            <button
+                                onClick={() => setSelectedCategory('uncategorized')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
                       ${selectedCategory === 'uncategorized'
-                                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
-                                                : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
-                                            }`}
-                                    >
-                                        <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
-                                        <span className="truncate flex-1">Uncategorized</span>
-                                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedCategory === 'uncategorized'
-                                            ? 'bg-amber-500/30 text-amber-400'
-                                            : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
-                                            }`}>
-                                            {displayCount}
-                                        </span>
-                                    </button>
-                                );
-                            })()}
+                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
+                                    }`}
+                            >
+                                <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
+                                <span className="truncate flex-1">Uncategorized</span>
+                                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedCategory === 'uncategorized'
+                                    ? 'bg-amber-500/30 text-amber-400'
+                                    : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
+                                    }`}>
+                                    {uncategorizedCount}
+                                </span>
+                            </button>
                             {categories
                                 .filter(cat => cat?.name?.toLowerCase().includes(categoriesSearchQuery.toLowerCase()))
                                 .sort((a, b) => a.name.localeCompare(b.name))
                                 .map(cat => {
-                                    // Total count for this category
-                                    const siteCount = sites.filter(site =>
-                                        site.categories_array?.some(c => c?.id === cat.id)
-                                    ).length;
-
-                                    // Filtered count when other filters are active
-                                    const hasOtherFilter = selectedTag || selectedImportSource;
-                                    let filteredCount = siteCount;
-
-                                    if (hasOtherFilter) {
-                                        let filtered = sites.filter(site =>
-                                            site.categories_array?.some(c => c?.id === cat.id)
-                                        );
-
-                                        if (selectedImportSource) {
-                                            try {
-                                                const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
-                                                filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
-                                            } catch (e) { /* ignore */ }
-                                        }
-
-                                        if (selectedTag) {
-                                            if (selectedTag === 'untagged') {
-                                                filtered = filtered.filter(s => {
-                                                    const t = s.tags_array || s.tags || s.site_tags?.map(st => st.tag) || [];
-                                                    return t.length === 0;
-                                                });
-                                            } else {
-                                                filtered = filtered.filter(s =>
-                                                    s.tags_array?.some(tag => tag?.id === selectedTag)
-                                                );
-                                            }
-                                        }
-
-                                        filteredCount = filtered.length;
-                                    }
-
-                                    // Format count: show "filtered/total" only in sites tab, otherwise just filtered count
-                                    const displayCount = (activeTab === 'sites' && hasOtherFilter)
-                                        ? `${filteredCount}/${siteCount}`
-                                        : (hasOtherFilter ? filteredCount : siteCount);
+                                    // Use site_count from API
+                                    const siteCount = cat.site_count || 0;
 
                                     return (
                                         <button
@@ -593,7 +449,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 ? 'bg-app-accent/30 text-app-accent'
                                                 : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
                                                 }`}>
-                                                {displayCount}
+                                                {siteCount}
                                             </span>
                                         </button>
                                     );
@@ -627,116 +483,29 @@ export default function Sidebar({ isOpen = false, onClose }) {
                             >
                                 All Tags
                             </button>
-                            {(() => {
-                                // Total untagged count
-                                const untagCount = sites.filter(site => {
-                                    const t = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
-                                    return t.length === 0;
-                                }).length;
-
-                                // Filtered untagged count (when category or import source is selected)
-                                const hasOtherFilter = selectedCategory || selectedImportSource;
-                                let filteredUntagCount = untagCount;
-
-                                if (hasOtherFilter) {
-                                    let filtered = sites.filter(site => {
-                                        const t = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
-                                        return t.length === 0;
-                                    });
-
-                                    if (selectedImportSource) {
-                                        try {
-                                            const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
-                                            filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
-                                        } catch (e) { /* ignore */ }
-                                    }
-
-                                    if (selectedCategory) {
-                                        if (selectedCategory === 'uncategorized') {
-                                            filtered = filtered.filter(s => {
-                                                const cats = s.categories_array || s.categories || s.site_categories?.map(sc => sc.category) || [];
-                                                return cats.length === 0;
-                                            });
-                                        } else {
-                                            filtered = filtered.filter(s =>
-                                                s.categories_array?.some(cat => cat?.id === selectedCategory)
-                                            );
-                                        }
-                                    }
-
-                                    filteredUntagCount = filtered.length;
-                                }
-
-                                // Format count: show "filtered/total" only in sites tab, otherwise just filtered count
-                                const displayCount = (activeTab === 'sites' && hasOtherFilter)
-                                    ? `${filteredUntagCount}/${untagCount}`
-                                    : (hasOtherFilter ? filteredUntagCount : untagCount);
-
-                                return (
-                                    <button
-                                        onClick={() => setSelectedTag('untagged')}
-                                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
+                            <button
+                                onClick={() => setSelectedTag('untagged')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
                       ${selectedTag === 'untagged'
-                                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
-                                                : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
-                                            }`}
-                                    >
-                                        <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
-                                        <span className="truncate flex-1">Untagged</span>
-                                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedTag === 'untagged'
-                                            ? 'bg-amber-500/30 text-amber-400'
-                                            : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
-                                            }`}>
-                                            {displayCount}
-                                        </span>
-                                    </button>
-                                );
-                            })()}
+                                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
+                                    }`}
+                            >
+                                <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
+                                <span className="truncate flex-1">Untagged</span>
+                                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedTag === 'untagged'
+                                    ? 'bg-amber-500/30 text-amber-400'
+                                    : 'bg-app-bg-light text-app-text-muted group-hover:bg-amber-500/20 group-hover:text-amber-400'
+                                    }`}>
+                                    {untaggedCount}
+                                </span>
+                            </button>
                             {tags
                                 .filter(tag => tag?.name?.toLowerCase().includes(tagsSearchQuery.toLowerCase()))
                                 .sort((a, b) => a.name.localeCompare(b.name))
                                 .map(tag => {
-                                    // Total count for this tag
-                                    const siteCount = sites.filter(site =>
-                                        site.tags_array?.some(t => t?.id === tag.id)
-                                    ).length;
-
-                                    // Filtered count when other filters are active
-                                    const hasOtherFilter = selectedCategory || selectedImportSource;
-                                    let filteredCount = siteCount;
-
-                                    if (hasOtherFilter) {
-                                        let filtered = sites.filter(site =>
-                                            site.tags_array?.some(t => t?.id === tag.id)
-                                        );
-
-                                        if (selectedImportSource) {
-                                            try {
-                                                const importSources = JSON.parse(localStorage.getItem('import_sources') || '{}');
-                                                filtered = filtered.filter(s => importSources[s.url] === selectedImportSource);
-                                            } catch (e) { /* ignore */ }
-                                        }
-
-                                        if (selectedCategory) {
-                                            if (selectedCategory === 'uncategorized') {
-                                                filtered = filtered.filter(s => {
-                                                    const cats = s.categories_array || s.categories || s.site_categories?.map(sc => sc.category) || [];
-                                                    return cats.length === 0;
-                                                });
-                                            } else {
-                                                filtered = filtered.filter(s =>
-                                                    s.categories_array?.some(cat => cat?.id === selectedCategory)
-                                                );
-                                            }
-                                        }
-
-                                        filteredCount = filtered.length;
-                                    }
-
-                                    // Format count: show "filtered/total" only in sites tab, otherwise just filtered count
-                                    const displayCount = (activeTab === 'sites' && hasOtherFilter)
-                                        ? `${filteredCount}/${siteCount}`
-                                        : (hasOtherFilter ? filteredCount : siteCount);
+                                    // Use site_count from API
+                                    const siteCount = tag.site_count || 0;
 
                                     return (
                                         <button
@@ -757,7 +526,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 ? 'bg-app-accent/30 text-app-accent'
                                                 : 'bg-app-bg-light text-app-text-muted group-hover:bg-app-accent/20 group-hover:text-app-accent'
                                                 }`}>
-                                                {displayCount}
+                                                {siteCount}
                                             </span>
                                         </button>
                                     );
@@ -784,7 +553,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
                         </button>
-                        {isImportSourceOpen && (
+                        {isImportSourceOpen && (<>
                             <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
                                 <button
                                     onClick={() => setSelectedImportSource(null)}
@@ -876,6 +645,25 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     </span>
                                 </button>
                             </div>
+                            {/* Clear import source data if corrupted */}
+                            {(importSourceCounts.bookmarks > 0 || importSourceCounts.notion > 0 || importSourceCounts.file > 0) && (
+                                <button
+                                    onClick={() => {
+                                        if (confirm('This will mark all sites as manually added. Are you sure?')) {
+                                            localStorage.removeItem('import_sources');
+                                            setSelectedImportSource(null);
+                                            window.location.reload();
+                                        }
+                                    }}
+                                    className="w-full mt-2 px-3 py-1.5 rounded-lg text-[10px] font-medium transition-all flex items-center justify-center gap-1.5 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20"
+                                >
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Reset import source data
+                                </button>
+                            )}
+                        </>
                         )}
                     </div>
                 )}

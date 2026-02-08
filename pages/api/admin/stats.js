@@ -230,9 +230,24 @@ export default async function handler(req, res) {
             };
         }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-        // 7. Count sites by pricing model
-        const { data: allSitesFullData } = await supabase.from('sites').select('id, url, pricing, user_id, created_at');
-        const allSitesFull = allSitesFullData || [];
+        // 7. Count sites by pricing model — fetch ALL sites (Supabase default limit is 1000)
+        let allSitesFull = [];
+        let from = 0;
+        const PAGE_SIZE = 1000;
+        let hasMoreData = true;
+        while (hasMoreData) {
+            const { data: batch } = await supabase.from('sites').select('id, url, pricing, user_id, created_at').range(from, from + PAGE_SIZE - 1);
+            if (!batch || batch.length === 0) {
+                hasMoreData = false;
+                break;
+            }
+            allSitesFull = allSitesFull.concat(batch);
+            if (batch.length < PAGE_SIZE) {
+                hasMoreData = false;
+            } else {
+                from += PAGE_SIZE;
+            }
+        }
 
         const pricingBreakdown = { fully_free: 0, freemium: 0, free_trial: 0, paid: 0 };
         allSitesFull.forEach(s => {
@@ -253,31 +268,34 @@ export default async function handler(req, res) {
             const hStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() - i, 0, 0, 0);
             const hEnd = new Date(hStart.getFullYear(), hStart.getMonth(), hStart.getDate(), hStart.getHours(), 59, 59, 999);
             const label = `${String(hStart.getHours()).padStart(2, '0')}:00`;
-            const usersCount = users.filter(u => {
-                const cd = new Date(u.created_at);
-                return cd >= hStart && cd <= hEnd;
-            }).length;
-            const sitesCount = allSitesFull.filter(s => {
+            const sitesInRange = allSitesFull.filter(s => {
                 const cd = new Date(s.created_at);
                 return cd >= hStart && cd <= hEnd;
-            }).length;
-            growthHourly.push({ label, users: usersCount, sites: sitesCount });
+            });
+            const sitesCount = sitesInRange.length;
+            const usersAddingSites = new Set(sitesInRange.map(s => s.user_id)).size;
+            const sitesUpTo = allSitesFull.filter(s => new Date(s.created_at) <= hEnd);
+            const totalSitesUpTo = sitesUpTo.length;
+            const totalUsersUpTo = new Set(sitesUpTo.map(s => s.user_id)).size;
+            growthHourly.push({ label, users: usersAddingSites, sites: sitesCount, totalUsers: totalUsersUpTo, totalSites: totalSitesUpTo });
         }
 
         // 8a. Monthly growth data (last 12 months)
         const growthMonthly = [];
         for (let i = 11; i >= 0; i--) {
             const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
             const label = d.toLocaleString('en', { month: 'short', year: '2-digit' });
-            const usersCount = users.filter(u => {
-                const cd = new Date(u.created_at);
-                return cd.getMonth() === d.getMonth() && cd.getFullYear() === d.getFullYear();
-            }).length;
-            const sitesCount = allSitesFull.filter(s => {
+            const sitesInMonth = allSitesFull.filter(s => {
                 const cd = new Date(s.created_at);
                 return cd.getMonth() === d.getMonth() && cd.getFullYear() === d.getFullYear();
-            }).length;
-            growthMonthly.push({ label, users: usersCount, sites: sitesCount });
+            });
+            const sitesCount = sitesInMonth.length;
+            const usersAddingSites = new Set(sitesInMonth.map(s => s.user_id)).size;
+            const sitesUpTo = allSitesFull.filter(s => new Date(s.created_at) <= monthEnd);
+            const totalSitesUpTo = sitesUpTo.length;
+            const totalUsersUpTo = new Set(sitesUpTo.map(s => s.user_id)).size;
+            growthMonthly.push({ label, users: usersAddingSites, sites: sitesCount, totalUsers: totalUsersUpTo, totalSites: totalSitesUpTo });
         }
 
         // 8b. Daily growth data (last 30 days)
@@ -287,29 +305,31 @@ export default async function handler(req, res) {
             const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
             const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
             const label = `${d.getDate()} ${d.toLocaleString('en', { month: 'short' })}`;
-            const usersCount = users.filter(u => {
-                const cd = new Date(u.created_at);
-                return cd >= dayStart && cd <= dayEnd;
-            }).length;
-            const sitesCount = allSitesFull.filter(s => {
+            const sitesInDay = allSitesFull.filter(s => {
                 const cd = new Date(s.created_at);
                 return cd >= dayStart && cd <= dayEnd;
-            }).length;
-            growthDaily.push({ label, users: usersCount, sites: sitesCount });
+            });
+            const sitesCount = sitesInDay.length;
+            const usersAddingSites = new Set(sitesInDay.map(s => s.user_id)).size;
+            const sitesUpTo = allSitesFull.filter(s => new Date(s.created_at) <= dayEnd);
+            const totalSitesUpTo = sitesUpTo.length;
+            const totalUsersUpTo = new Set(sitesUpTo.map(s => s.user_id)).size;
+            growthDaily.push({ label, users: usersAddingSites, sites: sitesCount, totalUsers: totalUsersUpTo, totalSites: totalSitesUpTo });
         }
 
         // 8c. Yearly growth data (all years with data)
-        const allDates = [
-            ...users.map(u => new Date(u.created_at).getFullYear()),
-            ...allSitesFull.map(s => new Date(s.created_at).getFullYear())
-        ];
-        const minYear = allDates.length ? Math.min(...allDates) : now.getFullYear();
         const maxYear = now.getFullYear();
+        const minYear = maxYear - 9;
         const growthYearly = [];
         for (let y = minYear; y <= maxYear; y++) {
-            const usersCount = users.filter(u => new Date(u.created_at).getFullYear() === y).length;
-            const sitesCount = allSitesFull.filter(s => new Date(s.created_at).getFullYear() === y).length;
-            growthYearly.push({ label: String(y), users: usersCount, sites: sitesCount });
+            const yearEnd = new Date(y, 11, 31, 23, 59, 59, 999);
+            const sitesInYear = allSitesFull.filter(s => new Date(s.created_at).getFullYear() === y);
+            const sitesCount = sitesInYear.length;
+            const usersAddingSites = new Set(sitesInYear.map(s => s.user_id)).size;
+            const sitesUpTo = allSitesFull.filter(s => new Date(s.created_at) <= yearEnd);
+            const totalSitesUpTo = sitesUpTo.length;
+            const totalUsersUpTo = new Set(sitesUpTo.map(s => s.user_id)).size;
+            growthYearly.push({ label: String(y), users: usersAddingSites, sites: sitesCount, totalUsers: totalUsersUpTo, totalSites: totalSitesUpTo });
         }
 
         // 9. Sites per user stats

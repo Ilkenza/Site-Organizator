@@ -397,16 +397,53 @@ const parsePaginationParams = (query) => {
  * @param {string} baseUrl - Supabase base URL
  * @param {number} limit - Result limit
  * @param {number} offset - Result offset
- * @param {string|null} searchQuery - Search query
+ * @param {Object} filters - Filter options
  * @returns {string} Complete URL
  */
-const buildSitesListUrl = (baseUrl, limit, offset, searchQuery) => {
-  let url = `${baseUrl}/rest/v1/sites?select=*`;
-  url += `&order=created_at.desc&limit=${limit}&offset=${offset}`;
+const buildSitesListUrl = (baseUrl, limit, offset, filters = {}) => {
+  const { searchQuery, categoryId, tagId, sortBy, sortOrder, favoritesOnly, isUncategorized, isUntagged } = filters;
+
+  // Build select with appropriate joins
+  let select = '*';
+  const queryFilters = [];
+
+  // Category filter: inner join for specific category, left join for uncategorized
+  if (isUncategorized) {
+    select += ',site_categories!left(category_id)';
+    queryFilters.push('site_categories=is.null');
+  } else if (categoryId) {
+    select += ',site_categories!inner(category_id)';
+    queryFilters.push(`site_categories.category_id=eq.${encodeURIComponent(categoryId)}`);
+  }
+
+  // Tag filter: inner join for specific tag, left join for untagged
+  if (isUntagged) {
+    select += ',site_tags!left(tag_id)';
+    queryFilters.push('site_tags=is.null');
+  } else if (tagId) {
+    select += ',site_tags!inner(tag_id)';
+    queryFilters.push(`site_tags.tag_id=eq.${encodeURIComponent(tagId)}`);
+  }
+
+  // Sort field mapping
+  const validSorts = ['created_at', 'updated_at', 'name', 'url', 'pricing'];
+  const sort = validSorts.includes(sortBy) ? sortBy : 'created_at';
+  const order = sortOrder === 'asc' ? 'asc' : 'desc';
+
+  let url = `${baseUrl}/rest/v1/sites?select=${encodeURIComponent(select)}`;
+  url += `&order=is_pinned.desc,${sort}.${order}&limit=${limit}&offset=${offset}`;
+
+  // Favorites filter
+  if (favoritesOnly) {
+    url += '&is_favorite=eq.true';
+  }
+
+  // Append all query filters
+  queryFilters.forEach(f => { url += `&${f}`; });
 
   if (searchQuery) {
     const qEsc = encodeURIComponent(searchQuery.replace(/%/g, '%25'));
-    const orFilter = `or=(name.ilike.*${qEsc}*,url.ilike.*${qEsc}*)`;
+    const orFilter = `or=(name.ilike.*${qEsc}*,url.ilike.*${qEsc}*,description.ilike.*${qEsc}*)`;
     url += `&${orFilter}`;
   }
 
@@ -425,7 +462,8 @@ const fetchSites = async (url, anonKey, authKey) => {
     headers: {
       apikey: anonKey,
       Authorization: `Bearer ${authKey}`,
-      Accept: 'application/json'
+      Accept: 'application/json',
+      Prefer: 'count=exact'
     }
   });
 
@@ -434,7 +472,16 @@ const fetchSites = async (url, anonKey, authKey) => {
     throw new Error(text);
   }
 
-  return await response.json();
+  const data = await response.json();
+  const contentRange = response.headers.get('content-range');
+  let totalCount = null;
+  if (contentRange) {
+    const match = contentRange.match(/\/(\d+)/);
+    if (match) totalCount = parseInt(match[1], 10);
+  }
+  if (totalCount === null) totalCount = Array.isArray(data) ? data.length : 0;
+
+  return { data, totalCount };
 };
 
 /**
@@ -700,7 +747,9 @@ const normalizeSiteRelations = (sites, categoriesBySite, tagsBySite, nameToCateg
       return t;
     });
 
-    return Object.assign({}, site, {
+    // Strip left-join artifacts from uncategorized/untagged queries
+    const { site_categories: _sc, site_tags: _st, ...cleanSite } = site;
+    return Object.assign({}, cleanSite, {
       categories_array: normalizedCats,
       tags_array: normalizedTags
     });
@@ -887,17 +936,55 @@ const handlePostRequest = async (req, res, baseUrl, anonKey, authKey, relKey) =>
  */
 const handleGetRequest = async (req, res, baseUrl, anonKey, authKey, relKey) => {
   const searchQuery = req.query?.q ? String(req.query.q).trim() : null;
+  const categoryId = req.query?.category_id || null;
+  const tagId = req.query?.tag_id || null;
+  const sortBy = req.query?.sort_by || 'created_at';
+  const sortOrder = req.query?.sort_order || 'desc';
+  const favoritesOnly = req.query?.favorites === 'true';
   const { limit, offset } = parsePaginationParams(req.query);
 
-  // Build URL and fetch sites
-  const url = buildSitesListUrl(baseUrl, limit, offset, searchQuery);
-  let sites = await fetchSites(url, anonKey, authKey);
+  // Build URL with filters — use left join + is.null for uncategorized/untagged
+  const filters = {
+    searchQuery,
+    categoryId: (categoryId && categoryId !== 'uncategorized') ? categoryId : null,
+    tagId: (tagId && tagId !== 'untagged') ? tagId : null,
+    sortBy,
+    sortOrder,
+    favoritesOnly,
+    isUncategorized: categoryId === 'uncategorized',
+    isUntagged: tagId === 'untagged'
+  };
+  const url = buildSitesListUrl(baseUrl, limit, offset, filters);
+  const fieldsMode = req.query?.fields || null;
+  const { data: sites, totalCount } = await fetchSites(url, anonKey, authKey);
+
+  // Minimal mode: return raw site data with basic array normalization (no relation lookups)
+  // Used for fast bulk fetches (e.g. import source filtering where only url/id matter)
+  if (fieldsMode === 'minimal') {
+    const minimalSites = (Array.isArray(sites) ? sites : []).map(site => {
+      const { site_categories: _sc, site_tags: _st, ...clean } = site;
+      // Convert legacy string arrays to {name} objects for Badge compatibility
+      const cats = (Array.isArray(clean.categories_array) ? clean.categories_array : []).map(
+        c => typeof c === 'string' ? { name: c } : c
+      );
+      const tagArr = (Array.isArray(clean.tags_array) ? clean.tags_array : []).map(
+        t => typeof t === 'string' ? { name: t } : t
+      );
+      return { ...clean, categories_array: cats, tags_array: tagArr };
+    });
+    return res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: minimalSites,
+      totalCount: totalCount || minimalSites.length
+    });
+  }
 
   // If no sites, return early
   if (!Array.isArray(sites) || sites.length === 0) {
     return res.status(HTTP_STATUS.OK).json({
       success: true,
       data: [],
+      totalCount: totalCount || 0,
       debug: {
         sitesCount: 0,
         siteCategoriesCount: 0,
@@ -935,7 +1022,7 @@ const handleGetRequest = async (req, res, baseUrl, anonKey, authKey, relKey) => 
   const nameToTag = await lookupTagsByNames(baseUrl, anonKey, relKey, tagNames);
 
   // Normalize and attach relations
-  sites = normalizeSiteRelations(
+  const normalizedSites = normalizeSiteRelations(
     sites,
     categoriesBySite,
     tagsBySite,
@@ -944,11 +1031,12 @@ const handleGetRequest = async (req, res, baseUrl, anonKey, authKey, relKey) => 
   );
 
   // Build debug info
-  const debug = buildDebugCounts(sites, siteCategories, siteTags, scDebug, stDebug);
+  const debug = buildDebugCounts(normalizedSites, siteCategories, siteTags, scDebug, stDebug);
 
   return res.status(HTTP_STATUS.OK).json({
     success: true,
-    data: sites,
+    data: normalizedSites,
+    totalCount,
     debug
   });
 };
