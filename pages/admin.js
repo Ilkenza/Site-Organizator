@@ -11,6 +11,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { SearchIcon, CrownIcon, ShieldCheckIcon, BanIcon, TrashIcon, RefreshIcon } from '../components/ui/Icons';
 
 // ========================================
 // Constants
@@ -338,8 +339,8 @@ function GrowthChart({ data, period, onPeriodChange }) {
                         {chartData.map((d, i) => (
                             <div key={i} className="flex-1 text-center">
                                 <span className={`text-app-text-muted font-semibold ${period === 'hourly' ? 'text-[10px]' :
-                                        period === 'daily' ? 'text-[10px]' :
-                                            'text-[11px]'
+                                    period === 'daily' ? 'text-[10px]' :
+                                        'text-[11px]'
                                     }`}>{d.label}</span>
                             </div>
                         ))}
@@ -426,9 +427,7 @@ function UserRow({ user, index, onDelete, onBan, onTogglePro, isCurrentUser }) {
                                 : 'text-app-text-muted hover:text-purple-400 hover:bg-purple-900/20'
                                 }`}
                             title={user.is_pro ? 'Remove Pro' : 'Give Pro'}>
-                            <svg className="w-4 h-4" fill={user.is_pro ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l3.057-3L12 3.5 15.943 0 19 3l-2 7H7L5 3zM7 10h10l1 2H6l1-2zM8 14h8v2a4 4 0 01-8 0v-2z" />
-                            </svg>
+                            <CrownIcon className="w-4 h-4" fill={user.is_pro ? 'currentColor' : 'none'} />
                         </button>
                         <button onClick={() => onBan(user)}
                             className={`p-1 rounded transition-colors ${user.banned
@@ -437,28 +436,20 @@ function UserRow({ user, index, onDelete, onBan, onTogglePro, isCurrentUser }) {
                                 }`}
                             title={user.banned ? 'Unban user' : 'Ban user'}>
                             {user.banned ? (
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                </svg>
+                                <ShieldCheckIcon className="w-4 h-4" />
                             ) : (
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                </svg>
+                                <BanIcon className="w-4 h-4" />
                             )}
                         </button>
                         <button onClick={() => onDelete(user)}
                             className="text-app-text-muted hover:text-red-400 transition-colors p-1 rounded hover:bg-red-900/20"
                             title="Delete user">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                            <TrashIcon className="w-4 h-4" />
                         </button>
                     </div>
                 ) : (
                     <span className="text-xs text-blue-400 font-medium flex items-center justify-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                        </svg>
+                        <ShieldCheckIcon className="w-3.5 h-3.5" />
                         You
                     </span>
                 )}
@@ -837,9 +828,7 @@ export default function AdminDashboard() {
                         {exporting === 'users' ? '⏳...' : '📥 CSV'}
                     </button>
                     <div className="relative flex-1 sm:flex-none">
-                        <svg className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-app-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+                        <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-app-text-muted" />
                         <input type="text" placeholder="Search users..." value={userSearch}
                             onChange={(e) => setUserSearch(e.target.value)}
                             className="w-full pl-9 pr-4 py-2 bg-app-bg-secondary border border-app-border/50 rounded-lg text-sm text-app-text-primary placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-app-accent sm:w-64" />
@@ -1152,9 +1141,7 @@ export default function AdminDashboard() {
                             <button onClick={fetchData}
                                 className="p-2 text-app-text-muted hover:text-app-text-primary hover:bg-app-bg-light rounded-lg transition-colors"
                                 title="Refresh">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
+                                <RefreshIcon className="w-5 h-5" />
                             </button>
                             <button onClick={() => router.push('/dashboard/sites')}
                                 className="px-3 py-1.5 text-xs sm:text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">

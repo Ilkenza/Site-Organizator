@@ -9,6 +9,7 @@ import SecuritySection from './SecuritySection';
 import PasswordModal from './PasswordModal';
 import EmailModal from './EmailModal';
 import MfaModal from './MfaModal';
+import DangerZoneSection from './DangerZoneSection';
 
 export default function SettingsPanel() {
     const { user, signOut, refreshUser } = useAuth();
@@ -44,6 +45,8 @@ export default function SettingsPanel() {
                     onEmailClick={() => setEmailModalOpen(true)}
                     onMfaClick={() => setMfaModalOpen(true)}
                 />
+
+                <DangerZoneSection />
             </div>
 
             <PasswordModal

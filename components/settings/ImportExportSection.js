@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
+import { SpinnerIcon, TextLinesIcon, BookmarkIcon, DocumentIcon, UploadIcon, DownloadIcon, ArrowLeftIcon } from '../ui/Icons';
 import { useDashboard } from '../../context/DashboardContext';
 
 export default function ImportExportSection({ user, fetchData, showToast }) {
     const [importMessage, setImportMessage] = useState(null);
     const [showDuplicates, setShowDuplicates] = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const [exportingFormat, setExportingFormat] = useState(null);
 
     // Import state from context (persists across tab changes)
     const {
@@ -17,6 +20,8 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
 
     // Export
     const handleExport = async (format = 'json') => {
+        setExporting(true);
+        setExportingFormat(format);
         try {
             const { exportSites } = await import('../../lib/exportImport.js');
             const result = await exportSites(user?.id, format);
@@ -28,6 +33,9 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
         } catch (err) {
             console.error('Export failed:', err);
             setImportMessage({ type: 'error', text: `Export error: ${err.message}` });
+        } finally {
+            setExporting(false);
+            setExportingFormat(null);
         }
     };
 
@@ -107,33 +115,27 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                 </p>
 
                 <div className="flex flex-col xs:flex-row flex-wrap gap-2 xs:gap-3">
-                    <button
-                        onClick={() => handleExport('json')}
-                        className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        JSON
-                    </button>
-                    <button
-                        onClick={() => handleExport('csv')}
-                        className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7 20H5a2 2 0 01-2-2V9a2 2 0 012-2h6a2 2 0 012 2v10a2 2 0 01-2 2z" />
-                        </svg>
-                        CSV
-                    </button>
-                    <button
-                        onClick={() => handleExport('html')}
-                        className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] font-medium transition-colors"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20v-6m4 6v-6m5-10H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V4a2 2 0 00-2-2z" />
-                        </svg>
-                        HTML
-                    </button>
+                    {[
+                        { fmt: 'json', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+                        { fmt: 'csv', icon: 'M9 12l2 2 4-4M7 20H5a2 2 0 01-2-2V9a2 2 0 012-2h6a2 2 0 012 2v10a2 2 0 01-2 2z' },
+                        { fmt: 'html', icon: 'M10 20v-6m4 6v-6m5-10H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V4a2 2 0 00-2-2z' },
+                    ].map(({ fmt, icon }) => (
+                        <button
+                            key={fmt}
+                            onClick={() => handleExport(fmt)}
+                            disabled={exporting}
+                            className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                        >
+                            {exportingFormat === fmt ? (
+                                <SpinnerIcon className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+                                </svg>
+                            )}
+                            {exportingFormat === fmt ? 'Exporting...' : fmt.toUpperCase()}
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -167,9 +169,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                     className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-app-border hover:border-app-accent/50 hover:bg-app-accent/5 cursor-pointer transition-all duration-200 group"
                                 >
                                     <div className="w-12 h-12 rounded-lg bg-app-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        <svg className="w-7 h-7 text-app-accent" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
-                                        </svg>
+                                        <TextLinesIcon className="w-7 h-7 text-app-accent" />
                                     </div>
                                     <span className="text-sm font-semibold text-app-text-primary">Import from Notion</span>
                                     <span className="text-[10px] text-app-text-muted text-center">Export your Notion page as HTML and upload it here</span>
@@ -194,9 +194,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                     className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed border-app-border hover:border-amber-500/50 hover:bg-amber-500/5 cursor-pointer transition-all duration-200 group"
                                 >
                                     <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        <svg className="w-7 h-7 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                                        </svg>
+                                        <BookmarkIcon className="w-7 h-7 text-amber-400" />
                                     </div>
                                     <span className="text-sm font-semibold text-app-text-primary">Import from Bookmarks</span>
                                     <span className="text-[10px] text-app-text-muted text-center">Chrome, Firefox, Edge, Safari — export bookmarks as HTML</span>
@@ -226,9 +224,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                 htmlFor="import-file-input"
                                 className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-app-bg-primary border border-app-border text-app-text-secondary rounded-lg hover:text-app-text-primary cursor-pointer transition-colors text-sm"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                </svg>
+                                <UploadIcon className="w-4 h-4" />
                                 Upload File (JSON, CSV, HTML)
                             </label>
                         </div>
@@ -241,25 +237,19 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                         <div className="flex items-center gap-2 mb-2">
                             {importSource === 'notion' && (
                                 <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-app-accent/20 text-app-accent rounded-full">
-                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                                        <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
-                                    </svg>
+                                    <TextLinesIcon className="w-3 h-3" />
                                     Notion
                                 </span>
                             )}
                             {importSource === 'bookmarks' && (
                                 <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                                    </svg>
+                                    <BookmarkIcon className="w-3 h-3" />
                                     Bookmarks
                                 </span>
                             )}
                             {importSource === 'file' && (
                                 <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full">
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                    </svg>
+                                    <DocumentIcon className="w-3 h-3" />
                                     File
                                 </span>
                             )}
@@ -348,9 +338,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                             className="inline-flex items-center gap-1 text-sm text-app-accent hover:underline disabled:opacity-50"
                             disabled={importing}
                         >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                            </svg>
+                            <ArrowLeftIcon className="w-3.5 h-3.5" />
                             Back to import options
                         </button>
                     </div>
@@ -388,9 +376,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                 disabled={importing}
                                 className="flex items-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] disabled:opacity-50 font-medium transition-colors"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
+                                <DownloadIcon className="w-4 h-4" />
                                 Import Sites
                             </button>
                         )}

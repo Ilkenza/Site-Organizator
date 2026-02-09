@@ -3,6 +3,7 @@ import { useDashboard } from '../../context/DashboardContext';
 import SiteCard from './SiteCard';
 import CategoryColorIndicator from '../layout/CategoryColorIndicator';
 import Pagination from '../ui/Pagination';
+import { SearchIcon, GlobeIcon } from '../ui/Icons';
 
 const RENDER_DELAY_MS = 500;
 
@@ -71,13 +72,9 @@ export default function SitesList({ onEdit, onDelete }) {
             <div className="flex flex-col items-center justify-center py-16 px-4">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-app-bg-light flex items-center justify-center mb-4">
                     {hasFilters ? (
-                        <svg className="w-8 h-8 sm:w-10 sm:h-10 text-app-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+                        <SearchIcon className="w-8 h-8 sm:w-10 sm:h-10 text-app-text-secondary" strokeWidth={1.5} />
                     ) : (
-                        <svg className="w-8 h-8 sm:w-10 sm:h-10 text-app-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                        </svg>
+                        <GlobeIcon className="w-8 h-8 sm:w-10 sm:h-10 text-app-text-secondary" strokeWidth={1.5} />
                     )}
                 </div>
                 <h3 className="text-lg sm:text-xl font-semibold text-app-text-primary mb-2">

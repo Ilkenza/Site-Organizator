@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Badge from '../ui/Badge';
 import InlineEditableName from '../categories/InlineEditableName';
 import { useDashboard } from '../../context/DashboardContext';
+import { CheckmarkIcon, GlobeIcon, ExternalLinkIcon, EditIcon, TrashIcon, BookmarkIcon, DocumentIcon, TextLinesIcon, PinIcon } from '../ui/Icons';
 
 export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
     const [imageError, setImageError] = useState(false);
@@ -106,9 +107,7 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                         />
                     ) : (
                         <div className="w-8 h-8 sm:w-6 sm:h-6 rounded-lg bg-gradient-to-br from-app-accent/20 to-app-accent/5 flex items-center justify-center">
-                            <svg className="w-5 h-5 sm:w-4 sm:h-4 text-app-accent/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                            </svg>
+                            <GlobeIcon className="w-5 h-5 sm:w-4 sm:h-4 text-app-accent/70" />
                         </div>
                     )}
                 </div>
@@ -204,27 +203,21 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                         className="p-1.5 text-app-text-secondary hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-green-400"
                         title="Visit site"
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
+                        <ExternalLinkIcon className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => onEdit(site)}
                         className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-accent/10 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-app-accent"
                         title="Edit"
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
+                        <EditIcon className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => onDelete(site)}
                         className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
                         title="Delete"
                     >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        <TrashIcon className="w-4 h-4" />
                     </button>
                 </div>
             </div>
@@ -303,17 +296,11 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
                             title={`Imported from ${importSource === 'bookmarks' ? 'Bookmarks' : importSource === 'file' ? 'File' : 'Notion'}`}
                         >
                             {importSource === 'bookmarks' ? (
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                                </svg>
+                                <BookmarkIcon className="w-3 h-3" />
                             ) : importSource === 'file' ? (
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                </svg>
+                                <DocumentIcon className="w-3 h-3" />
                             ) : (
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
-                                </svg>
+                                <TextLinesIcon className="w-3 h-3" />
                             )}
                         </span>
                     )}

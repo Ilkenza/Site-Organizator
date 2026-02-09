@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useDashboard } from '../../context/DashboardContext';
+import { BarChartIcon, SpinnerIcon, CheckCircleIcon, CloseIcon, LinkIcon, InfoCircleIcon, ExclamationCircleIcon } from '../ui/Icons';
 
 export default function StatsSection({ user, activeTab, showToast }) {
     const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0 });
@@ -106,9 +107,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
         <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
             <div className="flex items-center justify-between mb-2">
                 <h2 className="text-lg font-semibold text-app-text-primary flex items-center gap-2">
-                    <svg className="w-5 h-5 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
+                    <BarChartIcon className="w-5 h-5 text-app-accent" />
                     Statistics
                 </h2>
                 <button
@@ -117,7 +116,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
                     className="p-2 rounded-lg bg-app-bg-secondary hover:bg-app-bg-light text-app-text-secondary transition-colors"
                 >
                     {loadingStats ? (
-                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                        <SpinnerIcon className="w-4 h-4 animate-spin" />
                     ) : (
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M3 12h3m0 0a7 7 0 101.94-4.94L8 12" /></svg>
                     )}
@@ -143,9 +142,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
             <div className="border-t border-app-border pt-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3">
                     <h3 className="text-sm font-semibold text-app-text-primary flex items-center gap-2">
-                        <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                        <CheckCircleIcon className="w-4 h-4 text-green-400" />
                         Health Check
                     </h3>
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -160,9 +157,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
                                 onClick={cancelLinkCheck}
                                 className="w-full px-4 py-2.5 bg-red-900/30 border border-red-700/40 text-red-400 hover:bg-red-900/50 hover:text-red-300 rounded-lg transition-all font-medium flex items-center justify-center gap-2"
                             >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
+                                <CloseIcon className="w-4 h-4" />
                                 Cancel Check
                             </button>
                             {linkCheckProgress && (
@@ -193,9 +188,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
                             onClick={handleRunLinkCheck}
                             className="w-full px-4 py-2.5 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF] rounded-lg transition-all font-medium flex items-center justify-center gap-2"
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                            </svg>
+                            <LinkIcon className="w-4 h-4" />
                             Check Links
                         </button>
                     )}
@@ -203,9 +196,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
                     {linkCheckResult && (
                         <div className="text-sm text-app-text-secondary bg-app-bg-secondary rounded-lg p-3 border border-app-border">
                             <div className="flex items-center gap-2 mb-1">
-                                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                                <InfoCircleIcon className="w-4 h-4 text-blue-400" />
                                 <span className="font-medium">
                                     {linkCheckResult.total} checked{linkCheckResult.partial ? ' (partial)' : ''} · <span className={linkCheckResult.brokenCount > 0 ? 'text-red-400 font-semibold' : 'text-green-400'}>{linkCheckResult.brokenCount} broken</span>
                                 </span>
@@ -220,9 +211,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
 
                     {linkCheckError && (
                         <div className="text-sm text-red-400 bg-red-900/20 border border-red-700/30 rounded-lg p-3 flex items-center gap-2">
-                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <ExclamationCircleIcon className="w-4 h-4 flex-shrink-0" />
                             <span>Error: {String(linkCheckError)}</span>
                         </div>
                     )}
