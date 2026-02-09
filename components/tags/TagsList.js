@@ -7,25 +7,34 @@ import InlineEditableName from '../categories/InlineEditableName';
 const ITEMS_PER_PAGE = 50;
 
 export default function TagsList({ onEdit }) {
-    const { tags, sites, deleteTag, updateTag, loading, searchQuery, multiSelectMode, selectedTags, setSelectedTags } = useDashboard();
+    const { tags, sites, deleteTag, updateTag, loading, searchQuery, multiSelectMode, selectedTags, setSelectedTags, usageFilterTags } = useDashboard();
     const [deletingId, setDeletingId] = useState(null);
     const [tagToDelete, setTagToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
     const [editingId, setEditingId] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
 
-    // Filter tags based on search query
+    // Filter tags based on search query + usage filter
     const filteredTags = useMemo(() => {
-        if (!searchQuery.trim()) return tags;
-        return tags.filter(tag =>
-            tag?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [tags, searchQuery]);
+        let list = tags;
+        if (searchQuery.trim()) {
+            list = list.filter(tag =>
+                tag?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+        }
+        // Use site_count from the API (counts all sites, not just current page)
+        if (usageFilterTags === 'used') {
+            list = list.filter(tag => (tag.site_count || 0) > 0);
+        } else if (usageFilterTags === 'unused') {
+            list = list.filter(tag => (tag.site_count || 0) === 0);
+        }
+        return list;
+    }, [tags, searchQuery, usageFilterTags]);
 
-    // Reset to page 1 when search changes
+    // Reset to page 1 when search or filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery]);
+    }, [searchQuery, usageFilterTags]);
 
     const totalPages = Math.ceil(filteredTags.length / ITEMS_PER_PAGE);
     const paginatedTags = filteredTags.slice(
@@ -159,8 +168,23 @@ export default function TagsList({ onEdit }) {
                     {filteredTags.length > ITEMS_PER_PAGE && (
                         <div className="flex items-center justify-between mb-3">
                             <span className="text-xs text-app-text-muted">
-                                Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredTags.length)} of {filteredTags.length} tags
+                                Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredTags.length)} of {filteredTags.length}
                             </span>
+                        </div>
+                    )}
+
+                    {/* Empty state for filter */}
+                    {filteredTags.length === 0 && usageFilterTags !== 'all' && (
+                        <div className="flex flex-col items-center justify-center py-12 px-4 animate-fadeIn">
+                            <div className="w-14 h-14 rounded-xl bg-app-bg-light border-2 border-dashed border-app-border flex items-center justify-center mb-3">
+                                <svg className="w-7 h-7 text-app-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                </svg>
+                            </div>
+                            <h3 className="text-lg font-semibold text-app-text-primary mb-1">No {usageFilterTags} tags</h3>
+                            <p className="text-app-text-secondary text-center text-sm">
+                                {usageFilterTags === 'used' ? 'None of your tags are assigned to sites yet.' : 'All tags are currently in use.'}
+                            </p>
                         </div>
                     )}
 

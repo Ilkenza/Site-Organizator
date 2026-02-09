@@ -80,12 +80,21 @@ async function fetchProfileViaAPI() {
     }
 }
 
+// Helper to check if an email is an admin
+function isAdminEmail(email) {
+    if (!email) return false;
+    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    return adminEmails.includes(email.toLowerCase());
+}
+
 // Helper to create user object with profile data
 function createUserWithProfile(baseUser, profile) {
     return {
         ...baseUser,
         avatarUrl: profile?.avatar_url || null,
         displayName: baseUser?.user_metadata?.display_name || profile?.name || null,
+        isPro: !!baseUser?.user_metadata?.is_pro || isAdminEmail(baseUser?.email),
+        isAdmin: isAdminEmail(baseUser?.email),
     };
 }
 

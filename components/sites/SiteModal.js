@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
+import { fetchAPI, supabase } from '../../lib/supabase';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -34,6 +35,17 @@ const STYLES = {
         iconColor: 'text-purple-400',
         selected: 'bg-purple-600 text-white border-purple-500 shadow-md shadow-purple-900/30',
         unselected: 'bg-app-bg-secondary/50 text-app-text-secondary border-transparent hover:bg-app-bg-lighter hover:border-app-border',
+    },
+    ai: {
+        container: 'bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-pink-500/10 border border-violet-500/30 rounded-lg p-3 space-y-2.5',
+        header: 'flex items-center gap-2 text-sm font-medium text-violet-300',
+        section: 'flex items-center gap-2 flex-wrap',
+        catButton: 'px-2 py-1 text-xs bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 border border-violet-500/30 rounded-md transition-colors cursor-pointer',
+        tagButton: 'px-2 py-1 text-xs bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/30 rounded-md transition-colors cursor-pointer',
+        newButton: 'px-2 py-1 text-xs bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-md transition-colors cursor-pointer flex items-center gap-1',
+        pricingButton: 'px-2 py-1 text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-md transition-colors cursor-pointer',
+        label: 'text-[10px] text-app-text-muted uppercase tracking-wider font-semibold flex-shrink-0',
+        dismissButton: 'ml-auto text-app-text-muted hover:text-app-text-secondary transition-colors',
     },
     common: {
         searchInput: 'px-2 py-1 text-xs bg-app-bg-secondary border border-app-border rounded text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-1 w-28',
@@ -103,6 +115,18 @@ const TagIcon = ({ className }) => (
     </svg>
 );
 
+const SparklesIcon = ({ className }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+    </svg>
+);
+
+const XIcon = ({ className }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+);
+
 // Helper to capitalize first letter
 function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
@@ -160,9 +184,10 @@ function getRandomColor(colorArray) {
     return colorArray[Math.floor(Math.random() * colorArray.length)];
 }
 
-// Helper to format tag name (lowercase)
+// Helper to format tag name (capitalize first letter)
 function formatTagName(name) {
-    return name.toLowerCase();
+    const trimmed = name.trim();
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
 
 // Helper to add item to array field
@@ -202,6 +227,117 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
     const [newTagSuggestions, setNewTagSuggestions] = useState([]);
     const [retryingRelations, setRetryingRelations] = useState(false);
 
+    // Duplicate URL check state
+    const [duplicateUrl, setDuplicateUrl] = useState(null);
+
+    // AI suggestion state
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiResult, setAiResult] = useState(null);
+    const [aiError, setAiError] = useState(null);
+
+    // AI suggest handler
+    const handleAiSuggest = useCallback(async () => {
+        if (!formData.url?.trim() || aiLoading) return;
+
+        setAiLoading(true);
+        setAiError(null);
+        setAiResult(null);
+
+        try {
+            const res = await fetchAPI('/ai/suggest', {
+                method: 'POST',
+                body: JSON.stringify({
+                    url: formData.url.trim(),
+                    name: formData.name?.trim() || '',
+                    categories: categories.map(c => ({ id: c.id, name: c.name })),
+                    tags: tags.map(t => ({ id: t.id, name: t.name }))
+                })
+            });
+
+            if (res?.success && res?.data) {
+                setAiResult(res.data);
+            } else {
+                setAiError(res?.error || 'AI suggestion failed');
+            }
+        } catch (err) {
+            setAiError(err.message || 'Failed to get AI suggestions');
+        } finally {
+            setAiLoading(false);
+        }
+    }, [formData.url, formData.name, categories, tags, aiLoading]);
+
+    // Apply an AI-suggested existing category
+    const applyAiCategory = useCallback((catName) => {
+        const match = categories.find(c => c.name?.toLowerCase() === catName.toLowerCase());
+        if (match && !formData.categoryIds.includes(match.id)) {
+            addToArrayField(setFormData, 'categoryIds', match.id);
+        }
+    }, [categories, formData.categoryIds]);
+
+    // Apply an AI-suggested existing tag
+    const applyAiTag = useCallback((tagName) => {
+        const match = tags.find(t => t.name?.toLowerCase() === tagName.toLowerCase());
+        if (match && !formData.tagIds.includes(match.id)) {
+            addToArrayField(setFormData, 'tagIds', match.id);
+        }
+    }, [tags, formData.tagIds]);
+
+    // Apply AI-suggested pricing
+    const applyAiPricing = useCallback((pricing) => {
+        setFormData(prev => ({ ...prev, pricing }));
+    }, []);
+
+    // Apply ALL AI suggestions at once
+    const applyAllAiSuggestions = useCallback(async () => {
+        if (!aiResult) return;
+
+        // Apply existing categories
+        const newCatIds = [...formData.categoryIds];
+        (aiResult.existingCategories || []).forEach(name => {
+            const match = categories.find(c => c.name?.toLowerCase() === name.toLowerCase());
+            if (match && !newCatIds.includes(match.id)) newCatIds.push(match.id);
+        });
+
+        // Apply existing tags
+        const newTagIds = [...formData.tagIds];
+        (aiResult.existingTags || []).forEach(name => {
+            const match = tags.find(t => t.name?.toLowerCase() === name.toLowerCase());
+            if (match && !newTagIds.includes(match.id)) newTagIds.push(match.id);
+        });
+
+        // Create and apply new categories
+        for (const catName of (aiResult.newCategories || [])) {
+            try {
+                const catData = { name: capitalize(catName), color: getRandomColor(CATEGORY_COLORS) };
+                if (currentUser?.id) catData.user_id = currentUser.id;
+                const newCat = await addCategory(catData);
+                if (newCat?.id) newCatIds.push(newCat.id);
+            } catch (e) { console.warn('Failed to create AI category:', e); }
+        }
+
+        // Create and apply new tags
+        for (const tagName of (aiResult.newTags || [])) {
+            try {
+                const tagData = { name: capitalize(tagName), color: getRandomColor(TAG_COLORS).hex };
+                if (currentUser?.id) tagData.user_id = currentUser.id;
+                const newTag = await addTag(tagData);
+                if (newTag?.id) newTagIds.push(newTag.id);
+            } catch (e) { console.warn('Failed to create AI tag:', e); }
+        }
+
+        // Apply pricing if suggested
+        const pricingUpdate = aiResult.pricing || formData.pricing;
+
+        setFormData(prev => ({
+            ...prev,
+            categoryIds: newCatIds,
+            tagIds: newTagIds,
+            pricing: pricingUpdate
+        }));
+
+        setAiResult(null);
+    }, [aiResult, formData.categoryIds, formData.tagIds, formData.pricing, categories, tags, currentUser, addCategory, addTag]);
+
     // Reset form when modal opens/closes or site changes
     useEffect(() => {
         if (isOpen) {
@@ -231,21 +367,26 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 });
             }
             setError(null);
+            setDuplicateUrl(null);
             setCategorySearch('');
             setTagSearch('');
+            setAiResult(null);
+            setAiError(null);
+            setAiLoading(false);
         }
     }, [isOpen, site, defaultCategoryId, defaultFavorite, defaultTagId, restoreFormData]);
 
-    // Auto-suggest categories based on URL
+    // Auto-suggest categories based on URL (only when URL has a valid domain)
     useEffect(() => {
-        if (formData.url && formData.url.trim() && !site) {
+        const hasValidUrl = formData.url?.trim() && /^https?:\/\/.+\..+/.test(formData.url.trim());
+        if (hasValidUrl) {
             const { suggestions } = suggestCategories(
                 formData.url,
                 formData.name,
                 categories
             );
 
-            // Only auto-apply suggestions for new sites
+            // Show suggestions for both new and edit
             setSuggestedCategories(suggestions);
 
             // Find suggestions that don't exist yet
@@ -254,18 +395,19 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
             setSuggestedCategories([]);
             setNewCategorySuggestions([]);
         }
-    }, [formData.url, formData.name, categories, site]);
+    }, [formData.url, formData.name, categories]);
 
-    // Auto-suggest tags based on URL
+    // Auto-suggest tags based on URL (only when URL has a valid domain)
     useEffect(() => {
-        if (formData.url && formData.url.trim() && !site) {
+        const hasValidUrl = formData.url?.trim() && /^https?:\/\/.+\..+/.test(formData.url.trim());
+        if (hasValidUrl) {
             const { suggestions } = suggestTags(
                 formData.url,
                 formData.name,
                 tags
             );
 
-            // Only auto-apply suggestions for new sites
+            // Show suggestions for both new and edit
             setSuggestedTags(suggestions);
 
             // Find suggestions that don't exist yet
@@ -274,7 +416,54 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
             setSuggestedTags([]);
             setNewTagSuggestions([]);
         }
-    }, [formData.url, formData.name, tags, site]);
+    }, [formData.url, formData.name, tags]);
+
+    // Check for duplicate URL (debounced)
+    useEffect(() => {
+        const url = formData.url?.trim();
+        if (!url) {
+            setDuplicateUrl(null);
+            return;
+        }
+
+        const normalized = normalizeUrl(url);
+        if (!/^https?:\/\/.+\..+/.test(normalized)) {
+            setDuplicateUrl(null);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            try {
+                let query = supabase
+                    .from('sites')
+                    .select('id')
+                    .eq('url', normalized)
+                    .limit(1);
+
+                // Only check current user's sites
+                if (currentUser?.id) {
+                    query = query.eq('user_id', currentUser.id);
+                }
+
+                // When editing, exclude the current site
+                if (isEditing && site?.id) {
+                    query = query.neq('id', site.id);
+                }
+
+                const { data } = await query;
+
+                if (data && data.length > 0) {
+                    setDuplicateUrl(true);
+                } else {
+                    setDuplicateUrl(null);
+                }
+            } catch {
+                setDuplicateUrl(null);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [formData.url, isEditing, site, currentUser?.id]);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -376,7 +565,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
             if (formData.categoryIds.length === 0) missing.push('categories');
             if (formData.tagIds.length === 0) missing.push('tags');
             if (missing.length > 0) {
-                showToast(`⚠️ Saved without ${missing.join(' & ')} — you can add them later`, 'warning', 4000);
+                showToast(`Saved without ${missing.join(' & ')} — you can add them later`, 'warning', 4000);
             }
 
             onClose();
@@ -402,6 +591,11 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
         }
         if (!formData.pricing) {
             setError(VALIDATION_MESSAGES.PRICING_REQUIRED);
+            return;
+        }
+
+        // Block if duplicate URL (warning banner is already shown)
+        if (duplicateUrl) {
             return;
         }
 
@@ -433,6 +627,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
             title={isEditing ? 'Edit Site' : 'Add New Site'}
             size="lg"
             dataTour="site-modal"
+            glowAnimation={aiLoading}
             footer={
                 <>
                     <Button variant="secondary" onClick={onClose} disabled={loading}>
@@ -468,6 +663,13 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                     </div>
                 )}
 
+                {/* Duplicate URL warning */}
+                {duplicateUrl && (
+                    <div className="p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
+                        A site with this URL already exists
+                    </div>
+                )}
+
                 <Input
                     label="Name *"
                     name="name"
@@ -498,6 +700,184 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                         }
                     }}
                 />
+
+                {/* AI Suggest Button — Pro only */}
+                {currentUser?.isPro && formData.url?.trim() && /^https?:\/\/.+\..+/.test(formData.url.trim()) && (
+                    <button
+                        type="button"
+                        onClick={handleAiSuggest}
+                        disabled={aiLoading}
+                        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all border ${
+                            aiLoading
+                                ? 'bg-violet-900/20 text-violet-400/60 border-violet-500/20 cursor-wait'
+                                : 'bg-gradient-to-r from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 text-violet-300 border-violet-500/30 hover:border-violet-500/50 hover:from-violet-600/30 hover:via-fuchsia-600/30 hover:to-pink-600/30 hover:shadow-lg hover:shadow-violet-900/20'
+                        }`}
+                    >
+                        {aiLoading ? (
+                            <>
+                                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                                Analyzing site...
+                            </>
+                        ) : (
+                            <>
+                                <SparklesIcon className="w-4 h-4" />
+                                AI Suggest Categories & Tags
+                            </>
+                        )}
+                    </button>
+                )}
+
+                {/* AI Error */}
+                {aiError && (
+                    <div className="p-2.5 bg-red-900/20 border border-red-700/30 rounded-lg text-red-400 text-xs flex items-center justify-between">
+                        <span>AI: {aiError}</span>
+                        <button type="button" onClick={() => setAiError(null)} className="text-red-400/60 hover:text-red-400">
+                            <XIcon className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                )}
+
+                {/* AI Suggestions Panel */}
+                {aiResult && (
+                    <div className={STYLES.ai.container}>
+                        <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-2 text-sm font-medium text-violet-300">
+                                <SparklesIcon className="w-4 h-4 text-violet-400" />
+                                <span>AI Suggestions</span>
+                                <span className="text-[10px] text-app-text-muted font-normal">
+                                    ({Math.round((aiResult.confidence || 0) * 100)}% confidence)
+                                </span>
+                            </div>
+                            <button type="button" onClick={() => setAiResult(null)} className="text-app-text-muted hover:text-app-text-secondary transition-colors -mt-0.5">
+                                <XIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Existing categories */}
+                        {aiResult.existingCategories?.length > 0 && (
+                            <div className={STYLES.ai.section}>
+                                <span className={STYLES.ai.label}>📂 Categories:</span>
+                                {aiResult.existingCategories.map(name => {
+                                    const match = categories.find(c => c.name?.toLowerCase() === name.toLowerCase());
+                                    const isApplied = match && formData.categoryIds.includes(match.id);
+                                    return (
+                                        <button
+                                            key={name}
+                                            type="button"
+                                            onClick={() => applyAiCategory(name)}
+                                            disabled={isApplied}
+                                            className={`${STYLES.ai.catButton} ${isApplied ? 'opacity-40 cursor-default' : ''}`}
+                                        >
+                                            {isApplied && '✓ '}{name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* New categories */}
+                        {aiResult.newCategories?.length > 0 && (
+                            <div className={STYLES.ai.section}>
+                                <span className={STYLES.ai.label}>📂 New:</span>
+                                {aiResult.newCategories.map(name => (
+                                    <button
+                                        key={name}
+                                        type="button"
+                                        onClick={async () => {
+                                            await handleCreateAndAddCategory(name);
+                                            setAiResult(prev => prev ? {
+                                                ...prev,
+                                                newCategories: prev.newCategories.filter(n => n !== name),
+                                                existingCategories: [...(prev.existingCategories || []), capitalize(name)]
+                                            } : null);
+                                        }}
+                                        className={STYLES.ai.newButton}
+                                    >
+                                        <PlusIcon className="w-3 h-3" />
+                                        {capitalize(name)}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Existing tags */}
+                        {aiResult.existingTags?.length > 0 && (
+                            <div className={STYLES.ai.section}>
+                                <span className={STYLES.ai.label}>🏷️ Tags:</span>
+                                {aiResult.existingTags.map(name => {
+                                    const match = tags.find(t => t.name?.toLowerCase() === name.toLowerCase());
+                                    const isApplied = match && formData.tagIds.includes(match.id);
+                                    return (
+                                        <button
+                                            key={name}
+                                            type="button"
+                                            onClick={() => applyAiTag(name)}
+                                            disabled={isApplied}
+                                            className={`${STYLES.ai.tagButton} ${isApplied ? 'opacity-40 cursor-default' : ''}`}
+                                        >
+                                            {isApplied && '✓ '}{name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* New tags */}
+                        {aiResult.newTags?.length > 0 && (
+                            <div className={STYLES.ai.section}>
+                                <span className={STYLES.ai.label}>🏷️ New:</span>
+                                {aiResult.newTags.map(name => (
+                                    <button
+                                        key={name}
+                                        type="button"
+                                        onClick={async () => {
+                                            await handleCreateAndAddTag(name);
+                                            setAiResult(prev => prev ? {
+                                                ...prev,
+                                                newTags: prev.newTags.filter(n => n !== name),
+                                                existingTags: [...(prev.existingTags || []), capitalize(name)]
+                                            } : null);
+                                        }}
+                                        className={STYLES.ai.newButton}
+                                    >
+                                        <PlusIcon className="w-3 h-3" />
+                                        {capitalize(name)}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Pricing suggestion */}
+                        {aiResult.pricing && aiResult.pricing !== formData.pricing && (
+                            <div className={STYLES.ai.section}>
+                                <span className={STYLES.ai.label}>💰 Pricing:</span>
+                                <button
+                                    type="button"
+                                    onClick={() => applyAiPricing(aiResult.pricing)}
+                                    className={STYLES.ai.pricingButton}
+                                >
+                                    {PRICING_OPTIONS.find(p => p.value === aiResult.pricing)?.icon}{' '}
+                                    {PRICING_OPTIONS.find(p => p.value === aiResult.pricing)?.label}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Apply All button */}
+                        <div className="flex justify-end pt-1 border-t border-violet-500/20">
+                            <button
+                                type="button"
+                                onClick={applyAllAiSuggestions}
+                                className="px-3 py-1.5 text-xs font-semibold bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 border border-violet-500/40 rounded-md transition-colors flex items-center gap-1.5"
+                            >
+                                <SparklesIcon className="w-3.5 h-3.5" />
+                                Apply All
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Pricing Model */}
                 <div className="space-y-1.5">
@@ -560,7 +940,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 {/* Categories */}
                 {categories.length > 0 && (
                     <div className="space-y-1.5">
-                        {/* Suggested categories */}
+                        {/* Quick suggestions (local pattern matching) */}
                         {(suggestedCategories.length > 0 || newCategorySuggestions.length > 0) && (
                             <div className="space-y-2">
                                 {/* Existing category suggestions */}
@@ -572,22 +952,26 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                         <div className={`${STYLES.suggestion.existing} ${STYLES.category.suggestion}`}>
                                             <LightbulbIcon className={`w-4 h-4 ${STYLES.category.iconColor} flex-shrink-0`} />
                                             <span className="text-xs text-app-text-secondary">
-                                                Suggested:
+                                                Quick:
                                             </span>
-                                            {suggestedCategories.map(suggestion => {
-                                                const matchedCategory = categories.find(c => c?.name?.toLowerCase() === suggestion.toLowerCase());
-                                                if (!matchedCategory) return null;
-                                                return (
-                                                    <button
-                                                        key={matchedCategory.id}
-                                                        type="button"
-                                                        onClick={() => handleCategoryToggle(matchedCategory.id)}
-                                                        className={`${STYLES.suggestion.button} ${STYLES.category.button}`}
-                                                    >
-                                                        {matchedCategory.name}
-                                                    </button>
-                                                );
-                                            })}
+                                            {(() => {
+                                                const seen = new Set();
+                                                return suggestedCategories.map(suggestion => {
+                                                    const matchedCategory = categories.find(c => c?.name?.toLowerCase() === suggestion.toLowerCase());
+                                                    if (!matchedCategory || seen.has(matchedCategory.id)) return null;
+                                                    seen.add(matchedCategory.id);
+                                                    return (
+                                                        <button
+                                                            key={matchedCategory.id}
+                                                            type="button"
+                                                            onClick={() => handleCategoryToggle(matchedCategory.id)}
+                                                            className={`${STYLES.suggestion.button} ${STYLES.category.button}`}
+                                                        >
+                                                            {matchedCategory.name}
+                                                        </button>
+                                                    );
+                                                });
+                                            })()}
                                         </div>
                                     );
                                 })()}
@@ -685,7 +1069,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 {/* Tags */}
                 {tags.length > 0 && (
                     <div className="space-y-1.5">
-                        {/* Suggested tags */}
+                        {/* Quick tag suggestions (local) */}
                         {(suggestedTags.length > 0 || newTagSuggestions.length > 0) && (
                             <div className="space-y-2">
                                 {/* Existing tag suggestions */}
@@ -699,20 +1083,24 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                             <span className="text-xs text-app-text-secondary">
                                                 Suggested:
                                             </span>
-                                            {suggestedTags.map(suggestion => {
-                                                const matchedTag = tags.find(t => t?.name?.toLowerCase() === suggestion.toLowerCase());
-                                                if (!matchedTag) return null;
-                                                return (
-                                                    <button
-                                                        key={matchedTag.id}
-                                                        type="button"
-                                                        onClick={() => handleTagToggle(matchedTag.id)}
-                                                        className={`${STYLES.suggestion.button} ${STYLES.tag.button}`}
-                                                    >
-                                                        {matchedTag.name}
-                                                    </button>
-                                                );
-                                            })}
+                                            {(() => {
+                                                const seen = new Set();
+                                                return suggestedTags.map(suggestion => {
+                                                    const matchedTag = tags.find(t => t?.name?.toLowerCase() === suggestion.toLowerCase());
+                                                    if (!matchedTag || seen.has(matchedTag.id)) return null;
+                                                    seen.add(matchedTag.id);
+                                                    return (
+                                                        <button
+                                                            key={matchedTag.id}
+                                                            type="button"
+                                                            onClick={() => handleTagToggle(matchedTag.id)}
+                                                            className={`${STYLES.suggestion.button} ${STYLES.tag.button}`}
+                                                        >
+                                                            {matchedTag.name}
+                                                        </button>
+                                                    );
+                                                });
+                                            })()}
                                         </div>
                                     );
                                 })()}

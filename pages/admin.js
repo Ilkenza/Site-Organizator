@@ -364,7 +364,7 @@ function GrowthChart({ data, period, onPeriodChange }) {
 // ========================================
 // User Row
 // ========================================
-function UserRow({ user, index, onDelete, onBan, isCurrentUser }) {
+function UserRow({ user, index, onDelete, onBan, onTogglePro, isCurrentUser }) {
     const timeAgo = (date) => {
         if (!date) return 'Never';
         const diff = Date.now() - new Date(date).getTime();
@@ -392,6 +392,12 @@ function UserRow({ user, index, onDelete, onBan, isCurrentUser }) {
                     <div>
                         <div className="flex items-center gap-1.5">
                             <p className="text-app-text-primary text-sm font-medium">{user.username}</p>
+                            {isCurrentUser && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded-full font-medium">ADMIN</span>
+                            )}
+                            {(user.is_pro || isCurrentUser) && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded-full font-medium">PRO</span>
+                            )}
                             {user.banned && (
                                 <span className="text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded-full font-medium">BANNED</span>
                             )}
@@ -408,9 +414,22 @@ function UserRow({ user, index, onDelete, onBan, isCurrentUser }) {
             <td className="px-4 py-3 text-center">
                 {user.onboarded ? <span className="text-emerald-400 text-sm">✓</span> : <span className="text-app-text-muted text-sm">—</span>}
             </td>
+            <td className="px-4 py-3 text-center">
+                {(user.is_pro || isCurrentUser) ? <span className="text-purple-400 text-sm">👑</span> : <span className="text-app-text-muted text-sm">—</span>}
+            </td>
             <td className="px-4 py-3">
                 {!isCurrentUser ? (
                     <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => onTogglePro(user)}
+                            className={`p-1 rounded transition-colors ${user.is_pro
+                                ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-900/20'
+                                : 'text-app-text-muted hover:text-purple-400 hover:bg-purple-900/20'
+                                }`}
+                            title={user.is_pro ? 'Remove Pro' : 'Give Pro'}>
+                            <svg className="w-4 h-4" fill={user.is_pro ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3l3.057-3L12 3.5 15.943 0 19 3l-2 7H7L5 3zM7 10h10l1 2H6l1-2zM8 14h8v2a4 4 0 01-8 0v-2z" />
+                            </svg>
+                        </button>
                         <button onClick={() => onBan(user)}
                             className={`p-1 rounded transition-colors ${user.banned
                                 ? 'text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-900/20'
@@ -436,7 +455,12 @@ function UserRow({ user, index, onDelete, onBan, isCurrentUser }) {
                         </button>
                     </div>
                 ) : (
-                    <span className="text-app-text-muted text-xs block text-center">You</span>
+                    <span className="text-xs text-blue-400 font-medium flex items-center justify-center gap-1">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                        You
+                    </span>
                 )}
             </td>
         </tr>
@@ -484,6 +508,8 @@ export default function AdminDashboard() {
     const [deleting, setDeleting] = useState(false);
     const [banTarget, setBanTarget] = useState(null);
     const [banning, setBanning] = useState(false);
+    const [proTarget, setProTarget] = useState(null);
+    const [togglingPro, setTogglingPro] = useState(false);
 
     // Growth chart period
     const [growthPeriod, setGrowthPeriod] = useState('monthly');
@@ -572,6 +598,27 @@ export default function AdminDashboard() {
             alert(`Failed: ${err.message}`);
         } finally {
             setBanning(false);
+        }
+    };
+
+    const handleTogglePro = async () => {
+        if (!proTarget) return;
+        setTogglingPro(true);
+        try {
+            const token = await getToken();
+            const res = await fetch('/api/admin/toggle-pro', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: proTarget.id, isPro: !proTarget.is_pro })
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error);
+            setProTarget(null);
+            fetchData();
+        } catch (err) {
+            alert(`Failed: ${err.message}`);
+        } finally {
+            setTogglingPro(false);
         }
     };
 
@@ -833,6 +880,7 @@ export default function AdminDashboard() {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5">
                                         <p className="text-app-text-primary text-sm font-medium truncate">{u.username}</p>
+                                        {u.is_pro && <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded-full font-medium">PRO</span>}
                                         {u.banned && <span className="text-[9px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded-full font-medium">BANNED</span>}
                                         {isMe && <span className="text-[9px] px-1.5 py-0.5 bg-app-accent/20 text-app-accent rounded-full">You</span>}
                                     </div>
@@ -841,6 +889,14 @@ export default function AdminDashboard() {
                                 {/* Actions */}
                                 {!isMe && (
                                     <div className="flex items-center gap-0.5 flex-shrink-0">
+                                        <button onClick={() => setProTarget(u)}
+                                            className={`p-1.5 rounded-lg transition-colors ${u.is_pro
+                                                ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-900/20'
+                                                : 'text-app-text-muted hover:text-purple-400 hover:bg-purple-900/20'
+                                                }`}
+                                            title={u.is_pro ? 'Remove Pro' : 'Give Pro'}>
+                                            {u.is_pro ? '👑' : '⭐'}
+                                        </button>
                                         <button onClick={() => setBanTarget(u)}
                                             className={`p-1.5 rounded-lg transition-colors ${u.banned
                                                 ? 'text-emerald-400/70 hover:text-emerald-400 hover:bg-emerald-900/20'
@@ -898,17 +954,19 @@ export default function AdminDashboard() {
                                 <th className="px-4 py-3 text-left cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('created_at')}>Joined <SortIcon col="created_at" /></th>
                                 <th className="px-4 py-3 text-left cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('last_sign_in')}>Active <SortIcon col="last_sign_in" /></th>
                                 <th className="px-4 py-3 text-center">Tour</th>
-                                <th className="px-4 py-3 text-center w-20">Actions</th>
+                                <th className="px-4 py-3 text-center">Pro</th>
+                                <th className="px-4 py-3 text-center w-24">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredUsers.map((u, i) => (
                                 <UserRow key={u.id} user={u} index={i}
                                     onDelete={setDeleteTarget} onBan={setBanTarget}
+                                    onTogglePro={setProTarget}
                                     isCurrentUser={u.email === user?.email} />
                             ))}
                             {filteredUsers.length === 0 && (
-                                <tr><td colSpan={9} className="px-4 py-8 text-center text-app-text-muted">
+                                <tr><td colSpan={10} className="px-4 py-8 text-center text-app-text-muted">
                                     {userSearch ? 'No users match your search' : 'No users found'}
                                 </td></tr>
                             )}
@@ -1191,6 +1249,42 @@ export default function AdminDashboard() {
                                     className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors font-medium disabled:opacity-50 ${banTarget.banned ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500'
                                         }`}>
                                     {banning ? 'Processing...' : banTarget.banned ? 'Unban' : 'Ban'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Pro Toggle Modal */}
+                {proTarget && (
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+                        onClick={() => !togglingPro && setProTarget(null)}>
+                        <div className="bg-app-bg-secondary border border-app-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
+                            onClick={e => e.stopPropagation()}>
+                            <div className="text-center mb-4">
+                                <div className="text-4xl mb-3">{proTarget.is_pro ? '⭐' : '👑'}</div>
+                                <h3 className="text-lg font-bold text-app-text-primary">
+                                    {proTarget.is_pro ? 'Remove Pro' : 'Give Pro'}?
+                                </h3>
+                            </div>
+                            <p className="text-app-text-secondary text-sm text-center mb-1">
+                                {proTarget.is_pro ? 'Remove Pro access from' : 'Grant Pro access to'}{' '}
+                                <strong className="text-app-text-primary">{proTarget.email}</strong>
+                            </p>
+                            <p className="text-app-text-muted text-xs text-center mb-5">
+                                {proTarget.is_pro
+                                    ? 'This user will lose AI suggestions and other Pro features.'
+                                    : 'This user will get AI suggestions and other Pro features.'}
+                            </p>
+                            <div className="flex gap-3">
+                                <button onClick={() => setProTarget(null)} disabled={togglingPro}
+                                    className="flex-1 px-4 py-2 text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">
+                                    Cancel
+                                </button>
+                                <button onClick={handleTogglePro} disabled={togglingPro}
+                                    className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors font-medium disabled:opacity-50 ${proTarget.is_pro ? 'bg-gray-600 hover:bg-gray-500' : 'bg-purple-600 hover:bg-purple-500'
+                                        }`}>
+                                    {togglingPro ? 'Processing...' : proTarget.is_pro ? 'Remove Pro' : 'Give Pro'}
                                 </button>
                             </div>
                         </div>

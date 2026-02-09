@@ -1,4 +1,4 @@
-import { useState, useEffect, Component } from 'react';
+import { useState, useEffect, useRef, Component } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { DashboardProvider, useDashboard } from '../../context/DashboardContext';
@@ -76,9 +76,9 @@ function DashboardContent() {
         setSelectedCategories,
         selectedTags: _selectedTags,
         setSelectedTags,
-        _setSites,
-        _setCategories,
-        _setTags
+        setSites,
+        setCategories,
+        setTags,
     } = useDashboard();
 
     // Sync activeTab with URL
@@ -98,13 +98,13 @@ function DashboardContent() {
     const [editingTag, setEditingTag] = useState(null);
     const [commandMenuOpen, setCommandMenuOpen] = useState(false);
     const [undoToast, setUndoToast] = useState(null);
+    const pendingDeleteRef = useRef(null);
 
     // Save-without-categories/tags confirmation
     const [saveConfirm, setSaveConfirm] = useState({ open: false, payload: null, missing: [], isEditing: false, formData: null });
 
     // Delete confirmation
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, type: null, item: null });
-    const [deleting, setDeleting] = useState(false);
 
     // Listen for openAddSiteModal event from Sidebar
     useEffect(() => {
@@ -239,22 +239,67 @@ function DashboardContent() {
         setTagModalOpen(true);
     };
 
-    // Confirm delete
-    const handleConfirmDelete = async () => {
-        setDeleting(true);
-        try {
-            const { type, item } = deleteConfirm;
-            switch (type) {
-                case 'site': await deleteSite(item.id); break;
-                case 'category': await deleteCategory(item.id); break;
-                case 'tag': await deleteTag(item.id); break;
-            }
-            setDeleteConfirm({ open: false, type: null, item: null });
-        } catch (err) {
-            alert('Failed to delete: ' + err.message);
-        } finally {
-            setDeleting(false);
+    // Confirm delete — optimistic UI removal + deferred Supabase delete
+    const handleConfirmDelete = () => {
+        const { type, item } = deleteConfirm;
+        setDeleteConfirm({ open: false, type: null, item: null });
+
+        // Cancel any previous pending delete
+        if (pendingDeleteRef.current?.timer) {
+            clearTimeout(pendingDeleteRef.current.timer);
         }
+
+        const itemName = item?.name || item?.url || 'Item';
+        const typeLabel = type === 'site' ? 'Site' : type === 'category' ? 'Category' : 'Tag';
+
+        // Optimistic: remove from UI immediately
+        switch (type) {
+            case 'site': setSites(prev => prev.filter(s => s.id !== item.id)); break;
+            case 'category': setCategories(prev => prev.filter(c => c.id !== item.id)); break;
+            case 'tag': setTags(prev => prev.filter(t => t.id !== item.id)); break;
+        }
+
+        // Store pending delete info
+        const pendingDelete = { type, item, cancelled: false };
+        pendingDeleteRef.current = pendingDelete;
+
+        // Set timer for actual Supabase deletion (matches UndoToast duration)
+        pendingDelete.timer = setTimeout(async () => {
+            if (pendingDelete.cancelled) return;
+            pendingDeleteRef.current = null;
+            try {
+                switch (type) {
+                    case 'site': await deleteSite(item.id); break;
+                    case 'category': await deleteCategory(item.id); break;
+                    case 'tag': await deleteTag(item.id); break;
+                }
+            } catch (err) {
+                // Restore item to UI since API delete failed
+                switch (type) {
+                    case 'site': setSites(prev => [item, ...prev]); break;
+                    case 'category': setCategories(prev => [...prev, item]); break;
+                    case 'tag': setTags(prev => [...prev, item]); break;
+                }
+            }
+        }, 5000);
+
+        // Show undo toast
+        setUndoToast({
+            message: `${typeLabel} "${itemName}" deleted`,
+            onUndo: () => {
+                pendingDelete.cancelled = true;
+                clearTimeout(pendingDelete.timer);
+                pendingDeleteRef.current = null;
+                // Restore item to UI
+                switch (type) {
+                    case 'site': setSites(prev => [item, ...prev]); break;
+                    case 'category': setCategories(prev => [...prev, item]); break;
+                    case 'tag': setTags(prev => [...prev, item]); break;
+                }
+                setUndoToast(null);
+                showToast(`Restored "${itemName}"`, 'info');
+            }
+        });
     };
 
     // Command menu action handler
@@ -388,7 +433,7 @@ function DashboardContent() {
                 confirmText="Delete"
                 cancelText="Cancel"
                 variant="danger"
-                loading={deleting}
+                loading={false}
             />
 
             {/* Save without categories/tags confirmation */}
@@ -409,7 +454,7 @@ function DashboardContent() {
                             await addSite(payload);
                         }
                         setEditingSite(null);
-                        showToast(`⚠️ Saved without ${missing.join(' & ')} — you can add them later`, 'warning', 4000);
+                        showToast(`Saved without ${missing.join(' & ')} — you can add them later`, 'warning', 4000);
                     } catch (err) {
                         showToast(`Failed to save: ${err.message}`, 'error');
                     }
