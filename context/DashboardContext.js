@@ -279,6 +279,8 @@ export function DashboardProvider({ children }) {
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedTag, setSelectedTag] = useState(null);
     const [selectedImportSource, setSelectedImportSource] = useState(null); // 'bookmarks' | 'notion' | 'file' | null
+    const [usageFilterCategories, setUsageFilterCategories] = useState('all'); // 'all' | 'used' | 'unused'
+    const [usageFilterTags, setUsageFilterTags] = useState('all'); // 'all' | 'used' | 'unused'
     const [sortBy, setSortBy] = useState('created_at');
 
     // Import preview state (persists across tabs)
@@ -326,7 +328,7 @@ export function DashboardProvider({ children }) {
             });
 
             if (!site.is_favorite) {
-                showToast('✓ Added to favorites', 'success');
+                showToast('Added to favorites', 'success');
             } else {
                 showToast('Removed from favorites', 'info');
             }
@@ -357,7 +359,7 @@ export function DashboardProvider({ children }) {
             });
 
             if (!site.is_pinned) {
-                showToast('✓ Site pinned', 'success');
+                showToast('Site pinned', 'success');
             } else {
                 showToast('Unpinned', 'info');
             }
@@ -714,11 +716,11 @@ export function DashboardProvider({ children }) {
             setStats(prev => ({ ...prev, sites: prev.sites + 1 }));
 
             if (!handleResponseWarnings(response, newSite.id, siteData, setFailedRelationUpdates, showToast, fetchData)) {
-                showToast(`✓ Site "${newSite.name}" created successfully`, 'success');
+                showToast(`Site "${newSite.name}" created successfully`, 'success');
             }
             return newSite;
         } catch (err) {
-            showToast(`✗ Failed to add site: ${err.message}`, 'error');
+            showToast(`Failed to add site: ${err.message}`, 'error');
             throw err;
         }
     }, [user, showToast, fetchData]);
@@ -742,12 +744,12 @@ export function DashboardProvider({ children }) {
                     delete next[id];
                     return next;
                 });
-                showToast(`✓ Site "${updated.name}" updated successfully`, 'success');
+                showToast(`Site "${updated.name}" updated successfully`, 'success');
             }
 
             return updated;
         } catch (err) {
-            showToast(`✗ Failed to update site: ${err.message}`, 'error');
+            showToast(`Failed to update site: ${err.message}`, 'error');
             throw err;
         }
     }, [showToast, fetchData]);
@@ -758,11 +760,11 @@ export function DashboardProvider({ children }) {
             setSites(prev => prev.filter(s => s.id !== id));
             setStats(prev => ({ ...prev, sites: prev.sites - 1 }));
             setTotalSitesCount(prev => Math.max(0, prev - 1));
-            showToast('✓ Site deleted successfully', 'success');
+            showToast('Site deleted successfully', 'success');
             // Re-fetch current page to fill the gap
             fetchSitesPage(currentPage).catch(() => { });
         } catch (err) {
-            showToast(`✗ Failed to delete site: ${err.message}`, 'error');
+            showToast(`Failed to delete site: ${err.message}`, 'error');
             throw err;
         }
     }, [showToast, fetchSitesPage, currentPage]);
@@ -790,11 +792,11 @@ export function DashboardProvider({ children }) {
                 return copy;
             });
             await fetchData();
-            showToast('✓ Relation updates retried successfully', 'success');
+            showToast('Relation updates retried successfully', 'success');
             return res.data || res;
         } catch (err) {
             console.error('retrySiteRelations error:', err);
-            showToast(`✗ Failed to retry relations: ${err.message || err}`, 'error');
+            showToast(`Failed to retry relations: ${err.message || err}`, 'error');
             throw err;
         }
     }, [failedRelationUpdates, fetchData, showToast]);
@@ -809,10 +811,10 @@ export function DashboardProvider({ children }) {
             const newCategory = response?.data || response;
             setCategories(prev => [...prev, newCategory]);
             setStats(prev => ({ ...prev, categories: prev.categories + 1 }));
-            showToast(`✓ Category "${newCategory.name}" created successfully`, 'success');
+            showToast(`Category "${newCategory.name}" created successfully`, 'success');
             return newCategory;
         } catch (err) {
-            showToast(`✗ Failed to add category: ${err.message}`, 'error');
+            showToast(`Failed to add category: ${err.message}`, 'error');
             throw err;
         }
     }, [showToast]);
@@ -830,10 +832,10 @@ export function DashboardProvider({ children }) {
                 ...site,
                 categories_array: site.categories_array?.map(c => c?.id === id ? updated : c) || []
             })));
-            showToast(`✓ Category "${updated.name}" updated successfully`, 'success');
+            showToast(`Category "${updated.name}" updated successfully`, 'success');
             return updated;
         } catch (err) {
-            showToast(`✗ Failed to update category: ${err.message}`, 'error');
+            showToast(`Failed to update category: ${err.message}`, 'error');
             throw err;
         }
     }, [showToast]);
@@ -848,9 +850,9 @@ export function DashboardProvider({ children }) {
                 categories_array: site.categories_array?.filter(c => c?.id !== id) || []
             })));
             setStats(prev => ({ ...prev, categories: prev.categories - 1 }));
-            showToast('✓ Category deleted successfully', 'success');
+            showToast('Category deleted successfully', 'success');
         } catch (err) {
-            showToast(`✗ Failed to delete category: ${err.message}`, 'error');
+            showToast(`Failed to delete category: ${err.message}`, 'error');
             throw err;
         }
     }, [showToast]);
@@ -865,10 +867,10 @@ export function DashboardProvider({ children }) {
             const newTag = response?.data || response;
             setTags(prev => [...prev, newTag]);
             setStats(prev => ({ ...prev, tags: prev.tags + 1 }));
-            showToast(`✓ Tag "${newTag.name}" created successfully`, 'success');
+            showToast(`Tag "${newTag.name}" created successfully`, 'success');
             return newTag;
         } catch (err) {
-            showToast(`✗ Failed to add tag: ${err.message}`, 'error');
+            showToast(`Failed to add tag: ${err.message}`, 'error');
             throw err;
         }
     }, [showToast]);
@@ -886,10 +888,10 @@ export function DashboardProvider({ children }) {
                 ...site,
                 tags_array: site.tags_array?.map(t => t?.id === id ? updated : t) || []
             })));
-            showToast(`✓ Tag "${updated.name}" updated successfully`, 'success');
+            showToast(`Tag "${updated.name}" updated successfully`, 'success');
             return updated;
         } catch (err) {
-            showToast(`✗ Failed to update tag: ${err.message}`, 'error');
+            showToast(`Failed to update tag: ${err.message}`, 'error');
             throw err;
         }
     }, [showToast]);
@@ -904,9 +906,9 @@ export function DashboardProvider({ children }) {
                 tags_array: site.tags_array?.filter(t => t?.id !== id) || []
             })));
             setStats(prev => ({ ...prev, tags: prev.tags - 1 }));
-            showToast('✓ Tag deleted successfully', 'success');
+            showToast('Tag deleted successfully', 'success');
         } catch (err) {
-            showToast(`✗ Failed to delete tag: ${err.message}`, 'error');
+            showToast(`Failed to delete tag: ${err.message}`, 'error');
             throw err;
         }
     }, [showToast]);
@@ -959,6 +961,10 @@ export function DashboardProvider({ children }) {
         setSelectedTag,
         selectedImportSource,
         setSelectedImportSource,
+        usageFilterCategories,
+        setUsageFilterCategories,
+        usageFilterTags,
+        setUsageFilterTags,
         sortBy,
         setSortBy,
         sortOrder,

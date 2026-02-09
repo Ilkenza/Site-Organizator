@@ -1,13 +1,36 @@
+import { useState, useEffect, useRef } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import SiteCard from './SiteCard';
 import CategoryColorIndicator from '../layout/CategoryColorIndicator';
 import Pagination from '../ui/Pagination';
+
+const RENDER_DELAY_MS = 500;
 
 export default function SitesList({ onEdit, onDelete }) {
     const {
         filteredSites, loading, searchQuery, selectedCategory, selectedTag, categories,
         currentPage, totalPages, totalSitesCount, fetchSitesPage, SITES_PAGE_SIZE
     } = useDashboard();
+
+    // Delayed render: show skeleton briefly after sites data arrives
+    const [showSites, setShowSites] = useState(false);
+    const delayTimer = useRef(null);
+    const prevPageRef = useRef(currentPage);
+
+    useEffect(() => {
+        // When data changes (page change, filter change), delay rendering
+        if (!loading && filteredSites.length > 0) {
+            // If it's the first load (already waited for loading), show immediately
+            if (prevPageRef.current === currentPage && showSites) return;
+            prevPageRef.current = currentPage;
+
+            setShowSites(false);
+            delayTimer.current = setTimeout(() => setShowSites(true), RENDER_DELAY_MS);
+        } else if (!loading && filteredSites.length === 0) {
+            setShowSites(true);
+        }
+        return () => { if (delayTimer.current) clearTimeout(delayTimer.current); };
+    }, [loading, filteredSites, currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Calculate display indices
     const startIndex = (currentPage - 1) * SITES_PAGE_SIZE;
@@ -21,7 +44,7 @@ export default function SitesList({ onEdit, onDelete }) {
         }
     };
 
-    if (loading) {
+    if (loading || (!showSites && filteredSites.length > 0)) {
         return (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 p-3 sm:p-6">
                 {[...Array(6)].map((_, i) => (

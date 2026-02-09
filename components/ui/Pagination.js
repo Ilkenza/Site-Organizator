@@ -1,15 +1,30 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
+
+const PAGE_COOLDOWN_MS = 300;
 
 export default function Pagination({ currentPage, totalPages, onPageChange }) {
-    // Wrapper to scroll to top when changing pages
+    const [cooldown, setCooldown] = useState(false);
+    const cooldownTimer = useRef(null);
+
+    // Clean up timer on unmount
+    useEffect(() => {
+        return () => { if (cooldownTimer.current) clearTimeout(cooldownTimer.current); };
+    }, []);
+
+    // Wrapper to scroll to top when changing pages — with cooldown
     const handlePageChange = useCallback((page) => {
+        if (cooldown) return;
         // Use instant scroll before navigation so it completes before page re-renders
         window.scrollTo({ top: 0, behavior: 'instant' });
         // Also try scrolling the main content area if it exists
         const mainContent = document.querySelector('main') || document.querySelector('[role="main"]');
         if (mainContent) mainContent.scrollTop = 0;
         onPageChange(page);
-    }, [onPageChange]);
+
+        // Start cooldown
+        setCooldown(true);
+        cooldownTimer.current = setTimeout(() => setCooldown(false), PAGE_COOLDOWN_MS);
+    }, [onPageChange, cooldown]);
 
     // Keyboard navigation for pagination
     useEffect(() => {
@@ -65,10 +80,10 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
             {/* Previous Button */}
             <button
                 onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
+                disabled={currentPage === 1 || cooldown}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                    ${currentPage === 1
-                        ? 'text-app-text-muted cursor-not-allowed'
+                    ${currentPage === 1 || cooldown
+                        ? 'text-app-text-muted cursor-not-allowed opacity-60'
                         : 'text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light'
                     }`}
             >
@@ -126,10 +141,10 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
             {/* Next Button */}
             <button
                 onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
+                disabled={currentPage === totalPages || cooldown}
                 className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                    ${currentPage === totalPages
-                        ? 'text-app-text-muted cursor-not-allowed'
+                    ${currentPage === totalPages || cooldown
+                        ? 'text-app-text-muted cursor-not-allowed opacity-60'
                         : 'text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light'
                     }`}
             >

@@ -226,6 +226,7 @@ export default async function handler(req, res) {
                 categories: userStats[u.id]?.categories || 0,
                 tags: userStats[u.id]?.tags || 0,
                 onboarded: !!u.user_metadata?.onboarding_completed,
+                is_pro: !!u.user_metadata?.is_pro,
                 banned: !!u.banned_until && new Date(u.banned_until) > new Date()
             };
         }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));

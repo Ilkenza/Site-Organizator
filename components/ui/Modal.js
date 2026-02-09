@@ -9,7 +9,8 @@ export default function Modal({
     footer,
     size = 'md',
     showClose = true,
-    dataTour
+    dataTour,
+    glowAnimation = false
 }) {
     const modalRef = useRef(null);
     const onCloseRef = useRef(onClose);
@@ -47,39 +48,53 @@ export default function Modal({
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
             onClick={(e) => e.target === e.currentTarget && onCloseRef.current()}
         >
-            <div
-                ref={modalRef}
-                className={`${sizes[size]} w-full bg-app-bg-secondary border border-app-border rounded-xl shadow-2xl transform transition-all`}
-                role="dialog"
-                aria-modal="true"
-                data-tour={dataTour}
-            >
-                {/* Header */}
-                <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-app-border">
-                    <h2 className="text-lg sm:text-xl font-semibold text-app-text-primary">{title}</h2>
-                    {showClose && (
-                        <button
-                            onClick={() => onCloseRef.current()}
-                            className="p-1 text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light rounded-lg transition-colors"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
+            {/* Modal container */}
+            <div className={`${sizes[size]} w-full relative`}>
+                {/* Animated gradient glow ring — masked to show only the border, gap is fully transparent */}
+                <div
+                    className={`absolute -inset-[0.75rem] rounded-3xl bg-[length:300%_300%] bg-[linear-gradient(120deg,#7c3aed,#c026d3,#ec4899,#7c3aed,#c026d3)] z-0 transition-opacity duration-700 ${glowAnimation ? 'opacity-100 animate-gradient-spin' : 'opacity-0'}`}
+                    style={{
+                        WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                        WebkitMaskComposite: 'xor',
+                        mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                        maskComposite: 'exclude',
+                        padding: '3px',
+                    }}
+                />
+                <div
+                    ref={modalRef}
+                    className="relative z-10 w-full bg-app-bg-secondary border border-app-border rounded-xl shadow-2xl"
+                    role="dialog"
+                    aria-modal="true"
+                    data-tour={dataTour}
+                >
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-app-border">
+                        <h2 className="text-lg sm:text-xl font-semibold text-app-text-primary">{title}</h2>
+                        {showClose && (
+                            <button
+                                onClick={() => onCloseRef.current()}
+                                className="p-1 text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light rounded-lg transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Body */}
+                    <div className="px-4 sm:px-6 py-3 sm:py-4 max-h-[70vh] overflow-y-auto">
+                        {children}
+                    </div>
+
+                    {/* Footer */}
+                    {footer && (
+                        <div className="flex flex-col-reverse xs:flex-row xs:items-center xs:justify-end gap-2 xs:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-app-border bg-app-bg-light/30 rounded-b-xl">
+                            {footer}
+                        </div>
                     )}
                 </div>
-
-                {/* Body */}
-                <div className="px-4 sm:px-6 py-3 sm:py-4 max-h-[70vh] overflow-y-auto">
-                    {children}
-                </div>
-
-                {/* Footer */}
-                {footer && (
-                    <div className="flex flex-col-reverse xs:flex-row xs:items-center xs:justify-end gap-2 xs:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-app-border bg-app-bg-light/30 rounded-b-xl">
-                        {footer}
-                    </div>
-                )}
             </div>
         </div>
     );

@@ -363,7 +363,7 @@ export default function Header({ onAddClick, onMenuClick }) {
 
             if (!bulkDeleteCancelledRef.current) {
                 if (successCount === total) {
-                    showToast(`✓ Deleted ${successCount} ${itemName}(s) successfully`, 'success');
+                    showToast(`Deleted ${successCount} ${itemName}(s) successfully`, 'success');
                 } else {
                     showToast(`⚠ Deleted ${successCount}/${total} ${itemName}(s)`, 'warning');
                 }
@@ -376,7 +376,7 @@ export default function Header({ onAddClick, onMenuClick }) {
 
             setBulkDeleteModalOpen(false);
         } catch (err) {
-            showToast(`✗ Failed to delete items: ${err.message}`, 'error');
+            showToast(`Failed to delete items: ${err.message}`, 'error');
         } finally {
             setBulkDeleting(false);
             setBulkDeleteProgress({ done: 0, total: 0 });
