@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Head from 'next/head';
 import Modal from '../components/ui/Modal';
+import { CollectionIcon, SpinnerFullIcon, LockIcon } from '../components/ui/Icons';
 
 // Configuration
 const LOGIN_CONFIG = {
@@ -724,9 +725,7 @@ export default function Login() {
                 <div className="min-h-screen bg-app-bg-primary flex items-center justify-center">
                     <div className="text-center">
                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-app-accent to-[#4A9FE8] mb-4 shadow-lg shadow-app-accent/20 animate-pulse">
-                            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                            </svg>
+                            <CollectionIcon className="w-8 h-8 text-white" />
                         </div>
                         <p className="text-app-text-secondary">Loading...</p>
                     </div>
@@ -737,9 +736,7 @@ export default function Login() {
                         {/* Logo */}
                         <div className="text-center mb-8">
                             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-app-accent to-[#4A9FE8] mb-4 shadow-lg shadow-app-accent/20">
-                                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                                </svg>
+                                <CollectionIcon className="w-8 h-8 text-white" />
                             </div>
                             <h1 className="text-2xl font-bold text-app-text-primary">Site Organizer</h1>
                             <p className="text-app-text-secondary mt-2">Organize your favorite websites</p>
@@ -869,10 +866,7 @@ export default function Login() {
                                         className="w-full py-3 px-4 bg-btn-primary hover:bg-btn-hover text-app-accent font-medium rounded-xl border border-[#2A5A8A] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:text-app-accentLight"
                                     >
                                         {signing ? (
-                                            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                            </svg>
+                                            <SpinnerFullIcon className="h-5 w-5 animate-spin" />
                                         ) : (isSignUp ? 'Create Account' : 'Sign In')}
                                     </button>
                                 </form>
@@ -881,9 +875,7 @@ export default function Login() {
                                 <form onSubmit={handleMfaVerify} className="space-y-4">
                                     <div className="text-center mb-4">
                                         <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-app-accent/20 mb-3">
-                                            <svg className="w-6 h-6 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                            </svg>
+                                            <LockIcon className="w-6 h-6 text-app-accent" />
                                         </div>
                                         <p className="text-app-text-secondary text-sm">
                                             Enter the 6-digit code from your authenticator app
@@ -912,10 +904,7 @@ export default function Login() {
                                         className="w-full py-3 px-4 bg-btn-primary hover:bg-btn-hover text-app-accent font-medium rounded-xl border border-[#2A5A8A] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:text-app-accentLight"
                                     >
                                         {loading ? (
-                                            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                            </svg>
+                                            <SpinnerFullIcon className="h-5 w-5 animate-spin" />
                                         ) : 'Verify'}
                                     </button>
 

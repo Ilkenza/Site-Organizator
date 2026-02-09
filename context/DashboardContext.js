@@ -418,22 +418,22 @@ export function DashboardProvider({ children }) {
         setError(null);
         try {
             const [sitesRes, categoriesRes, tagsRes, favRes, uncatRes, untagRes, totalRes,
-                   manualRes, bookmarksRes, notionRes, fileRes] = await Promise.all([
-                fetchAPI(`/sites?${buildSitesQuery(1)}`),
-                fetchAPI('/categories'),
-                fetchAPI('/tags'),
-                // Lightweight count queries for sidebar (non-blocking)
-                fetchAPI('/sites?favorites=true&limit=1&page=1').catch(() => null),
-                fetchAPI('/sites?category_id=uncategorized&limit=1&page=1').catch(() => null),
-                fetchAPI('/sites?tag_id=untagged&limit=1&page=1').catch(() => null),
-                // Always fetch unfiltered total for accurate sidebar counts
-                fetchAPI('/sites?limit=1&page=1').catch(() => null),
-                // Import source counts from DB
-                fetchAPI('/sites?import_source=manual&limit=1&page=1').catch(() => null),
-                fetchAPI('/sites?import_source=bookmarks&limit=1&page=1').catch(() => null),
-                fetchAPI('/sites?import_source=notion&limit=1&page=1').catch(() => null),
-                fetchAPI('/sites?import_source=file&limit=1&page=1').catch(() => null)
-            ]);
+                manualRes, bookmarksRes, notionRes, fileRes] = await Promise.all([
+                    fetchAPI(`/sites?${buildSitesQuery(1)}`),
+                    fetchAPI('/categories'),
+                    fetchAPI('/tags'),
+                    // Lightweight count queries for sidebar (non-blocking)
+                    fetchAPI('/sites?favorites=true&limit=1&page=1').catch(() => null),
+                    fetchAPI('/sites?category_id=uncategorized&limit=1&page=1').catch(() => null),
+                    fetchAPI('/sites?tag_id=untagged&limit=1&page=1').catch(() => null),
+                    // Always fetch unfiltered total for accurate sidebar counts
+                    fetchAPI('/sites?limit=1&page=1').catch(() => null),
+                    // Import source counts from DB
+                    fetchAPI('/sites?import_source=manual&limit=1&page=1').catch(() => null),
+                    fetchAPI('/sites?import_source=bookmarks&limit=1&page=1').catch(() => null),
+                    fetchAPI('/sites?import_source=notion&limit=1&page=1').catch(() => null),
+                    fetchAPI('/sites?import_source=file&limit=1&page=1').catch(() => null)
+                ]);
 
             const categoriesData = Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []);
             const tagsData = Array.isArray(tagsRes) ? tagsRes : (tagsRes?.data || []);
@@ -935,6 +935,7 @@ export function DashboardProvider({ children }) {
         tags: filteredTags,
         setTags,
         stats,
+        setStats,
         loading,
         error,
         filteredSites,
@@ -945,6 +946,7 @@ export function DashboardProvider({ children }) {
         currentPage,
         setCurrentPage,
         totalSitesCount,
+        setTotalSitesCount,
         totalPages,
         fetchSitesPage,
         SITES_PAGE_SIZE,

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
+import { SpinnerIcon, TextLinesIcon, BookmarkIcon, DocumentIcon, ArrowLeftIcon } from './Icons';
 import { useDashboard } from '../../context/DashboardContext';
 
 export default function ExportImportModal({ isOpen, onClose, userId, onImportComplete }) {
     // Local state for file handling and export
     const [exporting, setExporting] = useState(false);
+    const [exportingFormat, setExportingFormat] = useState(null);
     const [importFile, setImportFile] = useState(null);
     const [message, setMessage] = useState('');
     const [messageType, setMessageType] = useState('info');
@@ -35,6 +37,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
 
     const handleExport = async (format = 'json') => {
         setExporting(true);
+        setExportingFormat(format);
         setMessage(`Exporting sites as ${format.toUpperCase()}...`);
         setMessageType('info');
 
@@ -54,6 +57,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
             setMessageType('error');
         } finally {
             setExporting(false);
+            setExportingFormat(null);
         }
     };
 
@@ -161,30 +165,20 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
                         Download all your sites in your preferred format for backup or transfer.
                     </p>
                     <div className="flex gap-2">
-                        <Button
-                            onClick={() => handleExport('json')}
-                            disabled={exporting}
-                            variant="primary"
-                            className="flex-1"
-                        >
-                            {exporting ? 'Exporting...' : '📄 JSON'}
-                        </Button>
-                        <Button
-                            onClick={() => handleExport('csv')}
-                            disabled={exporting}
-                            variant="primary"
-                            className="flex-1"
-                        >
-                            {exporting ? 'Exporting...' : 'CSV'}
-                        </Button>
-                        <Button
-                            onClick={() => handleExport('html')}
-                            disabled={exporting}
-                            variant="primary"
-                            className="flex-1"
-                        >
-                            {exporting ? 'Exporting...' : 'HTML'}
-                        </Button>
+                        {['json', 'csv', 'html'].map((fmt) => (
+                            <Button
+                                key={fmt}
+                                onClick={() => handleExport(fmt)}
+                                disabled={exporting}
+                                variant="primary"
+                                className="flex-1 inline-flex items-center justify-center gap-1.5"
+                            >
+                                {exportingFormat === fmt ? (
+                                    <SpinnerIcon className="w-4 h-4 animate-spin" />
+                                ) : null}
+                                {exportingFormat === fmt ? 'Exporting...' : fmt.toUpperCase()}
+                            </Button>
+                        ))}
                     </div>
                 </div>
 
@@ -201,9 +195,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
                                         onChange={(e) => handleFileSelect(e, 'notion')}
                                         disabled={exporting || importing} className="hidden" />
                                     <div className="w-10 h-10 rounded-lg bg-app-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        <svg className="w-6 h-6 text-app-accent" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
-                                        </svg>
+                                        <TextLinesIcon className="w-6 h-6 text-app-accent" />
                                     </div>
                                     <span className="text-xs font-semibold text-app-text-primary">From Notion</span>
                                     <span className="text-[9px] text-app-text-muted text-center leading-tight">HTML export</span>
@@ -213,9 +205,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
                                         onChange={(e) => handleFileSelect(e, 'bookmarks')}
                                         disabled={exporting || importing} className="hidden" />
                                     <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                                        </svg>
+                                        <BookmarkIcon className="w-6 h-6 text-amber-400" />
                                     </div>
                                     <span className="text-xs font-semibold text-app-text-primary">From Bookmarks</span>
                                     <span className="text-[9px] text-app-text-muted text-center leading-tight">Chrome, Firefox, Edge</span>
@@ -250,25 +240,19 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
                             <div className="flex items-center gap-2 mb-1">
                                 {importSource === 'notion' && (
                                     <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-app-accent/20 text-app-accent rounded-full">
-                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M4 4h16v2H4zm0 4h16v2H4zm0 4h16v2H4zm0 4h10v2H4z" />
-                                        </svg>
+                                        <TextLinesIcon className="w-3 h-3" />
                                         Notion
                                     </span>
                                 )}
                                 {importSource === 'bookmarks' && (
                                     <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                                        </svg>
+                                        <BookmarkIcon className="w-3 h-3" />
                                         Bookmarks
                                     </span>
                                 )}
                                 {importSource === 'file' && (
                                     <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                                        </svg>
+                                        <DocumentIcon className="w-3 h-3" />
                                         File
                                     </span>
                                 )}
@@ -361,9 +345,7 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
                                     className="flex-1 inline-flex items-center justify-center gap-1.5"
                                     disabled={importing}
                                 >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                                    </svg>
+                                    <ArrowLeftIcon className="w-3.5 h-3.5" />
                                     Back
                                 </Button>
                                 {importing ? (

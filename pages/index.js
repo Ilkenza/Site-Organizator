@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { SiGooglechrome, SiFirefoxbrowser } from 'react-icons/si';
 import { FaEdge } from 'react-icons/fa';
 import { Modal } from '../components/ui';
+import { CollectionIcon, CheckCircleFilledIcon, LockFilledIcon, CpuIcon, LightningIcon, TagIcon, CurrencyDollarIcon, DownloadIcon, BookmarkIcon, DeviceMobileIcon, LockIcon, CloseIcon, CheckmarkIcon, ChevronDownIcon, ArrowRightIcon } from '../components/ui/Icons';
 
 // Configuration
 const PAGE_CONFIG = {
@@ -57,9 +58,7 @@ const Logo = ({ size = 'md' }) => {
 
   return (
     <div className={`${sizeClasses.container} rounded-xl bg-gradient-to-br from-app-accent to-[#4A9FE8] flex items-center justify-center shadow-lg shadow-app-accent/20`}>
-      <svg className={`${sizeClasses.icon} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-      </svg>
+      <CollectionIcon className={`${sizeClasses.icon} text-white`} />
     </div>
   );
 };
@@ -249,22 +248,15 @@ export default function Home() {
               {/* Quick Stats */}
               <div className="flex items-center justify-center gap-6 mb-10 text-sm">
                 <div className="flex items-center gap-2 text-gray-400">
-                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
+                  <CheckCircleFilledIcon className="w-5 h-5 text-green-400" />
                   <span>Forever Free</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-400">
-                  <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                  </svg>
+                  <LockFilledIcon className="w-5 h-5 text-blue-400" />
                   <span>Your Data Only</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-400">
-                  <svg className="w-5 h-5 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M13 7H7v6h6V7z" />
-                    <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd" />
-                  </svg>
+                  <CpuIcon className="w-5 h-5 text-purple-400" />
                   <span>Zero Setup</span>
                 </div>
               </div>
@@ -299,9 +291,7 @@ export default function Home() {
                     </div>
                     <div className="flex-1 flex justify-center">
                       <div className="px-4 py-1.5 bg-gray-950 rounded-lg text-xs text-gray-500 flex items-center gap-2">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                        </svg>
+                        <LockFilledIcon className="w-3 h-3" />
                         {PAGE_CONFIG.DOMAIN}/dashboard
                       </div>
                     </div>
@@ -343,9 +333,7 @@ export default function Home() {
                 <div className="absolute inset-0 bg-gradient-to-br from-app-accent/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 <div className="relative">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-app-accent/20 to-app-accent/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-500">
-                    <svg className="w-8 h-8 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+                    <LightningIcon className="w-8 h-8 text-app-accent" />
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-3">Instant Search</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">Type. See results. Done. Faster than you can say &quot;loading spinner.&quot;</p>
@@ -357,9 +345,7 @@ export default function Home() {
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 <div className="relative">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-500">
-                    <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
+                    <TagIcon className="w-8 h-8 text-purple-400" />
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-3">Auto-Organize</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">Categories and tags suggested automatically. Your bookmarks organize themselves.</p>
@@ -371,9 +357,7 @@ export default function Home() {
                 <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 <div className="relative">
                   <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500/20 to-green-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-500">
-                    <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <CurrencyDollarIcon className="w-8 h-8 text-green-400" />
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-3">Actually Free</h3>
                   <p className="text-gray-400 text-sm leading-relaxed">Free means free. Not &quot;free trial.&quot; Not &quot;freemium.&quot; Just free. Forever.</p>
@@ -408,9 +392,7 @@ export default function Home() {
                     className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-500/20 to-blue-600/20 hover:from-blue-500/30 hover:to-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl transition-all duration-300 font-semibold group-hover:shadow-lg group-hover:shadow-blue-500/20"
                     onClick={(e) => { e.preventDefault(); setComingSoonModal({ isOpen: true, browser: 'Chrome', message: 'Save any webpage in one click. Auto-categorize. Never lose a link again. The Chrome extension launches soon!' }); }}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
+                    <DownloadIcon className="w-5 h-5" />
                     Add to Chrome
                   </a>
                 </div>
@@ -430,9 +412,7 @@ export default function Home() {
                     className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-orange-500/20 to-orange-600/20 hover:from-orange-500/30 hover:to-orange-600/30 text-orange-400 border border-orange-500/30 rounded-xl transition-all duration-300 font-semibold group-hover:shadow-lg group-hover:shadow-orange-500/20"
                     onClick={(e) => { e.preventDefault(); setComingSoonModal({ isOpen: true, browser: 'Firefox', message: 'One-click saves. Instant search. Auto-organization. The Firefox add-on is coming soon!' }); }}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
+                    <DownloadIcon className="w-5 h-5" />
                     Add to Firefox
                   </a>
                 </div>
@@ -452,9 +432,7 @@ export default function Home() {
                     className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-600/20 to-blue-700/20 hover:from-blue-600/30 hover:to-blue-700/30 text-blue-400 border border-blue-600/30 rounded-xl transition-all duration-300 font-semibold group-hover:shadow-lg group-hover:shadow-blue-600/20"
                     onClick={(e) => { e.preventDefault(); setComingSoonModal({ isOpen: true, browser: 'Edge', message: 'Save anything. Find everything. Never dig through folders again. Edge extension launching soon!' }); }}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
+                    <DownloadIcon className="w-5 h-5" />
                     Add to Edge
                   </a>
                 </div>
@@ -480,9 +458,7 @@ export default function Home() {
               {/* Feature 1 - Instant Search */}
               <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-app-accent/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-app-accent/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-app-accent/20 to-app-accent/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                  <svg className="w-7 h-7 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+                  <LightningIcon className="w-7 h-7 text-app-accent" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Instant Search</h3>
                 <p className="text-gray-400 leading-relaxed">Type. See results. Done. Search 10,000 bookmarks in under a second.</p>
@@ -491,9 +467,7 @@ export default function Home() {
               {/* Feature 2 - Auto-Organize */}
               <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-purple-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-purple-500/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                  <svg className="w-7 h-7 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                  </svg>
+                  <TagIcon className="w-7 h-7 text-purple-400" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Auto-Organize</h3>
                 <p className="text-gray-400 leading-relaxed">Categories and tags suggested automatically. Your bookmarks organize themselves.</p>
@@ -502,9 +476,7 @@ export default function Home() {
               {/* Feature 3 - One-Click Save */}
               <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-blue-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-blue-500/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                  <svg className="w-7 h-7 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
+                  <BookmarkIcon className="w-7 h-7 text-blue-400" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">One-Click Save</h3>
                 <p className="text-gray-400 leading-relaxed">See it. Save it. Done. Browser extension works everywhere.</p>
@@ -513,9 +485,7 @@ export default function Home() {
               {/* Feature 4 - Works Everywhere */}
               <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-emerald-500/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                  <svg className="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
+                  <DeviceMobileIcon className="w-7 h-7 text-emerald-400" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Works Everywhere</h3>
                 <p className="text-gray-400 leading-relaxed">Phone. Tablet. Desktop. Always in sync. Access from anywhere.</p>
@@ -524,9 +494,7 @@ export default function Home() {
               {/* Feature 5 - Your Data Only */}
               <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-cyan-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-cyan-500/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                  <svg className="w-7 h-7 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
+                  <LockIcon className="w-7 h-7 text-cyan-400" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Your Data Only</h3>
                 <p className="text-gray-400 leading-relaxed">Export everything anytime. Zero lock-in. Leave whenever you want.</p>
@@ -535,9 +503,7 @@ export default function Home() {
               {/* Feature 6 - Actually Free */}
               <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-green-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-green-500/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500/20 to-green-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                  <svg className="w-7 h-7 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <CurrencyDollarIcon className="w-7 h-7 text-green-400" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Actually Free</h3>
                 <p className="text-gray-400 leading-relaxed">Not a trial. Not freemium. Just free. No credit card. Ever.</p>
@@ -582,14 +548,10 @@ export default function Home() {
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
                       <td className="py-4 px-6 text-white font-medium">Auto-Categorize</td>
                       <td className="py-4 px-6 text-center">
-                        <svg className="w-5 h-5 text-red-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <CloseIcon className="w-5 h-5 text-red-400 mx-auto" />
                       </td>
                       <td className="py-4 px-6 text-center">
-                        <svg className="w-5 h-5 text-green-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <CheckmarkIcon className="w-5 h-5 text-green-400 mx-auto" />
                       </td>
                     </tr>
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
@@ -604,27 +566,19 @@ export default function Home() {
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
                       <td className="py-4 px-6 text-white font-medium">Dead Link Detection</td>
                       <td className="py-4 px-6 text-center">
-                        <svg className="w-5 h-5 text-red-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <CloseIcon className="w-5 h-5 text-red-400 mx-auto" />
                       </td>
                       <td className="py-4 px-6 text-center">
-                        <svg className="w-5 h-5 text-green-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <CheckmarkIcon className="w-5 h-5 text-green-400 mx-auto" />
                       </td>
                     </tr>
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
                       <td className="py-4 px-6 text-white font-medium">Smart Tags</td>
                       <td className="py-4 px-6 text-center">
-                        <svg className="w-5 h-5 text-red-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <CloseIcon className="w-5 h-5 text-red-400 mx-auto" />
                       </td>
                       <td className="py-4 px-6 text-center">
-                        <svg className="w-5 h-5 text-green-400 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <CheckmarkIcon className="w-5 h-5 text-green-400 mx-auto" />
                       </td>
                     </tr>
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
@@ -660,9 +614,7 @@ export default function Home() {
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-green-500/10 border border-green-500/30 flex items-center justify-center">
-                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+                    <CheckmarkIcon className="w-6 h-6 text-green-400" />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-2">Zero Learning Curve</h3>
@@ -672,9 +624,7 @@ export default function Home() {
 
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center">
-                    <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
+                    <LightningIcon className="w-6 h-6 text-blue-400" />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-2">Ridiculously Fast</h3>
@@ -684,9 +634,7 @@ export default function Home() {
 
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center">
-                    <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
+                    <LockIcon className="w-6 h-6 text-purple-400" />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-2">Your Data. Period.</h3>
@@ -696,9 +644,7 @@ export default function Home() {
 
                 <div className="flex gap-4">
                   <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center">
-                    <svg className="w-6 h-6 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <CurrencyDollarIcon className="w-6 h-6 text-pink-400" />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-white mb-2">Actually Free</h3>
@@ -725,9 +671,7 @@ export default function Home() {
               <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-app-accent/50 transition-all">
                 <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-app-accent transition-colors">
                   <span>Is it really free forever?</span>
-                  <svg className="w-5 h-5 transform group-open:rotate-180 transition-transform text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <ChevronDownIcon className="w-5 h-5 transform group-open:rotate-180 transition-transform text-app-accent" />
                 </summary>
                 <div className="px-6 pb-6 text-gray-400 leading-relaxed">
                   Yes. No credit card required. No &quot;premium&quot; tiers. No upgrade prompts. Just free. We believe bookmarking should be a basic internet right.
@@ -738,9 +682,7 @@ export default function Home() {
               <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-purple-500/50 transition-all">
                 <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-purple-400 transition-colors">
                   <span>Can I export my data?</span>
-                  <svg className="w-5 h-5 transform group-open:rotate-180 transition-transform text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <ChevronDownIcon className="w-5 h-5 transform group-open:rotate-180 transition-transform text-purple-400" />
                 </summary>
                 <div className="px-6 pb-6 text-gray-400 leading-relaxed">
                   Always. One-click export to JSON or CSV. Your data is YOURS. Take it anywhere, anytime. Zero lock-in.
@@ -751,9 +693,7 @@ export default function Home() {
               <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-green-500/50 transition-all">
                 <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-green-400 transition-colors">
                   <span>How fast is the search really?</span>
-                  <svg className="w-5 h-5 transform group-open:rotate-180 transition-transform text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <ChevronDownIcon className="w-5 h-5 transform group-open:rotate-180 transition-transform text-green-400" />
                 </summary>
                 <div className="px-6 pb-6 text-gray-400 leading-relaxed">
                   Sub-second. Even with 10,000+ bookmarks. Type and see results instantly. No loading spinners. No &quot;please wait.&quot; Just results.
@@ -783,21 +723,15 @@ export default function Home() {
 
                 <div className="flex flex-wrap gap-6 justify-center mb-12 text-sm">
                   <div className="flex items-center gap-2 text-gray-300">
-                    <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
+                    <CheckCircleFilledIcon className="w-5 h-5 text-green-400" />
                     Free forever
                   </div>
                   <div className="flex items-center gap-2 text-gray-300">
-                    <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
+                    <CheckCircleFilledIcon className="w-5 h-5 text-green-400" />
                     No card needed
                   </div>
                   <div className="flex items-center gap-2 text-gray-300">
-                    <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
+                    <CheckCircleFilledIcon className="w-5 h-5 text-green-400" />
                     Ready in 60s
                   </div>
                 </div>
@@ -807,9 +741,7 @@ export default function Home() {
                   className={`inline-flex items-center gap-2 px-10 py-5 ${BUTTON_CLASSES.PRIMARY_LARGE} group text-xl`}
                 >
                   Get Started Now
-                  <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
+                  <ArrowRightIcon className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                 </Link>
 
                 <p className="text-gray-500 text-xs mt-6">

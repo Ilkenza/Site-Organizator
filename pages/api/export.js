@@ -47,6 +47,10 @@ const SUPABASE_TABLES = {
 
 const EXPORT_VERSION = '1.0';
 
+// Batching / pagination limits
+const IN_BATCH_SIZE = 100;  // Max IDs per .in() call to avoid URL length issues
+const PAGE_SIZE = 1000;     // Rows per page when paginating
+
 // Supabase Configuration
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -196,22 +200,63 @@ const convertToHTML = (sites) => {
 };
 
 /**
+ * Paginate through ALL rows of a query (bypasses the default 1000-row limit).
+ * @param {Function} queryFn - (from, to) => supabase query builder
+ * @returns {Promise<Array>} All rows
+ */
+async function fetchAll(queryFn) {
+    const all = [];
+    let from = 0;
+    while (true) {
+        const to = from + PAGE_SIZE - 1;
+        const { data, error } = await queryFn(from, to);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < PAGE_SIZE) break; // last page
+        from += PAGE_SIZE;
+    }
+    return all;
+}
+
+/**
+ * Run .in() in batches to avoid URL-length limits
+ * @param {string} table - Table name
+ * @param {string} selectFields - Select clause
+ * @param {string} inColumn - Column for .in()
+ * @param {Array} ids - All IDs
+ * @returns {Promise<Array>} Merged results
+ */
+async function batchIn(table, selectFields, inColumn, ids) {
+    if (!ids || ids.length === 0) return [];
+    const results = [];
+    for (let i = 0; i < ids.length; i += IN_BATCH_SIZE) {
+        const batch = ids.slice(i, i + IN_BATCH_SIZE);
+        const rows = await fetchAll((from, to) =>
+            supabase
+                .from(table)
+                .select(selectFields)
+                .in(inColumn, batch)
+                .range(from, to)
+        );
+        results.push(...rows);
+    }
+    return results;
+}
+
+/**
  * Fetch all sites for a user
  * @param {string} userId - User ID
  * @returns {Promise<Array>} Sites array
  */
 async function fetchUserSites(userId) {
-    const { data, error } = await supabase
-        .from(SUPABASE_TABLES.SITES)
-        .select('*')
-        .eq('user_id', userId);
-
-    if (error) {
-        console.error('❌ Sites error:', error.message);
-        throw error;
-    }
-
-    return data || [];
+    return fetchAll((from, to) =>
+        supabase
+            .from(SUPABASE_TABLES.SITES)
+            .select('*')
+            .eq('user_id', userId)
+            .range(from, to)
+    );
 }
 
 /**
@@ -222,28 +267,16 @@ async function fetchUserSites(userId) {
 async function fetchCategoriesForSites(siteIds) {
     if (!siteIds || siteIds.length === 0) return [];
 
-    // Get category IDs from site_categories
-    const { data: scData, error: scError } = await supabase
-        .from(SUPABASE_TABLES.SITE_CATEGORIES)
-        .select('category_id')
-        .in('site_id', siteIds);
-
-    if (scError) {
-        console.error('❌ Site categories error:', scError.message);
-        throw scError;
-    }
+    // Get category IDs from site_categories (batched)
+    const scData = await batchIn(
+        SUPABASE_TABLES.SITE_CATEGORIES, 'category_id', 'site_id', siteIds
+    );
 
     const categoryIds = getUniqueIds(scData, 'category_id');
     if (categoryIds.length === 0) return [];
 
-    // Fetch actual categories
-    const { data: categories, error: catError } = await supabase
-        .from(SUPABASE_TABLES.CATEGORIES)
-        .select('*')
-        .in('id', categoryIds);
-
-    if (catError) return [];
-    return categories || [];
+    // Fetch actual categories (batched)
+    return batchIn(SUPABASE_TABLES.CATEGORIES, '*', 'id', categoryIds);
 }
 
 /**
@@ -254,28 +287,16 @@ async function fetchCategoriesForSites(siteIds) {
 async function fetchTagsForSites(siteIds) {
     if (!siteIds || siteIds.length === 0) return [];
 
-    // Get tag IDs from site_tags
-    const { data: stData, error: stError } = await supabase
-        .from(SUPABASE_TABLES.SITE_TAGS)
-        .select('tag_id')
-        .in('site_id', siteIds);
-
-    if (stError) {
-        console.error('❌ Site tags error:', stError.message);
-        throw stError;
-    }
+    // Get tag IDs from site_tags (batched)
+    const stData = await batchIn(
+        SUPABASE_TABLES.SITE_TAGS, 'tag_id', 'site_id', siteIds
+    );
 
     const tagIds = getUniqueIds(stData, 'tag_id');
     if (tagIds.length === 0) return [];
 
-    // Fetch actual tags
-    const { data: tags, error: tagError } = await supabase
-        .from(SUPABASE_TABLES.TAGS)
-        .select('*')
-        .in('id', tagIds);
-
-    if (tagError) return [];
-    return tags || [];
+    // Fetch actual tags (batched)
+    return batchIn(SUPABASE_TABLES.TAGS, '*', 'id', tagIds);
 }
 
 /**
@@ -285,18 +306,7 @@ async function fetchTagsForSites(siteIds) {
  */
 async function fetchSiteCategoryRelations(siteIds) {
     if (!siteIds || siteIds.length === 0) return [];
-
-    const { data, error } = await supabase
-        .from(SUPABASE_TABLES.SITE_CATEGORIES)
-        .select('site_id, category_id')
-        .in('site_id', siteIds);
-
-    if (error) {
-        console.error('❌ Site categories error:', error.message);
-        throw error;
-    }
-
-    return data || [];
+    return batchIn(SUPABASE_TABLES.SITE_CATEGORIES, 'site_id, category_id', 'site_id', siteIds);
 }
 
 /**
@@ -306,18 +316,7 @@ async function fetchSiteCategoryRelations(siteIds) {
  */
 async function fetchSiteTagRelations(siteIds) {
     if (!siteIds || siteIds.length === 0) return [];
-
-    const { data, error } = await supabase
-        .from(SUPABASE_TABLES.SITE_TAGS)
-        .select('site_id, tag_id')
-        .in('site_id', siteIds);
-
-    if (error) {
-        console.error('❌ Site tags error:', error.message);
-        throw error;
-    }
-
-    return data || [];
+    return batchIn(SUPABASE_TABLES.SITE_TAGS, 'site_id, tag_id', 'site_id', siteIds);
 }
 
 /**

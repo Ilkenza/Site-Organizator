@@ -3,6 +3,7 @@ import { useDashboard } from '../../context/DashboardContext';
 import { ConfirmModal } from '../ui/Modal';
 import Pagination from '../ui/Pagination';
 import InlineEditableName from './InlineEditableName';
+import { FolderIcon, FilterIcon, EditIcon, TrashIcon, SpinnerIcon, LinkIcon, WarningIcon } from '../ui/Icons';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -139,9 +140,7 @@ export default function CategoriesList({ onEdit }) {
         return (
             <div className="flex flex-col items-center justify-center py-16 px-4 animate-fadeIn">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-app-accent/20 to-app-accent/5 flex items-center justify-center mb-4 animate-bounce-slow">
-                    <svg className="w-8 h-8 sm:w-10 sm:h-10 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                    </svg>
+                    <FolderIcon className="w-8 h-8 sm:w-10 sm:h-10 text-app-accent" strokeWidth={1.5} />
                 </div>
                 <h3 className="text-lg sm:text-xl font-semibold text-app-text-primary mb-2">No categories yet</h3>
                 <p className="text-app-text-secondary text-center mb-6">Create your first category to organize your sites.</p>
@@ -168,9 +167,7 @@ export default function CategoriesList({ onEdit }) {
             {filteredCategories.length === 0 && usageFilterCategories !== 'all' && (
                 <div className="flex flex-col items-center justify-center py-12 px-4 animate-fadeIn">
                     <div className="w-14 h-14 rounded-xl bg-app-bg-light border-2 border-dashed border-app-border flex items-center justify-center mb-3">
-                        <svg className="w-7 h-7 text-app-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                        </svg>
+                        <FilterIcon className="w-7 h-7 text-app-text-secondary" strokeWidth={1.5} />
                     </div>
                     <h3 className="text-lg font-semibold text-app-text-primary mb-1">No {usageFilterCategories} categories</h3>
                     <p className="text-app-text-secondary text-center text-sm">
@@ -255,9 +252,7 @@ export default function CategoriesList({ onEdit }) {
                                         title="Edit category"
                                         aria-label="Edit category"
                                     >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                        </svg>
+                                        <EditIcon className="w-4 h-4" />
                                     </button>
                                     <button
                                         onClick={() => handleDeleteClick(category)}
@@ -267,14 +262,9 @@ export default function CategoriesList({ onEdit }) {
                                         aria-label="Delete category"
                                     >
                                         {deletingId === category.id ? (
-                                            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                            </svg>
+                                            <SpinnerIcon className="w-4 h-4 animate-spin" />
                                         ) : (
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
+                                            <TrashIcon className="w-4 h-4" />
                                         )}
                                     </button>
                                 </div>
@@ -282,9 +272,7 @@ export default function CategoriesList({ onEdit }) {
 
                             {/* Site count */}
                             <div className="flex items-center gap-1 text-xs text-app-text-muted">
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                </svg>
+                                <LinkIcon className="w-3.5 h-3.5" />
                                 <span>{siteCount} {siteCount === 1 ? 'site' : 'sites'}</span>
                             </div>
                         </div>
@@ -317,9 +305,7 @@ export default function CategoriesList({ onEdit }) {
                     <div className="bg-app-bg-primary rounded-lg shadow-lg max-w-md w-full mx-4">
                         <div className="p-6">
                             <h2 className="text-lg font-semibold text-app-text-primary mb-4 flex items-center gap-2">
-                                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
+                                <WarningIcon className="w-5 h-5 text-amber-400" />
                                 Cannot Delete Category
                             </h2>
                             <p className="text-app-text-secondary mb-4">

@@ -3,9 +3,69 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
+import { fetchAPI } from '../../lib/supabase';
 import Button from '../ui/Button';
+import {
+    MenuIcon, SearchIcon, RefreshIcon, CloseIcon, ClipboardCheckIcon,
+    TrashIcon, DotsVerticalIcon, CheckmarkIcon, PlusIcon, SettingsIcon,
+    ShieldCheckIcon, LogoutIcon, WarningIcon, FolderIcon, TagIcon
+} from '../ui/Icons';
 import { ConfirmModal } from '../ui/Modal';
+import UndoToast from '../ui/UndoToast';
 import ServerStatus from '../ui/ServerStatus';
+
+// Strip joined/computed fields from site rows for restore
+const SITE_STRIP_KEYS = ['categories_array', 'tags_array', 'site_categories', 'site_tags'];
+const stripSite = (site) => {
+    const row = {};
+    for (const [k, v] of Object.entries(site)) {
+        if (!SITE_STRIP_KEYS.includes(k)) row[k] = v;
+    }
+    return row;
+};
+const stripItem = ({ site_count: _sc, ...rest }) => rest;
+
+/**
+ * Build a restore payload from selected items so undo can re-insert them.
+ * For sites: saves raw rows + junction rows (site_categories, site_tags).
+ * For categories/tags: saves items + any junction rows from the current page's sites.
+ */
+function buildRestorePayload(type, selectedIds, sitesData, categoriesData, tagsData) {
+    const payload = { sites: [], categories: [], tags: [], site_categories: [], site_tags: [] };
+
+    if (type === 'sites') {
+        const deleted = sitesData.filter(s => selectedIds.has(s.id));
+        payload.sites = deleted.map(stripSite);
+        deleted.forEach(s => {
+            (s.categories_array || []).forEach(c => {
+                if (c?.id) payload.site_categories.push({ site_id: s.id, category_id: c.id });
+            });
+            (s.tags_array || []).forEach(t => {
+                if (t?.id) payload.site_tags.push({ site_id: s.id, tag_id: t.id });
+            });
+        });
+    } else if (type === 'categories') {
+        payload.categories = categoriesData.filter(c => selectedIds.has(c.id)).map(stripItem);
+        sitesData.forEach(s => {
+            (s.categories_array || []).forEach(c => {
+                if (c?.id && selectedIds.has(c.id)) {
+                    payload.site_categories.push({ site_id: s.id, category_id: c.id });
+                }
+            });
+        });
+    } else if (type === 'tags') {
+        payload.tags = tagsData.filter(t => selectedIds.has(t.id)).map(stripItem);
+        sitesData.forEach(s => {
+            (s.tags_array || []).forEach(t => {
+                if (t?.id && selectedIds.has(t.id)) {
+                    payload.site_tags.push({ site_id: s.id, tag_id: t.id });
+                }
+            });
+        });
+    }
+
+    return payload;
+}
 
 export default function Header({ onAddClick, onMenuClick }) {
     const { user: authUser, signOut } = useAuth();
@@ -91,9 +151,6 @@ export default function Header({ onAddClick, onMenuClick }) {
         setSelectedCategories,
         selectedTags,
         setSelectedTags,
-        deleteSite,
-        deleteCategory,
-        deleteTag,
         showToast,
     } = useDashboard();
 
@@ -110,9 +167,8 @@ export default function Header({ onAddClick, onMenuClick }) {
 
     // Bulk delete modal state
     const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
-    const [bulkDeleting, setBulkDeleting] = useState(false);
-    const [bulkDeleteProgress, setBulkDeleteProgress] = useState({ done: 0, total: 0 });
-    const bulkDeleteCancelledRef = useRef(false);
+    const [pendingBulkDelete, setPendingBulkDelete] = useState(null);
+    const didBulkUndoRef = useRef(false);
     const [usageWarning, setUsageWarning] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -335,61 +391,69 @@ export default function Header({ onAddClick, onMenuClick }) {
 
     const confirmBulkDelete = async () => {
         const selectedIds = getSelectedIds();
-        const itemName = activeTab.slice(0, -1);
-        const total = selectedIds.size;
+        const idsArray = Array.from(selectedIds);
+        const total = idsArray.length;
+        const itemType = (activeTab === 'favorites' ? 'sites' : activeTab);
+        didBulkUndoRef.current = false;
 
-        setBulkDeleting(true);
-        setBulkDeleteProgress({ done: 0, total });
-        bulkDeleteCancelledRef.current = false;
+        // Build restore payload BEFORE deleting (for undo)
+        const restorePayload = buildRestorePayload(itemType, selectedIds, sites, categories, tags);
+
+        // Close modal, clear selection, exit multi-select immediately
+        setBulkDeleteModalOpen(false);
+        if (activeTab === 'sites' || activeTab === 'favorites') setSelectedSites(new Set());
+        else if (activeTab === 'categories') setSelectedCategories(new Set());
+        else if (activeTab === 'tags') setSelectedTags(new Set());
+        setMultiSelectMode(false);
+
+        // Delete from DB in one fast call
+        try {
+            const res = await fetchAPI('/bulk-delete', {
+                method: 'POST',
+                body: JSON.stringify({ type: itemType, ids: idsArray }),
+            });
+            if (!res?.success) throw new Error(res?.error || 'Bulk delete failed');
+        } catch (err) {
+            showToast(`Delete failed: ${err.message}`, 'error');
+            return;
+        }
+
+        // Refresh from server — remaining items fill in with correct pagination
+        await fetchData();
+
+        // Show undo toast (data is already deleted, undo will restore)
+        setPendingBulkDelete({ type: itemType, restorePayload, total });
+    };
+
+    const handleBulkUndo = async () => {
+        didBulkUndoRef.current = true;
+        const pending = pendingBulkDelete;
+        setPendingBulkDelete(null);
+        if (!pending?.restorePayload) return;
 
         try {
-            const deleteFunc = activeTab === 'sites' ? deleteSite : activeTab === 'categories' ? deleteCategory : deleteTag;
-            let successCount = 0;
-
-            for (const id of selectedIds) {
-                // Check if user cancelled
-                if (bulkDeleteCancelledRef.current) {
-                    showToast(`⏹ Stopped — deleted ${successCount}/${total} ${itemName}(s)`, 'info');
-                    break;
-                }
-                try {
-                    await deleteFunc(id);
-                    successCount++;
-                    setBulkDeleteProgress({ done: successCount, total });
-                } catch (err) {
-                    console.error(`Failed to delete ${itemName}:`, err);
-                }
-            }
-
-            if (!bulkDeleteCancelledRef.current) {
-                if (successCount === total) {
-                    showToast(`Deleted ${successCount} ${itemName}(s) successfully`, 'success');
-                } else {
-                    showToast(`⚠ Deleted ${successCount}/${total} ${itemName}(s)`, 'warning');
-                }
-            }
-
-            // Clear selection
-            if (activeTab === 'sites') setSelectedSites(new Set());
-            else if (activeTab === 'categories') setSelectedCategories(new Set());
-            else if (activeTab === 'tags') setSelectedTags(new Set());
-
-            setBulkDeleteModalOpen(false);
+            const res = await fetchAPI('/restore', {
+                method: 'POST',
+                body: JSON.stringify(pending.restorePayload),
+            });
+            if (!res?.success) throw new Error(res?.error || 'Restore failed');
+            await fetchData();
+            showToast('Restored successfully', 'success');
         } catch (err) {
-            showToast(`Failed to delete items: ${err.message}`, 'error');
-        } finally {
-            setBulkDeleting(false);
-            setBulkDeleteProgress({ done: 0, total: 0 });
+            showToast(`Undo failed: ${err.message}`, 'error');
         }
     };
 
-    const cancelBulkDelete = () => {
-        if (bulkDeleting) {
-            // Signal the loop to stop
-            bulkDeleteCancelledRef.current = true;
-        } else {
-            setBulkDeleteModalOpen(false);
+    const handleBulkToastClose = () => {
+        if (didBulkUndoRef.current) {
+            didBulkUndoRef.current = false;
         }
+        // Already deleted from DB — nothing more to do
+        setPendingBulkDelete(null);
+    };
+
+    const cancelBulkDelete = () => {
+        setBulkDeleteModalOpen(false);
     };
 
     // Listen for bulk delete keyboard shortcut event
@@ -414,9 +478,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                             className="lg:hidden p-2 text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light rounded-lg transition-colors flex-shrink-0"
                             aria-label="Toggle menu"
                         >
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                            </svg>
+                            <MenuIcon className="w-6 h-6" />
                         </button>
 
                         {/* Title */}
@@ -430,19 +492,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                         {activeTab !== 'settings' && (
                             <div className="flex-1 min-w-0 max-w-xs sm:max-w-md hidden md:block" data-tour="search-bar">
                                 <div className="relative">
-                                    <svg
-                                        className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-app-text-tertiary"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                        />
-                                    </svg>
+                                    <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-app-text-tertiary" />
                                     <input
                                         ref={searchInputRef}
                                         type="text"
@@ -498,19 +548,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                     title="Refresh data"
                                     aria-label="Refresh"
                                 >
-                                    <svg
-                                        className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                        />
-                                    </svg>
+                                    <RefreshIcon className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                                 </button>
                             )}
 
@@ -562,13 +600,9 @@ export default function Header({ onAddClick, onMenuClick }) {
                                         aria-label={hasSelection ? 'Deselect all' : 'Toggle multi-select'}
                                     >
                                         {hasSelection ? (
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                            </svg>
+                                            <CloseIcon className="w-4 h-4" />
                                         ) : (
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                            </svg>
+                                            <ClipboardCheckIcon className="w-4 h-4" />
                                         )}
                                     </button>
                                 );
@@ -595,9 +629,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                         title={`Delete ${selectedCount} selected item(s)`}
                                         aria-label={`Delete ${selectedCount} items`}
                                     >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
+                                        <TrashIcon className="w-4 h-4" />
                                         <span>{selectedCount}</span>
                                     </button>
                                 );
@@ -632,9 +664,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                             title="More options"
                                             aria-label="More options"
                                         >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                                            </svg>
+                                            <DotsVerticalIcon className="w-5 h-5" />
                                         </button>
                                         {moreOptionsOpen && (
                                             <div className="absolute right-0 top-full mt-2 w-48 bg-app-bg-light border border-app-border rounded-xl shadow-xl z-50 overflow-hidden">
@@ -651,9 +681,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                                         }}
                                                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-secondary rounded-lg transition-colors"
                                                     >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                        </svg>
+                                                        <RefreshIcon className="w-4 h-4" />
                                                         Refresh
                                                     </button>
                                                     <button
@@ -666,9 +694,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                                         }}
                                                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-secondary rounded-lg transition-colors"
                                                     >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                                        </svg>
+                                                        <CheckmarkIcon className="w-4 h-4" />
                                                         Select All
                                                     </button>
                                                 </div>
@@ -710,9 +736,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                         title="Select all (Ctrl+A)"
                                         aria-label="Select all"
                                     >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                        </svg>
+                                        <CheckmarkIcon className="w-4 h-4" />
                                     </button>
                                 );
                             })()}
@@ -720,9 +744,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                             {/* Add button - desktop only */}
                             {activeTab !== 'settings' && (
                                 <Button onClick={onAddClick} variant="primary" size="sm" className="whitespace-nowrap hidden sm:inline-flex" data-tour="add-button">
-                                    <svg className="w-4 h-4 sm:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                    </svg>
+                                    <PlusIcon className="w-4 h-4 sm:mr-1.5" />
                                     <span className="hidden md:inline">{getAddButtonText()}</span>
                                 </Button>
                             )}
@@ -761,10 +783,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                                     title="Settings"
                                                     aria-label="Settings"
                                                 >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
+                                                    <SettingsIcon className="w-5 h-5" />
                                                 </button>
                                             </div>
                                             <div className="p-2">
@@ -773,9 +792,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                                         onClick={() => { router.push('/admin'); setUserMenuOpen(false); }}
                                                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-app-text-secondary hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition-colors mb-1"
                                                     >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                                                        </svg>
+                                                        <ShieldCheckIcon className="w-4 h-4" />
                                                         Admin Dashboard
                                                     </button>
                                                 )}
@@ -783,9 +800,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                                     onClick={() => { signOut(); setUserMenuOpen(false); }}
                                                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                                                 >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                                                    </svg>
+                                                    <LogoutIcon className="w-4 h-4" />
                                                     Sign Out
                                                 </button>
                                             </div>
@@ -807,9 +822,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                         <div className="bg-gradient-to-r from-amber-600/20 to-orange-600/20 px-6 py-4 border-b border-app-border">
                             <h2 className="text-lg font-semibold text-amber-400 flex items-center gap-2">
                                 <span className="text-amber-400">
-                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
+                                    <WarningIcon className="w-6 h-6" />
                                 </span>
                                 Cannot Delete {usageWarning.type === 'categories' ? 'Categories' : 'Tags'}
                             </h2>
@@ -824,13 +837,9 @@ export default function Header({ onAddClick, onMenuClick }) {
                                         <div className="font-medium text-app-text-primary flex items-center gap-2">
                                             <span className={usageWarning.type === 'categories' ? 'text-blue-400' : 'text-purple-400'}>
                                                 {usageWarning.type === 'categories' ? (
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                                                    </svg>
+                                                    <FolderIcon className="w-4 h-4" />
                                                 ) : (
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                                                    </svg>
+                                                    <TagIcon className="w-4 h-4" />
                                                 )}
                                             </span>
                                             {item.name}
@@ -866,16 +875,21 @@ export default function Header({ onAddClick, onMenuClick }) {
             <ConfirmModal
                 isOpen={bulkDeleteModalOpen}
                 onClose={cancelBulkDelete}
-                onConfirm={bulkDeleting ? cancelBulkDelete : confirmBulkDelete}
-                title={bulkDeleting ? `Deleting... ${bulkDeleteProgress.done}/${bulkDeleteProgress.total}` : 'Delete Selected Items'}
-                message={bulkDeleting
-                    ? `Deleting ${activeTab.slice(0, -1)}(s)... ${bulkDeleteProgress.done} of ${bulkDeleteProgress.total} done. Press Stop, ESC or ✕ to stop.`
-                    : `Are you sure you want to delete ${getSelectedIds().size} ${activeTab.slice(0, -1)}(s)? This action cannot be undone.`
-                }
-                confirmText={bulkDeleting ? 'Stop' : 'Delete'}
-                cancelText={bulkDeleting ? '' : 'Cancel'}
-                variant={bulkDeleting ? 'secondary' : 'danger'}
+                onConfirm={confirmBulkDelete}
+                title="Delete Selected Items"
+                message={`Are you sure you want to delete ${getSelectedIds().size} ${activeTab.slice(0, -1)}(s)? You will have a brief window to undo.`}
+                confirmText="Delete"
             />
+
+            {/* Bulk delete undo toast */}
+            {pendingBulkDelete && (
+                <UndoToast
+                    message={`Deleted ${pendingBulkDelete.total} ${pendingBulkDelete.type.slice(0, -1)}(s)`}
+                    onUndo={handleBulkUndo}
+                    onClose={handleBulkToastClose}
+                    duration={8000}
+                />
+            )}
         </>
     );
 }

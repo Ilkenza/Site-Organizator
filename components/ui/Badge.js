@@ -1,17 +1,5 @@
 import { memo } from 'react';
-
-// Pre-defined icons as constants (created once, reused everywhere)
-const FOLDER_ICON = (
-    <svg className="w-3 h-3 flex-shrink-0 opacity-70" fill="currentColor" viewBox="0 0 20 20">
-        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-    </svg>
-);
-
-const TAG_ICON = (
-    <svg className="w-3 h-3 flex-shrink-0 opacity-70" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-    </svg>
-);
+import { FolderFilledIcon, TagFilledIcon, CloseIcon } from './Icons';
 
 // Static color mappings (created once)
 const COLORS = {
@@ -60,9 +48,9 @@ function Badge({
             style={hexStyle}
         >
             {/* Category folder icon */}
-            {variant === 'category' && FOLDER_ICON}
+            {variant === 'category' && <FolderFilledIcon className="w-3 h-3 flex-shrink-0 opacity-70" />}
             {/* Tag icon */}
-            {variant === 'tag' && TAG_ICON}
+            {variant === 'tag' && <TagFilledIcon className="w-3 h-3 flex-shrink-0 opacity-70" />}
             {children}
             {removable && (
                 <button
@@ -72,9 +60,7 @@ function Badge({
                     }}
                     className="ml-0.5 hover:bg-white/10 rounded-full p-0.5 transition-colors"
                 >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <CloseIcon className="w-3 h-3" />
                 </button>
             )}
         </span>

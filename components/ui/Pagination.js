@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon } from './Icons';
 
 const PAGE_COOLDOWN_MS = 300;
 
@@ -87,9 +88,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
                         : 'text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light'
                     }`}
             >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
+                <ChevronLeftIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Prev</span>
             </button>
 
@@ -149,9 +148,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
                     }`}
             >
                 <span className="hidden sm:inline">Next</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <ChevronRightIcon className="w-4 h-4" />
             </button>
 
             {/* Page info */}

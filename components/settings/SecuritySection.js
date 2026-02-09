@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import Modal from '../ui/Modal';
+import { ShieldCheckIcon, DesktopIcon, InfoCircleIcon, LogoutIcon, WarningIcon } from '../ui/Icons';
 
 export default function SecuritySection({
     user,
@@ -172,9 +173,7 @@ export default function SecuritySection({
             {/* Security Section */}
             <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
                 <h2 className="text-lg font-semibold text-app-text-primary mb-4 flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
+                    <ShieldCheckIcon className="w-5 h-5" />
                     Security
                 </h2>
 
@@ -283,9 +282,7 @@ export default function SecuritySection({
                                 {/* Current Device */}
                                 <div className="flex flex-col xs:flex-row items-start xs:items-center gap-2 xs:gap-3 p-2 sm:p-3 bg-app-bg-primary rounded-lg border border-app-border">
                                     <div className="w-8 h-8 sm:w-10 sm:h-10 bg-app-accent/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <svg className="w-5 h-5 text-app-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                        </svg>
+                                        <DesktopIcon className="w-5 h-5 text-app-accent" />
                                     </div>
                                     <div className="flex-1">
                                         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
@@ -299,9 +296,7 @@ export default function SecuritySection({
                                 </div>
 
                                 <p className="text-xs text-app-text-tertiary">
-                                    <svg className="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
+                                    <InfoCircleIcon className="w-4 h-4 inline mr-1" />
                                     Other active sessions are not visible from the browser for security reasons. Use &ldquo;Sign Out Others&rdquo; to end all other sessions.
                                 </p>
                             </div>
@@ -317,9 +312,7 @@ export default function SecuritySection({
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
-                            <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                            </svg>
+                            <LogoutIcon className="w-5 h-5 text-red-400" />
                         </div>
                         <div>
                             <h3 className="text-app-text-primary font-medium">Sign Out</h3>
@@ -340,9 +333,7 @@ export default function SecuritySection({
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-red-500/30 rounded-lg flex items-center justify-center">
-                            <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
+                            <WarningIcon className="w-5 h-5 text-red-400" />
                         </div>
                         <div>
                             <h3 className="text-red-400 font-medium">Delete Account</h3>
@@ -366,9 +357,7 @@ export default function SecuritySection({
             >
                 <div className="space-y-4">
                     <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-3">
-                        <svg className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
+                        <WarningIcon className="w-6 h-6 text-amber-400 flex-shrink-0 mt-0.5" />
                         <div>
                             <h4 className="text-amber-400 font-medium">Are you sure?</h4>
                             <p className="text-sm text-app-text-secondary mt-1">
@@ -410,9 +399,7 @@ export default function SecuritySection({
             >
                 <div className="space-y-4">
                     <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
-                        <svg className="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
+                        <WarningIcon className="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" />
                         <div>
                             <h4 className="text-red-400 font-medium">This action cannot be undone!</h4>
                             <p className="text-sm text-app-text-secondary mt-1">

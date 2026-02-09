@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import Button from './Button';
+import { CloseIcon } from './Icons';
 
 export default function Modal({
     isOpen,
@@ -76,9 +77,7 @@ export default function Modal({
                                 onClick={() => onCloseRef.current()}
                                 className="p-1 text-app-text-secondary hover:text-app-text-primary hover:bg-app-bg-light rounded-lg transition-colors"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
+                                <CloseIcon className="w-5 h-5" />
                             </button>
                         )}
                     </div>
