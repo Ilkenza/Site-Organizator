@@ -130,8 +130,23 @@ export function DashboardProvider({ children }) {
             const token = sess?.data?.session?.access_token;
             if (!token) throw new Error('Not authenticated');
 
-            // Use sites already loaded in context
-            const allSites = sites.map(s => ({ id: s.id, url: s.url, name: s.name }));
+            // Fetch ALL user sites (not just the current paginated page)
+            const allSites = [];
+            const FETCH_PAGE_SIZE = 5000;
+            let fetchPage = 1;
+            let hasMore = true;
+            while (hasMore) {
+                const qs = `?page=${fetchPage}&limit=${FETCH_PAGE_SIZE}&fields=minimal`;
+                const r = await fetch(`/api/sites${qs}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (!r.ok) throw new Error('Failed to fetch sites for link check');
+                const json = await r.json();
+                const rows = Array.isArray(json.data) ? json.data : [];
+                allSites.push(...rows.map(s => ({ id: s.id, url: s.url, name: s.name })));
+                hasMore = rows.length === FETCH_PAGE_SIZE;
+                fetchPage++;
+            }
             if (allSites.length === 0) throw new Error('No sites to check');
 
             const totalSites = allSites.length;
@@ -199,7 +214,7 @@ export function DashboardProvider({ children }) {
             setCheckingLinks(false);
             setLinkCheckProgress(null);
         }
-    }, [checkingLinks, sites]);
+    }, [checkingLinks]);
 
     // Cancel link check — just sets flag, next batch won't be sent
     const cancelLinkCheck = useCallback(() => {
@@ -239,6 +254,8 @@ export function DashboardProvider({ children }) {
                     created: report.created?.length || 0,
                     updated: report.updated?.length || 0,
                     errors: report.errors?.length || 0,
+                    categoriesCreated: report.categoriesCreated || 0,
+                    tagsCreated: report.tagsCreated || 0,
                     tierLimited: report.tierLimited || false,
                     tierMessage: report.tierMessage || null,
                     report

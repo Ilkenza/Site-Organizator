@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { SpinnerIcon, TextLinesIcon, BookmarkIcon, DocumentIcon, UploadIcon, DownloadIcon, ArrowLeftIcon } from '../ui/Icons';
+import { SpinnerIcon, TextLinesIcon, BookmarkIcon, DocumentIcon, UploadIcon, DownloadIcon, ArrowLeftIcon, CheckCircleIcon, FolderIcon, TagIcon, GlobeIcon, WarningIcon } from '../ui/Icons';
 import { useDashboard } from '../../context/DashboardContext';
 
 export default function ImportExportSection({ user, fetchData, showToast }) {
@@ -79,22 +79,25 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
             if (importResult.created > 0) setTimeout(() => fetchData(), 500);
         } else if (importResult.created > 0 || importResult.updated > 0) {
             if (importResult.tierLimited) {
-                const parts = [];
-                if (importResult.created > 0) parts.push(`${importResult.created} created`);
-                if (importResult.updated > 0) parts.push(`${importResult.updated} updated`);
-                if (importResult.errors > 0) parts.push(`${importResult.errors} error(s)`);
-                const summary = parts.join(', ');
                 setImportMessage({
                     type: 'warning',
-                    text: `⚠️ Import: ${summary}. ${importResult.tierMessage}`
+                    detail: true,
+                    created: importResult.created,
+                    updated: importResult.updated,
+                    errors: importResult.errors,
+                    categoriesCreated: importResult.categoriesCreated || 0,
+                    tagsCreated: importResult.tagsCreated || 0,
+                    tierMessage: importResult.tierMessage
                 });
             } else {
-                const parts = [];
-                if (importResult.created > 0) parts.push(`${importResult.created} created`);
-                if (importResult.updated > 0) parts.push(`${importResult.updated} already existed (updated)`);
                 setImportMessage({
-                    type: importResult.created > 0 ? 'success' : 'warning',
-                    text: `${importResult.created > 0 ? '✅' : '⚠️'} Import complete: ${parts.join(', ')}.${importResult.errors > 0 ? ` ${importResult.errors} error(s).` : ''}`
+                    type: 'success',
+                    detail: true,
+                    created: importResult.created,
+                    updated: importResult.updated,
+                    errors: importResult.errors,
+                    categoriesCreated: importResult.categoriesCreated || 0,
+                    tagsCreated: importResult.tagsCreated || 0
                 });
             }
             setImportPreview(null);
@@ -371,18 +374,91 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
 
                 {/* Message */}
                 {importMessage && (
-                    <div
-                        className={`mb-4 mt-2 p-3 rounded-lg text-sm ${importMessage.type === 'success'
-                            ? 'bg-green-500/20 text-green-400'
-                            : importMessage.type === 'error'
-                                ? 'bg-red-500/20 text-red-400'
-                                : importMessage.type === 'warning'
-                                    ? 'bg-amber-500/20 text-amber-400'
-                                    : 'bg-blue-500/20 text-blue-400'
-                            }`}
-                    >
-                        {importMessage.text}
-                    </div>
+                    importMessage.detail ? (
+                        <div className={`mb-4 mt-2 rounded-lg border overflow-hidden ${importMessage.type === 'success'
+                                ? 'border-green-500/30'
+                                : 'border-amber-500/30'
+                            }`}>
+                            {/* Header */}
+                            <div className={`flex items-center gap-2 px-4 py-3 ${importMessage.type === 'success'
+                                    ? 'bg-green-500/15'
+                                    : 'bg-amber-500/15'
+                                }`}>
+                                {importMessage.type === 'success' ? (
+                                    <CheckCircleIcon className="w-5 h-5 text-green-400 flex-shrink-0" />
+                                ) : (
+                                    <WarningIcon className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                                )}
+                                <span className={`text-sm font-semibold ${importMessage.type === 'success' ? 'text-green-400' : 'text-amber-400'
+                                    }`}>
+                                    {importMessage.type === 'success' ? 'Import Successful' : 'Import Complete (with limits)'}
+                                </span>
+                            </div>
+                            {/* Breakdown */}
+                            <div className="px-4 py-3 bg-app-bg-primary space-y-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    {importMessage.created > 0 && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <GlobeIcon className="w-4 h-4 text-green-400 flex-shrink-0" />
+                                            <span className="text-app-text-secondary">
+                                                <span className="font-semibold text-green-400">{importMessage.created}</span> site{importMessage.created !== 1 ? 's' : ''} created
+                                            </span>
+                                        </div>
+                                    )}
+                                    {importMessage.updated > 0 && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <GlobeIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                                            <span className="text-app-text-secondary">
+                                                <span className="font-semibold text-blue-400">{importMessage.updated}</span> site{importMessage.updated !== 1 ? 's' : ''} updated
+                                            </span>
+                                        </div>
+                                    )}
+                                    {importMessage.categoriesCreated > 0 && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <FolderIcon className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                                            <span className="text-app-text-secondary">
+                                                <span className="font-semibold text-purple-400">{importMessage.categoriesCreated}</span> categor{importMessage.categoriesCreated !== 1 ? 'ies' : 'y'} created
+                                            </span>
+                                        </div>
+                                    )}
+                                    {importMessage.tagsCreated > 0 && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <TagIcon className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                                            <span className="text-app-text-secondary">
+                                                <span className="font-semibold text-cyan-400">{importMessage.tagsCreated}</span> tag{importMessage.tagsCreated !== 1 ? 's' : ''} created
+                                            </span>
+                                        </div>
+                                    )}
+                                    {importMessage.errors > 0 && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="w-4 h-4 text-red-400 flex-shrink-0">✗</span>
+                                            <span className="text-app-text-secondary">
+                                                <span className="font-semibold text-red-400">{importMessage.errors}</span> error{importMessage.errors !== 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                                {importMessage.tierMessage && (
+                                    <p className="text-xs text-amber-400/80 border-t border-app-border pt-2 mt-1">
+                                        ⚠️ {importMessage.tierMessage}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div
+                            className={`mb-4 mt-2 p-3 rounded-lg text-sm ${importMessage.type === 'success'
+                                ? 'bg-green-500/20 text-green-400'
+                                : importMessage.type === 'error'
+                                    ? 'bg-red-500/20 text-red-400'
+                                    : importMessage.type === 'warning'
+                                        ? 'bg-amber-500/20 text-amber-400'
+                                        : 'bg-blue-500/20 text-blue-400'
+                                }`}
+                        >
+                            {importMessage.text}
+                        </div>
+                    )
                 )}
 
                 {/* Import / Cancel Buttons */}

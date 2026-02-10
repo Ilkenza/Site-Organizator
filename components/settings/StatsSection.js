@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import { BarChartIcon, SpinnerIcon, CheckCircleIcon, CloseIcon, LinkIcon, InfoCircleIcon, ExclamationCircleIcon, CrownIcon } from '../ui/Icons';
-import { hasFeature, TIER_FREE } from '../../lib/tierConfig';
+import { hasFeature, TIER_FREE, TIER_LABELS, TIER_COLORS, TIER_LIMITS, limitText } from '../../lib/tierConfig';
 
 export default function StatsSection({ user, activeTab, showToast }) {
     const { user: currentUser } = useAuth();
@@ -129,6 +129,32 @@ export default function StatsSection({ user, activeTab, showToast }) {
             </div>
             <p className="text-sm text-app-text-secondary mb-4">Overview of your content and link health.</p>
 
+            {/* Current Plan */}
+            {(() => {
+                const tc = TIER_COLORS[tier] || TIER_COLORS[TIER_FREE];
+                const limits = TIER_LIMITS[tier] || TIER_LIMITS[TIER_FREE];
+                const isPro = tier === 'pro';
+                const isProMax = tier === 'promax';
+                const borderClass = isProMax
+                    ? 'border-purple-500/30'
+                    : isPro
+                        ? 'border-amber-500/30'
+                        : 'border-app-border';
+                return (
+                    <div className={`mb-4 p-3 rounded-lg border ${borderClass} ${tc.bg}`}>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <CrownIcon className={`w-4 h-4 ${tc.text}`} />
+                                <span className={`text-sm font-semibold ${tc.text}`}>Plan: {TIER_LABELS[tier] || 'Free'}</span>
+                            </div>
+                            <span className={`text-xs ${tc.text} opacity-80`}>
+                                {limitText(limits.sites)} sites · {limitText(limits.categories)} categories · {limitText(limits.tags)} tags
+                            </span>
+                        </div>
+                    </div>
+                );
+            })()}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                 <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
                     <div className="text-xs text-app-text-secondary">Sites</div>
@@ -143,6 +169,33 @@ export default function StatsSection({ user, activeTab, showToast }) {
                     <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.tags}</div>
                 </div>
             </div>
+
+            {/* Over-limit warnings */}
+            {!loadingStats && (() => {
+                const limits = TIER_LIMITS[tier] || TIER_LIMITS[TIER_FREE];
+                const overLimits = [];
+                if (limits.sites !== Infinity && stats.sites > limits.sites) overLimits.push({ type: 'sites', current: stats.sites, limit: limits.sites });
+                if (limits.categories !== Infinity && stats.categories > limits.categories) overLimits.push({ type: 'categories', current: stats.categories, limit: limits.categories });
+                if (limits.tags !== Infinity && stats.tags > limits.tags) overLimits.push({ type: 'tags', current: stats.tags, limit: limits.tags });
+                if (overLimits.length === 0) return null;
+                const upgradeTarget = tier === 'free' ? 'Pro or Pro Max' : 'Pro Max';
+                return (
+                    <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-1.5">
+                        <div className="flex items-center gap-2 text-amber-400 text-sm font-semibold">
+                            <ExclamationCircleIcon className="w-4 h-4 flex-shrink-0" />
+                            Over plan limit
+                        </div>
+                        {overLimits.map(o => (
+                            <p key={o.type} className="text-xs text-amber-400/80 ml-6">
+                                You have <span className="font-semibold text-amber-400">{o.current}</span>/{o.limit} {o.type} — you can&apos;t add new {o.type} until you&apos;re under the limit.
+                            </p>
+                        ))}
+                        <p className="text-xs text-amber-400/70 ml-6">
+                            Upgrade to {upgradeTarget} for higher limits, or delete some to free up space.
+                        </p>
+                    </div>
+                );
+            })()}
 
             <div className="border-t border-app-border pt-3">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3">

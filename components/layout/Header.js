@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import { fetchAPI } from '../../lib/supabase';
+import { TIER_LABELS, TIER_COLORS, TIER_FREE } from '../../lib/tierConfig';
 import Button from '../ui/Button';
 import {
     MenuIcon, SearchIcon, RefreshIcon, CloseIcon, ClipboardCheckIcon,
@@ -774,7 +775,18 @@ export default function Header({ onAddClick, onMenuClick }) {
                                         <div className="absolute right-0 top-full mt-2 w-48 sm:w-56 bg-app-bg-light border border-app-border rounded-xl shadow-xl z-50 overflow-hidden">
                                             <div className="p-3 border-b border-app-border flex items-center justify-between">
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm text-app-text-primary truncate font-semibold">{user?.displayName || 'User'}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-sm text-app-text-primary truncate font-semibold">{user?.displayName || 'User'}</p>
+                                                        {(() => {
+                                                            const t = user?.tier || TIER_FREE;
+                                                            const tc = TIER_COLORS[t] || TIER_COLORS[TIER_FREE];
+                                                            return (
+                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide ${tc.bg} ${tc.text}`}>
+                                                                    {tc.badge}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
                                                     <p className="text-xs text-app-text-tertiary truncate">{user?.email}</p>
                                                 </div>
                                                 <button

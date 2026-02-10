@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import Modal from '../ui/Modal';
-import { ShieldCheckIcon, DesktopIcon, InfoCircleIcon, LogoutIcon, WarningIcon } from '../ui/Icons';
+import { ShieldCheckIcon, DesktopIcon, InfoCircleIcon, WarningIcon } from '../ui/Icons';
 
 export default function SecuritySection({
     user,
@@ -129,43 +129,10 @@ export default function SecuritySection({
         setSignOutOthersLoading(true);
         try {
             await supabase.auth.signOut({ scope: 'global' });
-            // This will redirect to login since current session is also signed out
         } catch (err) {
             console.error('Sign out others error:', err);
         }
         setSignOutOthersLoading(false);
-    };
-
-    // Delete account handler
-    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [deleteLoading, setDeleteLoading] = useState(false);
-    const [deleteConfirmText, setDeleteConfirmText] = useState('');
-    const [deleteSuccessModal, setDeleteSuccessModal] = useState(false);
-    const [deleteErrorModal, setDeleteErrorModal] = useState({ isOpen: false, message: '' });
-
-    const handleDeleteAccount = async () => {
-        if (deleteConfirmText !== 'DELETE') {
-            setDeleteErrorModal({ isOpen: true, message: 'Please type DELETE to confirm' });
-            return;
-        }
-
-        setDeleteLoading(true);
-        try {
-            // Delete user account via Supabase auth admin
-            const { error } = await supabase.rpc('delete_user');
-            if (error) throw error;
-
-            setDeleteModalOpen(false);
-            setDeleteSuccessModal(true);
-            // Wait a moment for user to see success message, then sign out
-            setTimeout(async () => {
-                await signOut();
-            }, 2000);
-        } catch (err) {
-            console.error('Delete account error:', err);
-            setDeleteErrorModal({ isOpen: true, message: err.message || 'Failed to delete account' });
-            setDeleteLoading(false);
-        }
     };
 
     return (
@@ -307,48 +274,6 @@ export default function SecuritySection({
                 </div>
             </div>
 
-            {/* Sign Out Section */}
-            <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center">
-                            <LogoutIcon className="w-5 h-5 text-red-400" />
-                        </div>
-                        <div>
-                            <h3 className="text-app-text-primary font-medium">Sign Out</h3>
-                            <p className="text-sm text-app-text-secondary">Sign out from this device</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={signOut}
-                        className="px-3 sm:px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-lg font-medium transition-colors"
-                    >
-                        Sign Out
-                    </button>
-                </div>
-            </div>
-
-            {/* Delete Account Section */}
-            <div className="bg-red-500/5 border border-red-500/30 rounded-lg p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-red-500/30 rounded-lg flex items-center justify-center">
-                            <WarningIcon className="w-5 h-5 text-red-400" />
-                        </div>
-                        <div>
-                            <h3 className="text-red-400 font-medium">Delete Account</h3>
-                            <p className="text-sm text-app-text-secondary">Permanently delete your account and all data</p>
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => setDeleteModalOpen(true)}
-                        className="px-3 sm:px-4 py-2 bg-red-500/30 hover:bg-red-500/40 text-red-400 border border-red-500/40 rounded-lg font-medium transition-colors"
-                    >
-                        Delete Account
-                    </button>
-                </div>
-            </div>
-
             {/* Sign Out Others Modal */}
             <Modal
                 isOpen={signOutOthersModalOpen}
@@ -385,104 +310,6 @@ export default function SecuritySection({
                             {signOutOthersLoading ? 'Signing out...' : 'Sign Out All Devices'}
                         </button>
                     </div>
-                </div>
-            </Modal>
-
-            {/* Delete Account Modal */}
-            <Modal
-                isOpen={deleteModalOpen}
-                onClose={() => {
-                    setDeleteModalOpen(false);
-                    setDeleteConfirmText('');
-                }}
-                title="Delete Account"
-            >
-                <div className="space-y-4">
-                    <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
-                        <WarningIcon className="w-6 h-6 text-red-400 flex-shrink-0 mt-0.5" />
-                        <div>
-                            <h4 className="text-red-400 font-medium">This action cannot be undone!</h4>
-                            <p className="text-sm text-app-text-secondary mt-1">
-                                Deleting your account will permanently remove:
-                            </p>
-                            <ul className="text-sm text-app-text-secondary mt-2 space-y-1 list-disc list-inside">
-                                <li>All your saved sites and bookmarks</li>
-                                <li>All categories and tags</li>
-                                <li>Your profile and settings</li>
-                                <li>All account data</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-app-text-secondary mb-2">
-                            Type <span className="text-red-400 font-mono">DELETE</span> to confirm:
-                        </label>
-                        <input
-                            type="text"
-                            value={deleteConfirmText}
-                            onChange={(e) => setDeleteConfirmText(e.target.value)}
-                            placeholder="DELETE"
-                            className="w-full px-4 py-2 bg-app-bg-tertiary border border-app-border rounded-lg text-app-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
-                        />
-                    </div>
-
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => {
-                                setDeleteModalOpen(false);
-                                setDeleteConfirmText('');
-                            }}
-                            className="flex-1 px-4 py-2 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleDeleteAccount}
-                            disabled={deleteLoading || deleteConfirmText !== 'DELETE'}
-                            className="flex-1 px-4 py-2 bg-red-500/30 hover:bg-red-500/40 text-red-400 border border-red-500/40 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {deleteLoading ? 'Deleting...' : 'Delete My Account'}
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Delete Success Modal */}
-            <Modal
-                isOpen={deleteSuccessModal}
-                onClose={() => { }}
-                title="Account Deleted"
-                showCloseButton={false}
-            >
-                <div className="text-center py-4">
-                    <div className="text-6xl mb-4">✅</div>
-                    <p className="text-app-text-primary text-lg mb-2">
-                        Your account has been deleted successfully
-                    </p>
-                    <p className="text-app-text-secondary text-sm">
-                        Redirecting to login...
-                    </p>
-                </div>
-            </Modal>
-
-            {/* Delete Error Modal */}
-            <Modal
-                isOpen={deleteErrorModal.isOpen}
-                onClose={() => setDeleteErrorModal({ isOpen: false, message: '' })}
-                title="Error"
-            >
-                <div className="text-center py-4">
-                    <div className="text-6xl mb-4">❌</div>
-                    <p className="text-app-text-primary mb-2">
-                        {deleteErrorModal.message}
-                    </p>
-                    <button
-                        onClick={() => setDeleteErrorModal({ isOpen: false, message: '' })}
-                        className="mt-4 px-6 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
-                    >
-                        OK
-                    </button>
                 </div>
             </Modal>
         </>

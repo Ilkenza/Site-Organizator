@@ -46,7 +46,7 @@ export default function SettingsPanel({ onDeleteComplete }) {
                     onMfaClick={() => setMfaModalOpen(true)}
                 />
 
-                <DangerZoneSection onDeleteComplete={onDeleteComplete} />
+                <DangerZoneSection onDeleteComplete={onDeleteComplete} signOut={signOut} />
             </div>
 
             <PasswordModal
