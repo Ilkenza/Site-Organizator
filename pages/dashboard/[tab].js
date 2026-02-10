@@ -19,6 +19,7 @@ import Toast from '../../components/ui/Toast';
 import CommandMenu from '../../components/ui/CommandMenu';
 import UndoToast from '../../components/ui/UndoToast';
 import OnboardingTour from '../../components/ui/OnboardingTour';
+import { fetchAPI } from '../../lib/supabase';
 
 class ErrorBoundary extends Component {
     constructor(props) {
@@ -100,6 +101,9 @@ function DashboardContent() {
     const [undoToast, setUndoToast] = useState(null);
     const pendingDeleteRef = useRef(null);
 
+    // Danger Zone undo state (persists across tab switches)
+    const [dangerZonePending, setDangerZonePending] = useState(null);
+
     // Save-without-categories/tags confirmation
     const [saveConfirm, setSaveConfirm] = useState({ open: false, payload: null, missing: [], isEditing: false, formData: null });
 
@@ -115,10 +119,34 @@ function DashboardContent() {
         return () => window.removeEventListener('openAddSiteModal', handleOpenAddModal);
     }, []);
 
-    // Fetch data on mount
+    // Listen for openAddCategoryModal / openAddTagModal events (from SiteModal hints)
     useEffect(() => {
-        fetchData();
+        const handleOpenCategoryModal = () => {
+            router.push('/dashboard/categories');
+            setEditingCategory(null);
+            setCategoryModalOpen(true);
+        };
+        const handleOpenTagModal = () => {
+            router.push('/dashboard/tags');
+            setEditingTag(null);
+            setTagModalOpen(true);
+        };
+        window.addEventListener('openAddCategoryModal', handleOpenCategoryModal);
+        window.addEventListener('openAddTagModal', handleOpenTagModal);
+        return () => {
+            window.removeEventListener('openAddCategoryModal', handleOpenCategoryModal);
+            window.removeEventListener('openAddTagModal', handleOpenTagModal);
+        };
+    }, [router]);
+
+    // Fetch data on mount (DashboardContext handles re-fetches on filter changes)
+    const fetchDataOnMount = useRef(fetchData);
+    useEffect(() => {
+        fetchDataOnMount.current = fetchData;
     }, [fetchData]);
+    useEffect(() => {
+        fetchDataOnMount.current();
+    }, []);
 
     // Keyboard shortcuts - Command menu (Ctrl+/)
     useEffect(() => {
@@ -227,6 +255,14 @@ function DashboardContent() {
         setDeleteConfirm({ open: true, type: 'site', item: site });
     };
 
+    const handleDeleteCategory = (category) => {
+        setDeleteConfirm({ open: true, type: 'category', item: category });
+    };
+
+    const handleDeleteTag = (tag) => {
+        setDeleteConfirm({ open: true, type: 'tag', item: tag });
+    };
+
     // Category handlers
     const handleEditCategory = (category) => {
         setEditingCategory(category);
@@ -325,6 +361,43 @@ function DashboardContent() {
         }
     };
 
+    // Danger Zone: handle delete completion from DangerZoneSection
+    const handleDangerZoneDeleteComplete = (data) => {
+        setDangerZonePending(data);
+    };
+
+    const getDangerZoneMessage = () => {
+        if (!dangerZonePending?.counts) return 'Data deleted';
+        const { counts } = dangerZonePending;
+        const parts = [];
+        if (counts.sites) parts.push(`${counts.sites} site${counts.sites !== 1 ? 's' : ''}`);
+        if (counts.categories) parts.push(`${counts.categories} categor${counts.categories !== 1 ? 'ies' : 'y'}`);
+        if (counts.tags) parts.push(`${counts.tags} tag${counts.tags !== 1 ? 's' : ''}`);
+        return `Deleted ${parts.join(', ')}`;
+    };
+
+    const handleDangerZoneUndo = async () => {
+        const pending = dangerZonePending;
+        setDangerZonePending(null);
+        if (!pending?.restoreData) return;
+
+        try {
+            const res = await fetchAPI('/restore', {
+                method: 'POST',
+                body: JSON.stringify(pending.restoreData),
+            });
+            if (!res?.success) throw new Error(res?.error || 'Restore failed');
+            await fetchData();
+            showToast('Restored successfully', 'success');
+        } catch (err) {
+            showToast(`Undo failed: ${err.message}`, 'error');
+        }
+    };
+
+    const handleDangerZoneToastClose = () => {
+        setDangerZonePending(null);
+    };
+
     // Render content based on active tab
     const renderContent = () => {
         switch (activeTab) {
@@ -333,13 +406,13 @@ function DashboardContent() {
             case 'favorites':
                 return <FavoritesList onEdit={handleEditSite} onDelete={handleDeleteSite} />;
             case 'categories':
-                return <CategoriesList onEdit={handleEditCategory} />;
+                return <CategoriesList onEdit={handleEditCategory} onDelete={handleDeleteCategory} />;
             case 'tags':
-                return <TagsList onEdit={handleEditTag} />;
+                return <TagsList onEdit={handleEditTag} onDelete={handleDeleteTag} />;
             case 'settings':
                 return (
                     <ErrorBoundary>
-                        <SettingsPanel key="settings-panel" />
+                        <SettingsPanel key="settings-panel" onDeleteComplete={handleDangerZoneDeleteComplete} />
                     </ErrorBoundary>
                 );
             default:
@@ -479,6 +552,16 @@ function DashboardContent() {
                     message={undoToast.message}
                     onUndo={undoToast.onUndo}
                     onClose={() => setUndoToast(null)}
+                />
+            )}
+
+            {/* Danger Zone Undo Toast (persists across tabs) */}
+            {dangerZonePending && (
+                <UndoToast
+                    message={getDangerZoneMessage()}
+                    onUndo={handleDangerZoneUndo}
+                    onClose={handleDangerZoneToastClose}
+                    duration={8000}
                 />
             )}
 

@@ -8,6 +8,7 @@ const HTTP_STATUS = {
   OK: 200,
   CREATED: 201,
   UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
   METHOD_NOT_ALLOWED: 405,
   INTERNAL_ERROR: 500,
   BAD_GATEWAY: 502,
@@ -175,6 +176,39 @@ export default async function handler(req, res) {
         error: ERROR_MESSAGES.AUTH_REQUIRED,
       });
     }
+
+    // ── Tier limit check ──────────────────────────────────────────────
+    const TIER_LIMITS = { free: 50, pro: 200, promax: Infinity };
+    let tier = 'free';
+    try {
+      const jwtPayload = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString('utf8'));
+      const meta = jwtPayload?.user_metadata || {};
+      tier = meta.tier || (meta.is_pro ? 'pro' : 'free');
+      const userEmail = jwtPayload?.email || '';
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      if (adminEmails.includes(userEmail.toLowerCase())) tier = 'promax';
+    } catch { /* keep free */ }
+
+    const catLimit = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
+    if (catLimit !== Infinity) {
+      try {
+        const countUrl = `${config.url}/rest/v1/${SUPABASE_TABLES.CATEGORIES}?select=id&limit=${catLimit + 1}`;
+        const countHeaders = buildHeaders(config.anonKey, userToken);
+        const countRes = await fetch(countUrl, { headers: countHeaders });
+        if (countRes.ok) {
+          const rows = await countRes.json();
+          if (rows.length >= catLimit) {
+            const tierLabel = tier === 'promax' ? 'Pro Max' : tier === 'pro' ? 'Pro' : 'Free';
+            const upgradeTarget = tier === 'free' ? 'Pro or Pro Max' : 'Pro Max';
+            return res.status(HTTP_STATUS.FORBIDDEN).json({
+              success: false,
+              error: `Category limit reached (${rows.length}/${catLimit}). You are on the ${tierLabel} plan. Upgrade to ${upgradeTarget} for more.`
+            });
+          }
+        }
+      } catch { /* allow on count failure */ }
+    }
+    // ── End tier limit check ──────────────────────────────────────────
 
     try {
       const body = req.body || {};

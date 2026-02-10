@@ -7,7 +7,7 @@ import { TagIcon, SearchIcon, FilterIcon, EditIcon, TrashIcon, SpinnerIcon, Link
 
 const ITEMS_PER_PAGE = 50;
 
-export default function TagsList({ onEdit }) {
+export default function TagsList({ onEdit, onDelete }) {
     const { tags, sites, deleteTag, updateTag, loading, searchQuery, multiSelectMode, selectedTags, setSelectedTags, usageFilterTags } = useDashboard();
     const [deletingId, setDeletingId] = useState(null);
     const [tagToDelete, setTagToDelete] = useState(null);
@@ -80,6 +80,8 @@ export default function TagsList({ onEdit }) {
                 count: sitesUsingTag.length,
                 sites: sitesUsingTag
             });
+        } else if (onDelete) {
+            onDelete(tag);
         } else {
             setTagToDelete(tag);
         }

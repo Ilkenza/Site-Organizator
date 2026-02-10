@@ -7,7 +7,7 @@ import { FolderIcon, FilterIcon, EditIcon, TrashIcon, SpinnerIcon, LinkIcon, War
 
 const ITEMS_PER_PAGE = 50;
 
-export default function CategoriesList({ onEdit }) {
+export default function CategoriesList({ onEdit, onDelete }) {
     const {
         categories,
         sites,
@@ -92,6 +92,8 @@ export default function CategoriesList({ onEdit }) {
                 count: sitesUsingCategory.length,
                 sites: sitesUsingCategory
             });
+        } else if (onDelete) {
+            onDelete(category);
         } else {
             setCategoryToDelete(category);
         }

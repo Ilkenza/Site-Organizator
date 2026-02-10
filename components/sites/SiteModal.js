@@ -384,8 +384,12 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
         }
     }, [formData.url, formData.name, tags]);
 
-    // Check for duplicate URL (debounced)
+    // Check for duplicate URL (debounced) — only for new sites
     useEffect(() => {
+        if (isEditing) {
+            setDuplicateUrl(null);
+            return;
+        }
         const url = formData.url?.trim();
         if (!url) {
             setDuplicateUrl(null);
@@ -560,8 +564,8 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
             return;
         }
 
-        // Block if duplicate URL (warning banner is already shown)
-        if (duplicateUrl) {
+        // Block if duplicate URL (only when adding new site)
+        if (duplicateUrl && !isEditing) {
             return;
         }
 
@@ -629,8 +633,8 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                     </div>
                 )}
 
-                {/* Duplicate URL warning */}
-                {duplicateUrl && (
+                {/* Duplicate URL warning (only for new sites) */}
+                {duplicateUrl && !isEditing && (
                     <div className="p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
                         A site with this URL already exists
                     </div>
@@ -667,15 +671,15 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                     }}
                 />
 
-                {/* AI Suggest Button — Pro only */}
-                {currentUser?.isPro && formData.url?.trim() && /^https?:\/\/.+\..+/.test(formData.url.trim()) && (
+                {/* AI Suggest Button — all tiers (free gets limited uses) */}
+                {formData.url?.trim() && /^https?:\/\/.+\..+/.test(formData.url.trim()) && (
                     <button
                         type="button"
                         onClick={handleAiSuggest}
                         disabled={aiLoading}
                         className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all border ${aiLoading
-                                ? 'bg-violet-900/20 text-violet-400/60 border-violet-500/20 cursor-wait'
-                                : 'bg-gradient-to-r from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 text-violet-300 border-violet-500/30 hover:border-violet-500/50 hover:from-violet-600/30 hover:via-fuchsia-600/30 hover:to-pink-600/30 hover:shadow-lg hover:shadow-violet-900/20'
+                            ? 'bg-violet-900/20 text-violet-400/60 border-violet-500/20 cursor-wait'
+                            : 'bg-gradient-to-r from-violet-600/20 via-fuchsia-600/20 to-pink-600/20 text-violet-300 border-violet-500/30 hover:border-violet-500/50 hover:from-violet-600/30 hover:via-fuchsia-600/30 hover:to-pink-600/30 hover:shadow-lg hover:shadow-violet-900/20'
                             }`}
                     >
                         {aiLoading ? (
@@ -898,7 +902,7 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                 </div>
 
                 {/* Categories */}
-                {categories.length > 0 && (
+                {categories.length > 0 ? (
                     <div className="space-y-1.5">
                         {/* Quick suggestions (local pattern matching) */}
                         {(suggestedCategories.length > 0 || newCategorySuggestions.length > 0) && (
@@ -1024,10 +1028,14 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                             })()}
                         </div>
                     </div>
+                ) : (
+                    <div className="bg-app-bg-light/30 border border-app-border/30 rounded-lg p-3 text-center">
+                        <p className="text-xs text-app-text-muted">📂 No categories yet — <button type="button" className="text-app-accent hover:underline" onClick={() => { onClose(); setTimeout(() => window.dispatchEvent(new Event('openAddCategoryModal')), 200); }}>create categories</button> first to organize your sites</p>
+                    </div>
                 )}
 
                 {/* Tags */}
-                {tags.length > 0 && (
+                {tags.length > 0 ? (
                     <div className="space-y-1.5">
                         {/* Quick tag suggestions (local) */}
                         {(suggestedTags.length > 0 || newTagSuggestions.length > 0) && (
@@ -1143,6 +1151,10 @@ export default function SiteModal({ isOpen, onClose, site = null, defaultFavorit
                                 ));
                             })()}
                         </div>
+                    </div>
+                ) : (
+                    <div className="bg-app-bg-light/30 border border-app-border/30 rounded-lg p-3 text-center">
+                        <p className="text-xs text-app-text-muted">🏷️ No tags yet — <button type="button" className="text-app-accent hover:underline" onClick={() => { onClose(); setTimeout(() => window.dispatchEvent(new Event('openAddTagModal')), 200); }}>create tags</button> first to label your sites</p>
                     </div>
                 )}
             </form>

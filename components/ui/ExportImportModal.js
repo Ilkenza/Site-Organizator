@@ -118,8 +118,13 @@ export default function ExportImportModal({ isOpen, onClose, userId, onImportCom
             const parts = [];
             if (importResult.created > 0) parts.push(`${importResult.created} created`);
             if (importResult.updated > 0) parts.push(`${importResult.updated} already existed (updated)`);
-            setMessage(`${importResult.created > 0 ? '✅' : '⚠️'} Import complete: ${parts.join(', ')}.${importResult.errors > 0 ? ` ${importResult.errors} error(s).` : ''}`);
-            setMessageType(importResult.created > 0 ? 'success' : 'warning');
+            if (importResult.tierLimited) {
+                setMessage(`⚠️ ${importResult.tierMessage}${importResult.errors > 0 ? ` (${importResult.errors} error(s))` : ''}`);
+                setMessageType('warning');
+            } else {
+                setMessage(`✅ Import complete: ${parts.join(', ')}.${importResult.errors > 0 ? ` ${importResult.errors} error(s).` : ''}`);
+                setMessageType(importResult.created > 0 ? 'success' : 'warning');
+            }
             setImportFile(null);
             clearImportPreview();
 

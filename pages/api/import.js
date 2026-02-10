@@ -579,9 +579,70 @@ export default async function handler(req, res) {
   try {
     await preloadCategoriesAndTags();
 
+    // ── Tier limit check ──────────────────────────────────────────────────
+    // Decode JWT to resolve tier, then enforce limits on import size
+    const TIER_LIMITS = {
+      free: { sites: 500, categories: 50, tags: 200 },
+      pro: { sites: 2000, categories: 200, tags: 500 },
+      promax: { sites: Infinity, categories: Infinity, tags: Infinity },
+    };
+
+    let tier = 'free';
+    try {
+      const jwtPayload = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString('utf8'));
+      const meta = jwtPayload?.user_metadata || {};
+      tier = meta.tier || (meta.is_pro ? 'pro' : 'free');
+      const userEmail = jwtPayload?.email || '';
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+      if (adminEmails.includes(userEmail.toLowerCase())) tier = 'promax';
+    } catch { /* keep free */ }
+
+    const limits = TIER_LIMITS[tier] || TIER_LIMITS.free;
+
+    // Current counts
+    const currentSitesCount = await (async () => {
+      try {
+        const url = buildSupabaseUrl(SUPABASE_URL, `sites?select=id&user_id=eq.${userId}`);
+        const r = await fetch(url, { headers: { ...buildSupabaseHeaders(SUPABASE_ANON_KEY, KEY), 'Prefer': 'count=exact', 'Range': '0-0' } });
+        const range = r.headers.get('content-range');
+        if (range) { const m = range.match(/\/(\d+)/); if (m) return parseInt(m[1], 10); }
+        return 0;
+      } catch { return 0; }
+    })();
+    const currentCatsCount = catNameToObj.size;
+    const currentTagsCount = tagNameToObj.size;
+
+    const sitesRemaining = limits.sites === Infinity ? Infinity : Math.max(0, limits.sites - currentSitesCount);
+    const catsRemaining = limits.categories === Infinity ? Infinity : Math.max(0, limits.categories - currentCatsCount);
+    const tagsRemaining = limits.tags === Infinity ? Infinity : Math.max(0, limits.tags - currentTagsCount);
+
+    // If no sites can be imported, return structured tier-limited response
+    if (sitesRemaining === 0) {
+      const tierLabel = tier === 'promax' ? 'Pro Max' : tier === 'pro' ? 'Pro' : 'Free';
+      const upgradeTarget = tier === 'free' ? 'Pro or Pro Max' : 'Pro Max';
+      return res.status(HTTP_STATUS.OK).json({
+        [RESPONSE_FIELDS.SUCCESS]: true,
+        [RESPONSE_FIELDS.REPORT]: {
+          created: [],
+          updated: [],
+          skipped: [],
+          errors: [],
+          tierLimited: true,
+          siteLimitReached: true,
+          tierLabel,
+          tierMessage: `Site limit reached (${currentSitesCount}/${limits.sites}). You are on the ${tierLabel} plan. Upgrade to ${upgradeTarget} for more.`
+        }
+      });
+    }
+
+    // Don't pre-trim rows — process all and limit only actual NEW site creations
+    // (duplicates/updates don't consume slots)
+    let importRows = rows;
+    // ── End tier limit check ──────────────────────────────────────────────
+
     // ── Pre-create ALL categories & tags in parallel before chunk loop ──
     // This avoids sequential HTTP calls inside the loop (the #1 timeout cause).
-    const allNormRows = rows.map((r, idx) => normalizeImportRow(r, idx));
+    const allNormRows = importRows.map((r, idx) => normalizeImportRow(r, idx));
 
     // Collect unique category/tag names from ALL rows
     const allCatInfos = new Map(); // key → {name, color}
@@ -600,15 +661,19 @@ export default async function handler(req, res) {
     // Filter out already-cached, then create in parallel batches
     const PARALLEL_LIMIT = 15;
 
-    const newCats = Array.from(allCatInfos.values())
+    const allNewCats = Array.from(allCatInfos.values())
       .filter(c => !catNameToObj.has((c.name || '').toLowerCase()));
+    const newCats = allNewCats.slice(0, catsRemaining === Infinity ? undefined : catsRemaining);
+    const trimmedCats = allNewCats.length - newCats.length;
     for (let p = 0; p < newCats.length; p += PARALLEL_LIMIT) {
       const batch = newCats.slice(p, p + PARALLEL_LIMIT);
       await Promise.all(batch.map(c => ensureCategoryByName(c.name, c.color)));
     }
 
-    const newTags = Array.from(allTagInfos.values())
+    const allNewTags = Array.from(allTagInfos.values())
       .filter(t => !tagNameToObj.has((t.name || '').toLowerCase()));
+    const newTags = allNewTags.slice(0, tagsRemaining === Infinity ? undefined : tagsRemaining);
+    const trimmedTags = allNewTags.length - newTags.length;
     for (let p = 0; p < newTags.length; p += PARALLEL_LIMIT) {
       const batch = newTags.slice(p, p + PARALLEL_LIMIT);
       await Promise.all(batch.map(t => ensureTagByName(t.name, t.color)));
@@ -616,8 +681,10 @@ export default async function handler(req, res) {
     // ── All categories & tags now cached — chunk loop needs no HTTP calls ──
 
     // Process in chunks
-    for (let i = 0; i < rows.length; i += chunkSize) {
-      const chunk = rows.slice(i, i + chunkSize);
+    let newSitesCreated = 0; // Track actual new creations across chunks
+    let skippedDueToLimit = 0; // Track skipped new sites due to tier limit
+    for (let i = 0; i < importRows.length; i += chunkSize) {
+      const chunk = importRows.slice(i, i + chunkSize);
 
       // Normalize rows
       const normRows = chunk.map((r, idx) => normalizeImportRow(r, i + idx));
@@ -659,6 +726,17 @@ export default async function handler(req, res) {
         }
       }
 
+      // Enforce tier limit on new site creations (updates always allowed)
+      let skippedInChunk = 0;
+      if (sitesRemaining !== Infinity) {
+        const slotsLeft = Math.max(0, sitesRemaining - newSitesCreated);
+        if (toCreateSites.length > slotsLeft) {
+          skippedInChunk = toCreateSites.length - slotsLeft;
+          skippedDueToLimit += skippedInChunk;
+          toCreateSites.length = slotsLeft; // trim to available slots
+        }
+      }
+
       // Insert new sites in batch
       // NOTE: Do NOT include 'categories' or 'tags' here — they conflict with
       // PostgREST's resource embedding (site_categories/site_tags junction tables).
@@ -681,13 +759,17 @@ export default async function handler(req, res) {
       let createdSites = [];
       try {
         createdSites = await insertSitesBatch(siteInserts);
+        newSitesCreated += createdSites.length;
       } catch (err) {
         // Fallback: try single inserts to get per-row errors
         for (let j = 0; j < siteInserts.length; j++) {
           const s = siteInserts[j];
           try {
             const created = await insertSitesBatch([s]);
-            if (created && created.length > 0) createdSites.push(created[0]);
+            if (created && created.length > 0) {
+              createdSites.push(created[0]);
+              newSitesCreated++;
+            }
           } catch (e) {
             const origIndex = toCreateSites[j] && toCreateSites[j].nr && toCreateSites[j].nr._origIndex;
             report.errors.push({ row: origIndex, error: e.message });
@@ -789,6 +871,34 @@ export default async function handler(req, res) {
       } catch (e) {
         // Continue anyway
       }
+    }
+
+    // Add tier info to report
+    if (skippedDueToLimit > 0 || trimmedCats > 0 || trimmedTags > 0) {
+      const tierLabel = tier === 'promax' ? 'Pro Max' : tier === 'pro' ? 'Pro' : 'Free';
+      const upgradeTarget = tier === 'free' ? 'Pro or Pro Max' : 'Pro Max';
+      report.tierLimited = true;
+      report.tierLabel = tierLabel;
+      if (skippedDueToLimit > 0) report.siteLimitReached = true;
+
+      // What was skipped due to limits
+      const limitParts = [];
+      if (skippedDueToLimit > 0) {
+        report.skippedDueToLimit = skippedDueToLimit;
+        report.sitesImported = newSitesCreated;
+        report.sitesTotal = rows.length;
+        limitParts.push(`${skippedDueToLimit} new site(s) skipped (${currentSitesCount + newSitesCreated}/${limits.sites})`);
+      }
+      if (trimmedCats > 0) {
+        report.trimmedCategories = trimmedCats;
+        limitParts.push(`${trimmedCats} categor${trimmedCats === 1 ? 'y' : 'ies'} skipped (${currentCatsCount}/${limits.categories})`);
+      }
+      if (trimmedTags > 0) {
+        report.trimmedTags = trimmedTags;
+        limitParts.push(`${trimmedTags} tag(s) skipped (${currentTagsCount}/${limits.tags})`);
+      }
+
+      report.tierMessage = `${tierLabel} plan limits reached: ${limitParts.join(', ')}. Upgrade to ${upgradeTarget} for more.`;
     }
 
     return res.status(HTTP_STATUS.OK).json({

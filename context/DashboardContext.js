@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { fetchAPI, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { canAdd, getTierLimits, TIER_LABELS, TIER_FREE } from '../lib/tierConfig';
 
 const DashboardContext = createContext(null);
 
@@ -238,6 +239,8 @@ export function DashboardProvider({ children }) {
                     created: report.created?.length || 0,
                     updated: report.updated?.length || 0,
                     errors: report.errors?.length || 0,
+                    tierLimited: report.tierLimited || false,
+                    tierMessage: report.tierMessage || null,
                     report
                 });
             }
@@ -706,6 +709,14 @@ export function DashboardProvider({ children }) {
     // Site operations
     const addSite = useCallback(async (siteData) => {
         if (!user) throw new Error('Must be logged in to add a site');
+        // Tier limit check
+        const tier = user.tier || TIER_FREE;
+        const check = canAdd(tier, 'sites', stats.sites);
+        if (!check.allowed) {
+            const msg = `Site limit reached (${stats.sites}/${check.limit}). Upgrade to ${tier === TIER_FREE ? 'Pro or Pro Max' : 'Pro Max'} for more.`;
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
         try {
             const response = await fetchAPI('/sites', {
                 method: 'POST',
@@ -718,12 +729,16 @@ export function DashboardProvider({ children }) {
             if (!handleResponseWarnings(response, newSite.id, siteData, setFailedRelationUpdates, showToast, fetchData)) {
                 showToast(`Site "${newSite.name}" created successfully`, 'success');
             }
+
+            // Re-fetch current page so server-side filters stay accurate
+            fetchSitesPage(currentPage).catch(() => { });
+
             return newSite;
         } catch (err) {
             showToast(`Failed to add site: ${err.message}`, 'error');
             throw err;
         }
-    }, [user, showToast, fetchData]);
+    }, [user, showToast, fetchData, fetchSitesPage, currentPage]);
 
     const updateSite = useCallback(async (id, siteData) => {
         try {
@@ -747,12 +762,16 @@ export function DashboardProvider({ children }) {
                 showToast(`Site "${updated.name}" updated successfully`, 'success');
             }
 
+            // Re-fetch current page so server-side filters (uncategorized, untagged, etc.)
+            // correctly include/exclude this site after the edit
+            fetchSitesPage(currentPage).catch(() => { });
+
             return updated;
         } catch (err) {
             showToast(`Failed to update site: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast, fetchData]);
+    }, [showToast, fetchData, fetchSitesPage, currentPage]);
 
     const deleteSite = useCallback(async (id) => {
         try {
@@ -803,6 +822,14 @@ export function DashboardProvider({ children }) {
 
     // Category operations
     const addCategory = useCallback(async (categoryData) => {
+        // Tier limit check
+        const tier = user?.tier || TIER_FREE;
+        const check = canAdd(tier, 'categories', stats.categories);
+        if (!check.allowed) {
+            const msg = `Category limit reached (${stats.categories}/${check.limit}). Upgrade to ${tier === TIER_FREE ? 'Pro or Pro Max' : 'Pro Max'} for more.`;
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
         try {
             const response = await fetchAPI('/categories', {
                 method: 'POST',
@@ -859,6 +886,14 @@ export function DashboardProvider({ children }) {
 
     // Tag operations
     const addTag = useCallback(async (tagData) => {
+        // Tier limit check
+        const tier = user?.tier || TIER_FREE;
+        const check = canAdd(tier, 'tags', stats.tags);
+        if (!check.allowed) {
+            const msg = `Tag limit reached (${stats.tags}/${check.limit}). Upgrade to ${tier === TIER_FREE ? 'Pro or Pro Max' : 'Pro Max'} for more.`;
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
         try {
             const response = await fetchAPI('/tags', {
                 method: 'POST',

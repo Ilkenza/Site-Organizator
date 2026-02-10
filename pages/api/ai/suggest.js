@@ -1,13 +1,18 @@
 /**
  * @fileoverview AI-powered category and tag suggestions for sites
  * Uses GitHub Models API (Copilot Pro+) with GPT-4o-mini
+ * Rate-limited per tier via ai_usage table in Supabase
  */
+
+import { createClient } from '@supabase/supabase-js';
 
 // HTTP Status Codes
 const HTTP_STATUS = {
     OK: 200,
     BAD_REQUEST: 400,
     UNAUTHORIZED: 401,
+    FORBIDDEN: 403,
+    TOO_MANY: 429,
     INTERNAL_ERROR: 500
 };
 
@@ -20,6 +25,29 @@ const MAX_CATEGORIES = 3;
 const MAX_TAGS = 8;
 const MAX_NEW_CATEGORIES = 2;
 const MAX_NEW_TAGS = 5;
+
+// Monthly AI suggestion limits per tier (admin = Infinity)
+const AI_LIMITS = { free: 1, pro: 200, promax: 2000 };
+
+/**
+ * Get Supabase admin client (service role)
+ */
+function getAdminClient() {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !serviceKey) return null;
+    return createClient(url, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+    });
+}
+
+/**
+ * Get current month string (YYYY-MM)
+ */
+function getCurrentMonth() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 /**
  * Extract JWT token from Authorization header
@@ -189,24 +217,52 @@ export default async function handler(req, res) {
         });
     }
 
-    // Pro check — decode JWT to verify is_pro in user_metadata (admins always pass)
+    // Tier check — decode JWT to verify tier in user_metadata
+    let userId, tier, isAdmin, monthlyLimit;
     try {
         const payload = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString('utf8'));
-        const isPro = !!payload?.user_metadata?.is_pro;
+        userId = payload?.sub;
+        const meta = payload?.user_metadata || {};
+        tier = meta.tier || (meta.is_pro ? 'pro' : 'free');
         const userEmail = payload?.email || '';
         const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-        const isAdmin = adminEmails.includes(userEmail.toLowerCase());
-        if (!isPro && !isAdmin) {
-            return res.status(403).json({
-                success: false,
-                error: 'Pro subscription required for AI suggestions'
-            });
-        }
+        isAdmin = adminEmails.includes(userEmail.toLowerCase());
+        monthlyLimit = isAdmin ? Infinity : (AI_LIMITS[tier] || AI_LIMITS.free);
     } catch {
         return res.status(HTTP_STATUS.UNAUTHORIZED).json({
             success: false,
             error: 'Invalid token'
         });
+    }
+
+    // Monthly usage check
+    const supabaseAdmin = getAdminClient();
+    const currentMonth = getCurrentMonth();
+    let usageCount = 0;
+
+    if (supabaseAdmin && monthlyLimit !== Infinity) {
+        try {
+            const { data: usage } = await supabaseAdmin
+                .from('ai_usage')
+                .select('count')
+                .eq('user_id', userId)
+                .eq('month', currentMonth)
+                .single();
+
+            usageCount = usage?.count || 0;
+
+            if (usageCount >= monthlyLimit) {
+                const upgradeHint = tier === 'free' ? ' Upgrade to Pro or Pro Max for more AI suggestions.' : tier === 'pro' ? ' Upgrade to Pro Max for more AI suggestions.' : '';
+                return res.status(HTTP_STATUS.TOO_MANY).json({
+                    success: false,
+                    error: `Monthly AI suggestion limit reached (${usageCount}/${monthlyLimit}). Resets next month.${upgradeHint}`,
+                    usage: { used: usageCount, limit: monthlyLimit, month: currentMonth }
+                });
+            }
+        } catch (err) {
+            // Table might not exist yet — log and continue
+            console.warn('ai_usage check failed:', err.message);
+        }
     }
 
     // Check for GitHub token (Copilot Pro+)
@@ -256,9 +312,25 @@ export default async function handler(req, res) {
             }
         };
 
+        // 4. Increment usage counter
+        const newCount = usageCount + 1;
+        if (supabaseAdmin && monthlyLimit !== Infinity) {
+            try {
+                await supabaseAdmin
+                    .from('ai_usage')
+                    .upsert(
+                        { user_id: userId, month: currentMonth, count: newCount, updated_at: new Date().toISOString() },
+                        { onConflict: 'user_id,month' }
+                    );
+            } catch (err) {
+                console.warn('ai_usage increment failed:', err.message);
+            }
+        }
+
         return res.status(HTTP_STATUS.OK).json({
             success: true,
-            data: result
+            data: result,
+            usage: { used: newCount, limit: monthlyLimit, month: currentMonth }
         });
     } catch (err) {
         console.error('AI suggest error:', err);

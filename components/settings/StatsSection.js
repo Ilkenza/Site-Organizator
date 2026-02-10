@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useDashboard } from '../../context/DashboardContext';
-import { BarChartIcon, SpinnerIcon, CheckCircleIcon, CloseIcon, LinkIcon, InfoCircleIcon, ExclamationCircleIcon } from '../ui/Icons';
+import { useAuth } from '../../context/AuthContext';
+import { BarChartIcon, SpinnerIcon, CheckCircleIcon, CloseIcon, LinkIcon, InfoCircleIcon, ExclamationCircleIcon, CrownIcon } from '../ui/Icons';
+import { hasFeature, TIER_FREE } from '../../lib/tierConfig';
 
 export default function StatsSection({ user, activeTab, showToast }) {
+    const { user: currentUser } = useAuth();
+    const tier = currentUser?.tier || TIER_FREE;
+    const canCheckLinks = hasFeature(tier, 'linkHealthCheck');
     const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0 });
     const [loadingStats, setLoadingStats] = useState(false);
 
@@ -184,13 +189,20 @@ export default function StatsSection({ user, activeTab, showToast }) {
                             )}
                         </div>
                     ) : (
-                        <button
-                            onClick={handleRunLinkCheck}
-                            className="w-full px-4 py-2.5 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF] rounded-lg transition-all font-medium flex items-center justify-center gap-2"
-                        >
-                            <LinkIcon className="w-4 h-4" />
-                            Check Links
-                        </button>
+                        canCheckLinks ? (
+                            <button
+                                onClick={handleRunLinkCheck}
+                                className="w-full px-4 py-2.5 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] hover:bg-[#2A5A8A] hover:text-[#8DD0FF] rounded-lg transition-all font-medium flex items-center justify-center gap-2"
+                            >
+                                <LinkIcon className="w-4 h-4" />
+                                Check Links
+                            </button>
+                        ) : (
+                            <div className="w-full px-4 py-2.5 bg-amber-900/10 border border-amber-700/30 text-amber-400/80 rounded-lg font-medium flex items-center justify-center gap-2 cursor-not-allowed">
+                                <CrownIcon className="w-4 h-4" gradient />
+                                <span className="text-sm">Link Health Check requires Pro</span>
+                            </div>
+                        )
                     )}
 
                     {linkCheckResult && (

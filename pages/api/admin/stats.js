@@ -227,6 +227,7 @@ export default async function handler(req, res) {
                 tags: userStats[u.id]?.tags || 0,
                 onboarded: !!u.user_metadata?.onboarding_completed,
                 is_pro: !!u.user_metadata?.is_pro,
+                tier: u.user_metadata?.tier || (u.user_metadata?.is_pro ? 'pro' : 'free'),
                 banned: !!u.banned_until && new Date(u.banned_until) > new Date()
             };
         }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -408,6 +409,56 @@ export default async function handler(req, res) {
                 };
             });
 
+        // 15. AI Usage stats
+        let aiUsage = { totalRequests: 0, currentMonth: { month: '', requests: 0 }, topUsers: [], tierBreakdown: { free: 0, pro: 0, promax: 0 } };
+        try {
+            const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            // All usage records
+            const { data: allUsage } = await supabase.from('ai_usage').select('user_id, month, count');
+
+            if (allUsage && allUsage.length > 0) {
+                // Total requests all time
+                const totalRequests = allUsage.reduce((sum, r) => sum + (r.count || 0), 0);
+
+                // Current month total
+                const currentMonthRecords = allUsage.filter(r => r.month === currentMonth);
+                const currentMonthRequests = currentMonthRecords.reduce((sum, r) => sum + (r.count || 0), 0);
+
+                // Top users by total usage
+                const userTotals = {};
+                allUsage.forEach(r => {
+                    userTotals[r.user_id] = (userTotals[r.user_id] || 0) + (r.count || 0);
+                });
+                const topAiUsers = Object.entries(userTotals)
+                    .map(([uid, total]) => {
+                        const u = userList.find(u => u.id === uid);
+                        return u ? { username: u.username, email: u.email, avatar: u.avatar, tier: u.tier, total, currentMonth: currentMonthRecords.find(r => r.user_id === uid)?.count || 0 } : null;
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => b.total - a.total)
+                    .slice(0, 10);
+
+                // Per-tier breakdown (current month)
+                const tierBreakdown = { free: 0, pro: 0, promax: 0 };
+                currentMonthRecords.forEach(r => {
+                    const u = userList.find(u => u.id === r.user_id);
+                    const t = u?.tier || 'free';
+                    tierBreakdown[t] = (tierBreakdown[t] || 0) + (r.count || 0);
+                });
+
+                aiUsage = { totalRequests, currentMonth: { month: currentMonth, requests: currentMonthRequests }, topUsers: topAiUsers, tierBreakdown };
+
+                // Attach per-user AI usage to userList
+                userList.forEach(u => {
+                    u.aiUsageMonth = currentMonthRecords.find(r => r.user_id === u.id)?.count || 0;
+                    u.aiUsageTotal = userTotals[u.id] || 0;
+                });
+            }
+        } catch (err) {
+            console.warn('Failed to fetch AI usage:', err.message);
+        }
+
         return res.status(HTTP_STATUS.OK).json({
             success: true,
             overview: {
@@ -428,7 +479,8 @@ export default async function handler(req, res) {
             popularDomains,
             duplicateSites,
             emptyAccountsCount: emptyAccounts.length,
-            recentActivity
+            recentActivity,
+            aiUsage
         });
     } catch (error) {
         console.error('Admin stats error:', error);

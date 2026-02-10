@@ -1,8 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { fetchAPI } from '../../lib/supabase';
 import { useDashboard } from '../../context/DashboardContext';
 import { ConfirmModal } from '../ui/Modal';
-import UndoToast from '../ui/UndoToast';
 import { TrashIcon, WarningIcon } from '../ui/Icons';
 
 const RESET_OPTIONS = [
@@ -56,15 +55,13 @@ const COLOR_MAP = {
     },
 };
 
-export default function DangerZoneSection() {
+export default function DangerZoneSection({ onDeleteComplete }) {
     const {
         stats, totalSitesCount,
         fetchData, showToast,
     } = useDashboard();
 
     const [confirmType, setConfirmType] = useState(null);
-    const [pendingDelete, setPendingDelete] = useState(null);
-    const didUndoRef = useRef(false);
 
     const activeOption = RESET_OPTIONS.find(o => o.type === confirmType);
 
@@ -72,12 +69,11 @@ export default function DangerZoneSection() {
 
     const handleConfirmDelete = async () => {
         if (!confirmType) return;
-        didUndoRef.current = false;
 
         // Quick check: anything to delete?
         const hasData = (confirmType === 'sites' || confirmType === 'all') ? (stats?.sites || totalSitesCount) > 0 :
             (confirmType === 'categories') ? (stats?.categories) > 0 :
-            (confirmType === 'tags') ? (stats?.tags) > 0 : false;
+                (confirmType === 'tags') ? (stats?.tags) > 0 : false;
 
         if (!hasData) {
             showToast('Nothing to delete', 'info');
@@ -106,51 +102,11 @@ export default function DangerZoneSection() {
                 tags: res.deleted?.tags?.length || 0,
             };
 
-            // Show undo toast (data is already deleted, undo will restore via API)
-            setPendingDelete({ type: deleteType, restoreData: res.deleted, counts });
+            // Notify parent to show persistent undo toast
+            onDeleteComplete?.({ type: deleteType, restoreData: res.deleted, counts });
         } catch (err) {
             showToast(`Delete failed: ${err.message}`, 'error');
         }
-    };
-
-    // ── Undo: restore via API ───────────────────────────────────────────
-
-    const handleUndo = async () => {
-        didUndoRef.current = true;
-        const pending = pendingDelete;
-        setPendingDelete(null);
-        if (!pending?.restoreData) return;
-
-        try {
-            const res = await fetchAPI('/restore', {
-                method: 'POST',
-                body: JSON.stringify(pending.restoreData),
-            });
-            if (!res?.success) throw new Error(res?.error || 'Restore failed');
-            await fetchData();
-            showToast('Restored successfully', 'success');
-        } catch (err) {
-            showToast(`Undo failed: ${err.message}`, 'error');
-        }
-    };
-
-    // ── Toast closed: data already deleted, just clear state ────────────
-
-    const handleToastClose = () => {
-        didUndoRef.current = false;
-        setPendingDelete(null);
-    };
-
-    // ── Undo message ────────────────────────────────────────────────────
-
-    const getUndoMessage = () => {
-        if (!pendingDelete?.counts) return 'Data deleted';
-        const { counts } = pendingDelete;
-        const parts = [];
-        if (counts.sites) parts.push(`${counts.sites} site${counts.sites !== 1 ? 's' : ''}`);
-        if (counts.categories) parts.push(`${counts.categories} categor${counts.categories !== 1 ? 'ies' : 'y'}`);
-        if (counts.tags) parts.push(`${counts.tags} tag${counts.tags !== 1 ? 's' : ''}`);
-        return `Deleted ${parts.join(', ')}`;
     };
 
     return (
@@ -183,7 +139,6 @@ export default function DangerZoneSection() {
                                 </div>
                                 <button
                                     onClick={() => setConfirmType(option.type)}
-                                    disabled={!!pendingDelete}
                                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors flex-shrink-0 ${c.border} ${c.text} ${c.hoverBg} disabled:opacity-50`}
                                 >
                                     {option.type === 'all' ? 'Reset' : 'Delete'}
@@ -210,15 +165,6 @@ export default function DangerZoneSection() {
                 />
             )}
 
-            {/* Undo Toast */}
-            {pendingDelete && (
-                <UndoToast
-                    message={getUndoMessage()}
-                    onUndo={handleUndo}
-                    onClose={handleToastClose}
-                    duration={8000}
-                />
-            )}
         </>
     );
 }

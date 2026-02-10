@@ -6,6 +6,8 @@
  * All icons default to 24×24 viewBox, stroke style, unless noted otherwise.
  */
 
+import { FaCrown } from 'react-icons/fa';
+
 // ─── Helper wrapper ────────────────────────────────────────────────────────────
 
 /** Stroke-style icon (Heroicons Outline convention) */
@@ -176,4 +178,6 @@ export const SpinnerFullIcon = ({ className = 'w-5 h-5 animate-spin', ...props }
 
 // ─── Crown / Pro ───────────────────────────────────────────────────────────────
 
-export const CrownIcon = (p) => <S d="M5 3l3.057-3L12 3.5 15.943 0 19 3l-2 7H7L5 3zM7 10h10l1 2H6l1-2zM8 14h8v2a4 4 0 01-8 0v-2z" {...p} />;
+export const CrownIcon = ({ className = 'w-5 h-5', gradient, ...props }) => (
+    <FaCrown className={className} style={gradient ? { color: '#F59E0B' } : undefined} {...props} />
+);

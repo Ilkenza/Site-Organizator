@@ -8,6 +8,15 @@
 
 import { verifyUserFromAuthHeader } from './helpers/auth-helpers';
 
+// Increase body size limit — restore payloads can be large when undoing "Reset Everything"
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '10mb',
+        },
+    },
+};
+
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const HTTP = { OK: 200, BAD_REQUEST: 400, UNAUTHORIZED: 401, METHOD_NOT_ALLOWED: 405, INTERNAL_ERROR: 500 };
