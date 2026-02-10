@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
-import Router from 'next/router';
 import { supabase, fetchAPI } from '../lib/supabase';
 import { resolveTier, hasFeature, TIER_PRO } from '../lib/tierConfig';
 
@@ -257,7 +256,25 @@ export function AuthProvider({ children }) {
         };
 
         // Initialize auth
-        initializeAuth();
+        initializeAuth().then(() => {
+            // Background refresh: after initial load (from cached JWT), silently fetch
+            // fresh session from server so tier changes from admin are picked up immediately
+            // on page refresh — not just on window focus.
+            if (isMounted && supabase) {
+                supabase.auth.refreshSession().then(async ({ data: refreshData }) => {
+                    if (!isMounted || !refreshData?.session?.user) return;
+                    try {
+                        const { profile } = await fetchProfileViaAPI();
+                        if (isMounted) {
+                            setUser(profile
+                                ? createUserWithProfile(refreshData.session.user, profile)
+                                : refreshData.session.user
+                            );
+                        }
+                    } catch (_) { /* non-critical */ }
+                }).catch(() => { /* non-critical */ });
+            }
+        });
 
         // Safety timeout - 10s to allow slow networks and MFA challenges
         const safetyTimeout = setTimeout(() => {
@@ -413,11 +430,12 @@ export function AuthProvider({ children }) {
             console.warn('Error clearing auth tokens from localStorage:', e);
         }
 
-        supabase.auth.signOut({ scope: 'local' }).catch(err => {
-            console.error('Sign out exception:', err);
-        });
+        // Fire-and-forget SDK cleanup
+        try { supabase.auth.signOut({ scope: 'local' }); } catch (_) {}
 
-        Router.push('/login');
+        // Full page redirect — instant navigation, clears all JS state.
+        // Router.push would wait for getServerSideProps which can be slow.
+        window.location.replace('/login');
     };
 
     const refreshUser = async () => {
@@ -427,20 +445,35 @@ export function AuthProvider({ children }) {
         }
 
         try {
+            // Refresh session to get updated user_metadata (e.g. tier changes from admin)
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            const freshUser = refreshData?.session?.user || user;
+
             const { profile, error } = await fetchProfileViaAPI();
 
             if (error) {
                 console.warn('Profile refresh error:', error.message);
+                // Still update with refreshed session user
+                setUser(createUserWithProfile(freshUser, null));
                 return;
             }
 
-            if (profile) {
-                setUser(prev => createUserWithProfile(prev, profile));
-            }
+            setUser(createUserWithProfile(freshUser, profile));
         } catch (error) {
             console.error('Error refreshing user:', error);
         }
     };
+
+    // Auto-refresh session on window focus (picks up tier changes from admin)
+    useEffect(() => {
+        const onFocus = () => {
+            if (user?.id && supabase) {
+                refreshUser();
+            }
+        };
+        window.addEventListener('focus', onFocus);
+        return () => window.removeEventListener('focus', onFocus);
+    }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Emergency user recovery + fetch missing profile (combined)
     useEffect(() => {

@@ -678,6 +678,10 @@ export default async function handler(req, res) {
       const batch = newTags.slice(p, p + PARALLEL_LIMIT);
       await Promise.all(batch.map(t => ensureTagByName(t.name, t.color)));
     }
+
+    // Track how many categories & tags were actually created in this chunk
+    report.categoriesCreated = newCats.length;
+    report.tagsCreated = newTags.length;
     // ── All categories & tags now cached — chunk loop needs no HTTP calls ──
 
     // Process in chunks

@@ -252,27 +252,41 @@ async function fetchUserSites(userToken) {
         throw new Error(ERROR_MESSAGES.NOT_AUTHENTICATED);
     }
 
-    const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/sites?select=*&order=created_at.desc`;
+    const baseUrl = SUPABASE_URL.replace(/\/$/, '');
     const headers = {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${userToken}`,
         Accept: 'application/json',
     };
 
-    const response = await fetch(url, { headers });
-    if (!response.ok) {
-        const details = await response.text();
-        const error = new Error(ERROR_MESSAGES.UPSTREAM_ERROR);
-        error.details = details;
-        throw error;
+    // Fetch ALL sites with pagination (Supabase default limit is 1000)
+    const PAGE_SIZE = 1000;
+    const allSites = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+        const url = `${baseUrl}/rest/v1/sites?select=id,url,name&order=created_at.desc&limit=${PAGE_SIZE}&offset=${offset}`;
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+            const details = await response.text();
+            const error = new Error(ERROR_MESSAGES.UPSTREAM_ERROR);
+            error.details = details;
+            throw error;
+        }
+
+        const data = await response.json();
+        const sites = Array.isArray(data) ? data : [];
+        allSites.push(...sites.map(s => ({ id: s.id, url: s.url, name: s.name })));
+
+        if (sites.length < PAGE_SIZE) {
+            hasMore = false;
+        } else {
+            offset += PAGE_SIZE;
+        }
     }
 
-    const data = await response.json();
-    return (Array.isArray(data) ? data : []).map(s => ({
-        id: s.id,
-        url: s.url,
-        name: s.name,
-    }));
+    return allSites;
 }
 
 /**
