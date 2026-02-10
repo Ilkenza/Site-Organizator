@@ -11,7 +11,7 @@ import EmailModal from './EmailModal';
 import MfaModal from './MfaModal';
 import DangerZoneSection from './DangerZoneSection';
 
-export default function SettingsPanel() {
+export default function SettingsPanel({ onDeleteComplete }) {
     const { user, signOut, refreshUser } = useAuth();
     const { fetchData, showToast, activeTab } = useDashboard();
 
@@ -46,7 +46,7 @@ export default function SettingsPanel() {
                     onMfaClick={() => setMfaModalOpen(true)}
                 />
 
-                <DangerZoneSection />
+                <DangerZoneSection onDeleteComplete={onDeleteComplete} />
             </div>
 
             <PasswordModal

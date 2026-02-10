@@ -442,8 +442,8 @@ const buildSitesListUrl = (baseUrl, limit, offset, filters = {}) => {
   queryFilters.forEach(f => { url += `&${f}`; });
 
   if (searchQuery) {
-    const qEsc = encodeURIComponent(searchQuery.replace(/%/g, '%25'));
-    const orFilter = `or=(name.ilike.*${qEsc}*,url.ilike.*${qEsc}*,description.ilike.*${qEsc}*)`;
+    const qEsc = encodeURIComponent(searchQuery);
+    const orFilter = `or=(name.ilike.*${qEsc}*,url.ilike.*${qEsc}*)`;
     url += `&${orFilter}`;
   }
 

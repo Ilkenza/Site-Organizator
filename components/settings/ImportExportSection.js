@@ -78,19 +78,36 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
             setImportSource(null);
             if (importResult.created > 0) setTimeout(() => fetchData(), 500);
         } else if (importResult.created > 0 || importResult.updated > 0) {
-            const parts = [];
-            if (importResult.created > 0) parts.push(`${importResult.created} created`);
-            if (importResult.updated > 0) parts.push(`${importResult.updated} already existed (updated)`);
-            setImportMessage({
-                type: importResult.created > 0 ? 'success' : 'warning',
-                text: `${importResult.created > 0 ? '✅' : '⚠️'} Import complete: ${parts.join(', ')}. ${importResult.errors > 0 ? `${importResult.errors} error(s).` : ''}`
-            });
+            if (importResult.tierLimited) {
+                const parts = [];
+                if (importResult.created > 0) parts.push(`${importResult.created} created`);
+                if (importResult.updated > 0) parts.push(`${importResult.updated} updated`);
+                if (importResult.errors > 0) parts.push(`${importResult.errors} error(s)`);
+                const summary = parts.join(', ');
+                setImportMessage({
+                    type: 'warning',
+                    text: `⚠️ Import: ${summary}. ${importResult.tierMessage}`
+                });
+            } else {
+                const parts = [];
+                if (importResult.created > 0) parts.push(`${importResult.created} created`);
+                if (importResult.updated > 0) parts.push(`${importResult.updated} already existed (updated)`);
+                setImportMessage({
+                    type: importResult.created > 0 ? 'success' : 'warning',
+                    text: `${importResult.created > 0 ? '✅' : '⚠️'} Import complete: ${parts.join(', ')}.${importResult.errors > 0 ? ` ${importResult.errors} error(s).` : ''}`
+                });
+            }
             setImportPreview(null);
             setTimeout(() => {
                 if (importResult.created > 0) {
                     fetchData();
                 }
             }, 2000);
+        } else if (importResult.tierLimited) {
+            setImportMessage({
+                type: 'warning',
+                text: `⚠️ ${importResult.tierMessage}`
+            });
         } else if (importResult.errors > 0) {
             setImportMessage({
                 type: 'error',
@@ -303,28 +320,36 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                         )}
 
                         {/* Progress bar */}
-                        {importing && importProgress && (
+                        {importing && (
                             <div className="space-y-1.5 mb-3">
                                 <div className="flex justify-between text-xs text-app-text-muted">
-                                    <span>{importProgress.created} created{importProgress.errors > 0 ? `, ${importProgress.errors} errors` : ''}</span>
+                                    <span>{importProgress ? `${importProgress.created} created${importProgress.errors > 0 ? `, ${importProgress.errors} errors` : ''}` : 'Starting import...'}</span>
                                     <span>
-                                        {importProgress.etaMs > 0
-                                            ? importProgress.etaMs >= 60000
-                                                ? `~${Math.ceil(importProgress.etaMs / 60000)} min left`
-                                                : `~${Math.ceil(importProgress.etaMs / 1000)}s left`
-                                            : importProgress.current >= importProgress.total
-                                                ? 'Finishing...'
-                                                : 'Calculating...'}
+                                        {importProgress
+                                            ? importProgress.etaMs > 0
+                                                ? importProgress.etaMs >= 60000
+                                                    ? `~${Math.ceil(importProgress.etaMs / 60000)} min left`
+                                                    : `~${Math.ceil(importProgress.etaMs / 1000)}s left`
+                                                : importProgress.current >= importProgress.total
+                                                    ? 'Finishing...'
+                                                    : 'Calculating...'
+                                            : 'Preparing...'}
                                     </span>
                                 </div>
                                 <div className="w-full h-2.5 bg-app-bg-light rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-app-accent rounded-full transition-all duration-500 ease-out"
-                                        style={{ width: `${Math.round((importProgress.current / importProgress.total) * 100)}%` }}
-                                    />
+                                    {importProgress ? (
+                                        <div
+                                            className="h-full bg-app-accent rounded-full transition-all duration-500 ease-out"
+                                            style={{ width: `${Math.round((importProgress.current / importProgress.total) * 100)}%` }}
+                                        />
+                                    ) : (
+                                        <div className="h-full bg-app-accent/60 rounded-full animate-pulse" style={{ width: '15%' }} />
+                                    )}
                                 </div>
                                 <div className="text-center text-[10px] text-app-text-muted">
-                                    {Math.round((importProgress.current / importProgress.total) * 100)}% — {importProgress.current}/{importProgress.total} processed
+                                    {importProgress
+                                        ? `${Math.round((importProgress.current / importProgress.total) * 100)}% — ${importProgress.current}/${importProgress.total} processed`
+                                        : 'Processing sites...'}
                                 </div>
                             </div>
                         )}

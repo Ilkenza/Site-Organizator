@@ -8,6 +8,7 @@ const HTTP_STATUS = {
   OK: 200,
   CREATED: 201,
   UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
   INTERNAL_ERROR: 500,
   BAD_GATEWAY: 502
 };
@@ -176,6 +177,44 @@ const handlePostRequest = async (req, res, baseUrl, anonKey, serviceKey, userTok
       error: ERROR_MESSAGES.AUTH_REQUIRED
     });
   }
+
+  // ── Tier limit check ──────────────────────────────────────────────
+  const TIER_LIMITS = { free: 200, pro: 500, promax: Infinity };
+  let tier = 'free';
+  try {
+    const jwtPayload = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString('utf8'));
+    const meta = jwtPayload?.user_metadata || {};
+    tier = meta.tier || (meta.is_pro ? 'pro' : 'free');
+    const userEmail = jwtPayload?.email || '';
+    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    if (adminEmails.includes(userEmail.toLowerCase())) tier = 'promax';
+  } catch { /* keep free */ }
+
+  const tagLimit = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
+  if (tagLimit !== Infinity) {
+    try {
+      const countUrl = `${baseUrl}/rest/v1/tags?select=id&limit=${tagLimit + 1}`;
+      const countRes = await fetch(countUrl, {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${userToken}`,
+          Accept: 'application/json'
+        }
+      });
+      if (countRes.ok) {
+        const rows = await countRes.json();
+        if (rows.length >= tagLimit) {
+          const tierLabel = tier === 'promax' ? 'Pro Max' : tier === 'pro' ? 'Pro' : 'Free';
+          const upgradeTarget = tier === 'free' ? 'Pro or Pro Max' : 'Pro Max';
+          return res.status(HTTP_STATUS.FORBIDDEN).json({
+            success: false,
+            error: `Tag limit reached (${rows.length}/${tagLimit}). You are on the ${tierLabel} plan. Upgrade to ${upgradeTarget} for more.`
+          });
+        }
+      }
+    } catch { /* allow on count failure */ }
+  }
+  // ── End tier limit check ──────────────────────────────────────────
 
   try {
     const body = req.body || {};

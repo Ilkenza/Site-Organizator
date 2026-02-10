@@ -63,9 +63,23 @@ export default async function handler(req, res) {
     const auth = await verifyAdmin(req, supabase);
     if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
-    const { userId, isPro } = req.body || {};
+    const { userId, isPro, tier } = req.body || {};
     if (!userId) return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: 'userId is required' });
-    if (typeof isPro !== 'boolean') return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: 'isPro must be boolean' });
+
+    // Support new tier system: tier can be 'free', 'pro', 'promax'
+    // Legacy support: isPro boolean still works (maps to 'pro' / 'free')
+    const VALID_TIERS = ['free', 'pro', 'promax'];
+    let newTier;
+    if (tier !== undefined) {
+        if (!VALID_TIERS.includes(tier)) {
+            return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: `tier must be one of: ${VALID_TIERS.join(', ')}` });
+        }
+        newTier = tier;
+    } else if (typeof isPro === 'boolean') {
+        newTier = isPro ? 'pro' : 'free';
+    } else {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: 'tier or isPro is required' });
+    }
 
     try {
         // Get current user metadata to preserve existing fields
@@ -74,16 +88,21 @@ export default async function handler(req, res) {
 
         const currentMeta = existingUser?.user?.user_metadata || {};
 
-        // Update user_metadata with is_pro flag (preserve all other fields)
+        // Update user_metadata with tier + legacy is_pro flag
         const { data: _data, error } = await supabase.auth.admin.updateUserById(userId, {
-            user_metadata: { ...currentMeta, is_pro: isPro }
+            user_metadata: {
+                ...currentMeta,
+                tier: newTier,
+                is_pro: newTier !== 'free', // legacy compat
+            }
         });
 
         if (error) throw error;
 
         return res.status(HTTP_STATUS.OK).json({
             success: true,
-            is_pro: isPro,
+            tier: newTier,
+            is_pro: newTier !== 'free',
             user_id: userId
         });
     } catch (error) {

@@ -146,7 +146,8 @@ Average person spends 20 minutes per day looking for bookmarks. That's 120 hours
 ✓ Open source (verify yourself)
 ✓ Export anytime, no lock-in
 
-Try it free. No signup required to test.
+Try it free. No
+required to test.
 
 ### Keywords (for SEO)
 

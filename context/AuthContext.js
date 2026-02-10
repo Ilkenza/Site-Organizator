@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import Router from 'next/router';
 import { supabase, fetchAPI } from '../lib/supabase';
+import { resolveTier, hasFeature, TIER_PRO } from '../lib/tierConfig';
 
 const AuthContext = createContext({});
 
@@ -89,12 +91,15 @@ function isAdminEmail(email) {
 
 // Helper to create user object with profile data
 function createUserWithProfile(baseUser, profile) {
+    const isAdmin = isAdminEmail(baseUser?.email);
+    const tier = resolveTier(baseUser?.user_metadata, isAdmin);
     return {
         ...baseUser,
         avatarUrl: profile?.avatar_url || null,
         displayName: baseUser?.user_metadata?.display_name || profile?.name || null,
-        isPro: !!baseUser?.user_metadata?.is_pro || isAdminEmail(baseUser?.email),
-        isAdmin: isAdminEmail(baseUser?.email),
+        tier,
+        isPro: hasFeature(tier, 'aiSuggest'), // backwards compat — true for pro & promax
+        isAdmin,
     };
 }
 
@@ -412,7 +417,7 @@ export function AuthProvider({ children }) {
             console.error('Sign out exception:', err);
         });
 
-        window.location.replace('/login');
+        Router.push('/login');
     };
 
     const refreshUser = async () => {

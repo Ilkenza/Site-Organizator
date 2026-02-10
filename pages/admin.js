@@ -11,7 +11,8 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { SearchIcon, CrownIcon, ShieldCheckIcon, BanIcon, TrashIcon, RefreshIcon } from '../components/ui/Icons';
+import { SearchIcon, CrownIcon, StarIcon, ShieldCheckIcon, BanIcon, TrashIcon, RefreshIcon } from '../components/ui/Icons';
+import { TIER_FREE, TIER_PRO, TIER_PROMAX, TIER_LABELS, TIER_COLORS } from '../lib/tierConfig';
 
 // ========================================
 // Constants
@@ -396,9 +397,12 @@ function UserRow({ user, index, onDelete, onBan, onTogglePro, isCurrentUser }) {
                             {isCurrentUser && (
                                 <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded-full font-medium">ADMIN</span>
                             )}
-                            {(user.is_pro || isCurrentUser) && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded-full font-medium">PRO</span>
-                            )}
+                            {(() => {
+                                const t = isCurrentUser ? TIER_PROMAX : (user.tier || TIER_FREE);
+                                if (t === TIER_FREE) return null;
+                                const c = TIER_COLORS[t];
+                                return <span className={`text-[10px] px-1.5 py-0.5 ${c.bg} ${c.text} rounded-full font-medium`}>{c.badge}</span>;
+                            })()}
                             {user.banned && (
                                 <span className="text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded-full font-medium">BANNED</span>
                             )}
@@ -410,24 +414,33 @@ function UserRow({ user, index, onDelete, onBan, onTogglePro, isCurrentUser }) {
             <td className="px-4 py-3 text-center"><span className="font-semibold text-app-text-primary text-sm">{user.sites}</span></td>
             <td className="px-4 py-3 text-center"><span className="font-semibold text-app-text-primary text-sm">{user.categories}</span></td>
             <td className="px-4 py-3 text-center"><span className="font-semibold text-app-text-primary text-sm">{user.tags}</span></td>
+            <td className="px-4 py-3 text-center">
+                {user.aiUsageMonth > 0 ? (
+                    <span className="font-semibold text-purple-400 text-sm" title={`Total: ${user.aiUsageTotal || 0}`}>{user.aiUsageMonth}</span>
+                ) : (
+                    <span className="text-app-text-muted text-sm">—</span>
+                )}
+            </td>
             <td className="px-4 py-3 text-app-text-muted text-xs">{new Date(user.created_at).toLocaleDateString()}</td>
             <td className="px-4 py-3 text-app-text-muted text-xs">{timeAgo(user.last_sign_in)}</td>
             <td className="px-4 py-3 text-center">
                 {user.onboarded ? <span className="text-emerald-400 text-sm">✓</span> : <span className="text-app-text-muted text-sm">—</span>}
             </td>
             <td className="px-4 py-3 text-center">
-                {(user.is_pro || isCurrentUser) ? <span className="text-purple-400 text-sm">👑</span> : <span className="text-app-text-muted text-sm">—</span>}
+                {(() => {
+                    const t = isCurrentUser ? TIER_PROMAX : (user.tier || TIER_FREE);
+                    if (t === TIER_PROMAX) return <CrownIcon className="w-4 h-4 text-purple-400 mx-auto" />;
+                    if (t === TIER_PRO) return <CrownIcon className="w-4 h-4 text-amber-400 mx-auto" gradient />;
+                    return <span className="text-app-text-muted text-sm">—</span>;
+                })()}
             </td>
             <td className="px-4 py-3">
                 {!isCurrentUser ? (
                     <div className="flex items-center justify-center gap-1">
                         <button onClick={() => onTogglePro(user)}
-                            className={`p-1 rounded transition-colors ${user.is_pro
-                                ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-900/20'
-                                : 'text-app-text-muted hover:text-purple-400 hover:bg-purple-900/20'
-                                }`}
-                            title={user.is_pro ? 'Remove Pro' : 'Give Pro'}>
-                            <CrownIcon className="w-4 h-4" fill={user.is_pro ? 'currentColor' : 'none'} />
+                            className="p-1 rounded transition-colors text-app-text-muted hover:text-amber-400 hover:bg-amber-900/20"
+                            title={`Tier: ${TIER_LABELS[user.tier || TIER_FREE]}`}>
+                            <CrownIcon className="w-4 h-4" />
                         </button>
                         <button onClick={() => onBan(user)}
                             className={`p-1 rounded transition-colors ${user.banned
@@ -501,6 +514,7 @@ export default function AdminDashboard() {
     const [banning, setBanning] = useState(false);
     const [proTarget, setProTarget] = useState(null);
     const [togglingPro, setTogglingPro] = useState(false);
+    const [selectedTier, setSelectedTier] = useState(TIER_FREE);
 
     // Growth chart period
     const [growthPeriod, setGrowthPeriod] = useState('monthly');
@@ -600,7 +614,7 @@ export default function AdminDashboard() {
             const res = await fetch('/api/admin/toggle-pro', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: proTarget.id, isPro: !proTarget.is_pro })
+                body: JSON.stringify({ userId: proTarget.id, tier: selectedTier })
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error);
@@ -730,7 +744,7 @@ export default function AdminDashboard() {
     }
 
     const { overview, pricingBreakdown, topCategories, topTags, growthData, sitesPerUserStats,
-        mostActiveUsers, popularDomains, duplicateSites, emptyAccountsCount, recentActivity } = data || {};
+        mostActiveUsers, popularDomains, duplicateSites, emptyAccountsCount, recentActivity, aiUsage } = data || {};
 
     // ========================================
     // Tab Content
@@ -839,6 +853,7 @@ export default function AdminDashboard() {
             {/* Sort controls - mobile */}
             <div className="flex gap-1.5 overflow-x-auto scrollbar-none md:hidden pb-1">
                 {[{ col: 'sites', label: 'Sites' }, { col: 'categories', label: 'Cat' }, { col: 'tags', label: 'Tags' },
+                { col: 'aiUsageMonth', label: 'AI' },
                 { col: 'created_at', label: 'Joined' }, { col: 'last_sign_in', label: 'Active' }].map(s => (
                     <button key={s.col} onClick={() => handleSort(s.col)}
                         className={`px-2.5 py-1 text-[10px] rounded-full whitespace-nowrap border transition-colors flex-shrink-0 ${sortBy === s.col
@@ -869,7 +884,7 @@ export default function AdminDashboard() {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-1.5">
                                         <p className="text-app-text-primary text-sm font-medium truncate">{u.username}</p>
-                                        {u.is_pro && <span className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded-full font-medium">PRO</span>}
+                                        {u.is_pro && <span className={`text-[9px] px-1.5 py-0.5 ${TIER_COLORS[u.tier || TIER_PRO].bg} ${TIER_COLORS[u.tier || TIER_PRO].text} rounded-full font-medium`}>{TIER_COLORS[u.tier || TIER_PRO].badge}</span>}
                                         {u.banned && <span className="text-[9px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded-full font-medium">BANNED</span>}
                                         {isMe && <span className="text-[9px] px-1.5 py-0.5 bg-app-accent/20 text-app-accent rounded-full">You</span>}
                                     </div>
@@ -878,13 +893,10 @@ export default function AdminDashboard() {
                                 {/* Actions */}
                                 {!isMe && (
                                     <div className="flex items-center gap-0.5 flex-shrink-0">
-                                        <button onClick={() => setProTarget(u)}
-                                            className={`p-1.5 rounded-lg transition-colors ${u.is_pro
-                                                ? 'text-purple-400 hover:text-purple-300 hover:bg-purple-900/20'
-                                                : 'text-app-text-muted hover:text-purple-400 hover:bg-purple-900/20'
-                                                }`}
-                                            title={u.is_pro ? 'Remove Pro' : 'Give Pro'}>
-                                            {u.is_pro ? '👑' : '⭐'}
+                                        <button onClick={() => { setSelectedTier(u.tier || TIER_FREE); setProTarget(u); }}
+                                            className="p-1.5 rounded-lg transition-colors text-app-text-muted hover:text-amber-400 hover:bg-amber-900/20"
+                                            title={`Tier: ${TIER_LABELS[u.tier || TIER_FREE]}`}>
+                                            <CrownIcon className="w-4 h-4" />
                                         </button>
                                         <button onClick={() => setBanTarget(u)}
                                             className={`p-1.5 rounded-lg transition-colors ${u.banned
@@ -914,6 +926,12 @@ export default function AdminDashboard() {
                                     <span className="text-[10px] text-app-text-muted">🏷️</span>
                                     <span className="text-xs font-semibold text-app-text-primary">{u.tags}</span>
                                 </div>
+                                {(u.aiUsageMonth > 0 || u.aiUsageTotal > 0) && (
+                                    <div className="flex items-center gap-1" title={`Total: ${u.aiUsageTotal || 0}`}>
+                                        <span className="text-[10px] text-app-text-muted">🤖</span>
+                                        <span className="text-xs font-semibold text-purple-400">{u.aiUsageMonth}</span>
+                                    </div>
+                                )}
                                 <span className="text-app-text-muted text-[9px] ml-auto">
                                     {new Date(u.created_at).toLocaleDateString()}
                                 </span>
@@ -940,10 +958,11 @@ export default function AdminDashboard() {
                                 <th className="px-4 py-3 text-center cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('sites')}>Sites <SortIcon col="sites" /></th>
                                 <th className="px-4 py-3 text-center cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('categories')}>Cat <SortIcon col="categories" /></th>
                                 <th className="px-4 py-3 text-center cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('tags')}>Tags <SortIcon col="tags" /></th>
+                                <th className="px-4 py-3 text-center cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('aiUsageMonth')}>AI <SortIcon col="aiUsageMonth" /></th>
                                 <th className="px-4 py-3 text-left cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('created_at')}>Joined <SortIcon col="created_at" /></th>
                                 <th className="px-4 py-3 text-left cursor-pointer hover:text-app-text-primary" onClick={() => handleSort('last_sign_in')}>Active <SortIcon col="last_sign_in" /></th>
                                 <th className="px-4 py-3 text-center">Tour</th>
-                                <th className="px-4 py-3 text-center">Pro</th>
+                                <th className="px-4 py-3 text-center">Tier</th>
                                 <th className="px-4 py-3 text-center w-24">Actions</th>
                             </tr>
                         </thead>
@@ -951,11 +970,11 @@ export default function AdminDashboard() {
                             {filteredUsers.map((u, i) => (
                                 <UserRow key={u.id} user={u} index={i}
                                     onDelete={setDeleteTarget} onBan={setBanTarget}
-                                    onTogglePro={setProTarget}
+                                    onTogglePro={(u) => { setSelectedTier(u.tier || TIER_FREE); setProTarget(u); }}
                                     isCurrentUser={u.email === user?.email} />
                             ))}
                             {filteredUsers.length === 0 && (
-                                <tr><td colSpan={10} className="px-4 py-8 text-center text-app-text-muted">
+                                <tr><td colSpan={11} className="px-4 py-8 text-center text-app-text-muted">
                                     {userSearch ? 'No users match your search' : 'No users found'}
                                 </td></tr>
                             )}
@@ -1038,6 +1057,90 @@ export default function AdminDashboard() {
 
     const renderToolsTab = () => (
         <div className="space-y-6">
+            {/* AI Usage */}
+            <SectionCard title="AI Suggestions Usage" action={
+                <span className="text-xs text-app-text-muted">
+                    {aiUsage?.currentMonth?.month || 'N/A'}
+                </span>
+            }>
+                {/* Stats Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
+                    <div className="text-center p-2.5 sm:p-3 bg-app-bg-light/30 rounded-lg">
+                        <p className="text-lg sm:text-2xl font-bold text-app-text-primary">{aiUsage?.totalRequests || 0}</p>
+                        <p className="text-app-text-muted text-[10px] sm:text-xs mt-0.5">All Time</p>
+                    </div>
+                    <div className="text-center p-2.5 sm:p-3 bg-app-bg-light/30 rounded-lg">
+                        <p className="text-lg sm:text-2xl font-bold text-purple-400">{aiUsage?.currentMonth?.requests || 0}</p>
+                        <p className="text-app-text-muted text-[10px] sm:text-xs mt-0.5">This Month</p>
+                    </div>
+                    <div className="text-center p-2.5 sm:p-3 bg-app-bg-light/30 rounded-lg">
+                        <p className="text-lg sm:text-2xl font-bold text-amber-400">{aiUsage?.topUsers?.length || 0}</p>
+                        <p className="text-app-text-muted text-[10px] sm:text-xs mt-0.5">Active Users</p>
+                    </div>
+                    <div className="text-center p-2.5 sm:p-3 bg-app-bg-light/30 rounded-lg">
+                        <p className="text-lg sm:text-2xl font-bold text-emerald-400">
+                            {(() => {
+                                const tb = aiUsage?.tierBreakdown || {};
+                                const total = (tb.free || 0) + (tb.pro || 0) + (tb.promax || 0);
+                                return total > 0 ? Math.round(((tb.pro || 0) + (tb.promax || 0)) / total * 100) : 0;
+                            })()}%
+                        </p>
+                        <p className="text-app-text-muted text-[10px] sm:text-xs mt-0.5">Pro Usage</p>
+                    </div>
+                </div>
+
+                {/* Tier Breakdown */}
+                <div className="mb-4">
+                    <p className="text-app-text-secondary text-xs font-medium mb-2">This Month by Tier</p>
+                    <div className="flex gap-2 sm:gap-3">
+                        {[{ key: 'free', label: 'Free', color: 'gray', limit: 10 },
+                        { key: 'pro', label: 'Pro', color: 'amber', limit: 200 },
+                        { key: 'promax', label: 'Pro Max', color: 'purple', limit: 2000 }].map(t => (
+                            <div key={t.key} className="flex-1 p-2 bg-app-bg-light/30 rounded-lg">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className={`text-${t.color}-400 text-xs font-medium`}>{t.label}</span>
+                                    <span className="text-app-text-muted text-[10px]">{t.limit}/mo</span>
+                                </div>
+                                <p className="text-app-text-primary text-sm font-bold">{aiUsage?.tierBreakdown?.[t.key] || 0}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Top AI Users */}
+                {aiUsage?.topUsers?.length > 0 ? (
+                    <div>
+                        <p className="text-app-text-secondary text-xs font-medium mb-2">Top AI Users</p>
+                        <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                            {aiUsage.topUsers.map((u, i) => {
+                                const tierColor = u.tier === 'promax' ? 'text-purple-400' : u.tier === 'pro' ? 'text-amber-400' : 'text-gray-400';
+                                const tierLabel = u.tier === 'promax' ? 'Pro Max' : u.tier === 'pro' ? 'Pro' : 'Free';
+                                const limit = u.tier === 'promax' ? 2000 : u.tier === 'pro' ? 200 : 10;
+                                return (
+                                    <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-app-bg-light/30 transition-colors">
+                                        <span className="text-app-text-muted text-xs w-4 text-right">{i + 1}</span>
+                                        {u.avatar ? (
+                                            <img src={u.avatar} alt="" className="w-5 h-5 rounded-full" />
+                                        ) : (
+                                            <div className="w-5 h-5 rounded-full bg-app-bg-light flex items-center justify-center">
+                                                <span className="text-[10px] text-app-text-muted">{(u.username?.[0] || u.email?.[0] || '?').toUpperCase()}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <span className="text-app-text-primary text-xs truncate block">{u.username || u.email}</span>
+                                        </div>
+                                        <span className={`text-[10px] ${tierColor}`}>{tierLabel}</span>
+                                        <span className="text-app-text-secondary text-xs font-mono">{u.currentMonth}<span className="text-app-text-muted">/{limit}</span></span>
+                                        <span className="text-app-text-muted text-[10px]">({u.total} total)</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ) : (
+                    <p className="text-app-text-muted text-sm text-center py-3">No AI usage data yet</p>
+                )}
+            </SectionCard>
             {/* Broken Links Checker */}
             <SectionCard title="Broken Links Checker"
                 action={
@@ -1242,36 +1345,66 @@ export default function AdminDashboard() {
                     </div>
                 )}
 
-                {/* Pro Toggle Modal */}
+                {/* Tier Change Modal */}
                 {proTarget && (
                     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
                         onClick={() => !togglingPro && setProTarget(null)}>
                         <div className="bg-app-bg-secondary border border-app-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
                             onClick={e => e.stopPropagation()}>
                             <div className="text-center mb-4">
-                                <div className="text-4xl mb-3">{proTarget.is_pro ? '⭐' : '👑'}</div>
-                                <h3 className="text-lg font-bold text-app-text-primary">
-                                    {proTarget.is_pro ? 'Remove Pro' : 'Give Pro'}?
-                                </h3>
+                                <div className="mb-3 flex justify-center"><CrownIcon className="w-10 h-10 text-amber-400" gradient /></div>
+                                <h3 className="text-lg font-bold text-app-text-primary">Change Tier</h3>
                             </div>
-                            <p className="text-app-text-secondary text-sm text-center mb-1">
-                                {proTarget.is_pro ? 'Remove Pro access from' : 'Grant Pro access to'}{' '}
-                                <strong className="text-app-text-primary">{proTarget.email}</strong>
+                            <p className="text-app-text-secondary text-sm text-center mb-4">
+                                Set tier for <strong className="text-app-text-primary">{proTarget.email}</strong>
                             </p>
-                            <p className="text-app-text-muted text-xs text-center mb-5">
-                                {proTarget.is_pro
-                                    ? 'This user will lose AI suggestions and other Pro features.'
-                                    : 'This user will get AI suggestions and other Pro features.'}
+                            <div className="flex flex-col gap-2 mb-5">
+                                {[TIER_FREE, TIER_PRO, TIER_PROMAX].map(t => {
+                                    const colors = TIER_COLORS[t];
+                                    const isSelected = selectedTier === t;
+                                    const isCurrent = (proTarget.tier || TIER_FREE) === t;
+                                    return (
+                                        <button key={t} onClick={() => setSelectedTier(t)}
+                                            className={`flex items-center justify-between px-4 py-3 rounded-lg border-2 transition-all ${isSelected
+                                                    ? t === TIER_FREE
+                                                        ? 'border-gray-500 bg-gray-500/10'
+                                                        : t === TIER_PRO
+                                                            ? 'border-amber-500 bg-amber-500/10'
+                                                            : 'border-purple-500 bg-purple-500/10'
+                                                    : 'border-app-border hover:border-app-border-hover bg-app-bg-light'
+                                                }`}>
+                                            <div className="flex items-center gap-2">
+                                                {t !== TIER_FREE && <CrownIcon className={`w-4 h-4 ${t === TIER_PROMAX ? 'text-purple-400' : 'text-amber-400'}`} gradient={t === TIER_PRO} />}
+                                                <span className={`font-medium ${isSelected ? 'text-app-text-primary' : 'text-app-text-secondary'}`}>{TIER_LABELS[t]}</span>
+                                                {isCurrent && <span className="text-xs text-app-text-muted ml-1">(current)</span>}
+                                            </div>
+                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected
+                                                    ? t === TIER_FREE ? 'border-gray-500' : t === TIER_PRO ? 'border-amber-500' : 'border-purple-500'
+                                                    : 'border-app-border'
+                                                }`}>
+                                                {isSelected && <div className={`w-2 h-2 rounded-full ${t === TIER_FREE ? 'bg-gray-500' : t === TIER_PRO ? 'bg-amber-500' : 'bg-purple-500'
+                                                    }`} />}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <p className="text-app-text-muted text-xs text-center mb-4">
+                                {selectedTier === TIER_FREE && 'Free: 500 sites, 50 categories, 200 tags.'}
+                                {selectedTier === TIER_PRO && 'Pro: 2000 sites, 200 categories, 500 tags + AI & Link Check.'}
+                                {selectedTier === TIER_PROMAX && 'Pro Max: Unlimited everything + all features.'}
                             </p>
                             <div className="flex gap-3">
                                 <button onClick={() => setProTarget(null)} disabled={togglingPro}
                                     className="flex-1 px-4 py-2 text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">
                                     Cancel
                                 </button>
-                                <button onClick={handleTogglePro} disabled={togglingPro}
-                                    className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors font-medium disabled:opacity-50 ${proTarget.is_pro ? 'bg-gray-600 hover:bg-gray-500' : 'bg-purple-600 hover:bg-purple-500'
+                                <button onClick={handleTogglePro} disabled={togglingPro || selectedTier === (proTarget.tier || TIER_FREE)}
+                                    className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors font-medium disabled:opacity-50 ${selectedTier === TIER_PROMAX ? 'bg-purple-600 hover:bg-purple-500'
+                                            : selectedTier === TIER_PRO ? 'bg-amber-600 hover:bg-amber-500'
+                                                : 'bg-gray-600 hover:bg-gray-500'
                                         }`}>
-                                    {togglingPro ? 'Processing...' : proTarget.is_pro ? 'Remove Pro' : 'Give Pro'}
+                                    {togglingPro ? 'Processing...' : `Set ${TIER_LABELS[selectedTier]}`}
                                 </button>
                             </div>
                         </div>
