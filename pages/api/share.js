@@ -69,7 +69,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET' && req.query.token) {
         const share = await fetchShareByToken(cfg, req.query.token);
-        if (!share) return sendError(res, HTTP.NOT_FOUND, 'Share link deleted');
+        if (!share) return sendError(res, HTTP.NOT_FOUND, 'Shared sites have been deleted');
 
         const sites = await fetchSharedSites(cfg, share);
         return sendOk(res, { share: { id: share.id, name: share.name }, sites });
