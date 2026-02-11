@@ -2,14 +2,31 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
-import { BarChartIcon, SpinnerIcon, CheckCircleIcon, CloseIcon, LinkIcon, InfoCircleIcon, ExclamationCircleIcon, CrownIcon } from '../ui/Icons';
+import { BarChartIcon, SpinnerIcon, CheckCircleIcon, CloseIcon, LinkIcon, InfoCircleIcon, ExclamationCircleIcon, CrownIcon, TagIcon, FolderIcon, GlobeIcon } from '../ui/Icons';
 import { hasFeature, TIER_FREE, TIER_LABELS, TIER_COLORS, TIER_LIMITS, limitText } from '../../lib/tierConfig';
+
+const PRICING_META = {
+    fully_free: { label: 'Fully Free', bg: 'bg-pricing-fullyFree', text: 'text-pricing-fullyFreeText' },
+    freemium: { label: 'Freemium', bg: 'bg-pricing-freemium', text: 'text-pricing-freemiumText' },
+    free_trial: { label: 'Free Trial', bg: 'bg-pricing-freeTrial', text: 'text-pricing-freeTrialText' },
+    paid: { label: 'Paid', bg: 'bg-pricing-paid', text: 'text-pricing-paidText' },
+    unknown: { label: 'Unknown', bg: 'bg-app-bg-secondary', text: 'text-app-text-tertiary' },
+};
 
 export default function StatsSection({ user, activeTab, showToast }) {
     const { user: currentUser } = useAuth();
     const tier = currentUser?.tier || TIER_FREE;
     const canCheckLinks = hasFeature(tier, 'linkHealthCheck');
-    const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0 });
+    const canViewStats = hasFeature(tier, 'statsInsights');
+    const [stats, setStats] = useState({
+        sites: 0,
+        categories: 0,
+        tags: 0,
+        pricingDistribution: [],
+        topCategories: [],
+        addedThisMonth: 0,
+        addedLastMonth: 0,
+    });
     const [loadingStats, setLoadingStats] = useState(false);
 
     // Link check state from context — survives tab switches
@@ -54,6 +71,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
 
     // Fetch statistics for Settings panel
     const fetchStats = useCallback(async () => {
+        if (!canViewStats) return;
         setLoadingStats(true);
         try {
             const sess = await supabase.auth.getSession();
@@ -63,14 +81,22 @@ export default function StatsSection({ user, activeTab, showToast }) {
             });
             if (!r.ok) throw new Error(await r.text());
             const json = await r.json();
-            setStats(json.stats || { sites: 0, categories: 0, tags: 0 });
+            setStats(json.stats || {
+                sites: 0,
+                categories: 0,
+                tags: 0,
+                pricingDistribution: [],
+                topCategories: [],
+                addedThisMonth: 0,
+                addedLastMonth: 0,
+            });
         } catch (err) {
             console.warn('Failed to fetch stats:', err);
             showToast && showToast('Failed to load stats', 'error');
         } finally {
             setLoadingStats(false);
         }
-    }, [showToast]);
+    }, [canViewStats, showToast]);
 
     // Compute displayed broken links based on ignored state
     const displayedBroken = linkCheckResult?.broken
@@ -105,8 +131,8 @@ export default function StatsSection({ user, activeTab, showToast }) {
 
     // Auto-refresh stats when opening settings
     useEffect(() => {
-        if (activeTab === 'settings') fetchStats();
-    }, [activeTab, fetchStats]);
+        if (activeTab === 'settings' && canViewStats) fetchStats();
+    }, [activeTab, canViewStats, fetchStats]);
 
     return (
         <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
@@ -128,6 +154,15 @@ export default function StatsSection({ user, activeTab, showToast }) {
                 </button>
             </div>
             <p className="text-sm text-app-text-secondary mb-4">Overview of your content and link health.</p>
+
+            {!canViewStats && (
+                <div className="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10">
+                    <div className="text-sm text-amber-300 font-semibold">Pro required</div>
+                    <div className="text-xs text-amber-300/80 mt-1">
+                        Upgrade to {TIER_LABELS[tier] === 'Free' ? 'Pro' : 'Pro Max'} to see stats insights.
+                    </div>
+                </div>
+            )}
 
             {/* Current Plan */}
             {(() => {
@@ -155,23 +190,133 @@ export default function StatsSection({ user, activeTab, showToast }) {
                 );
             })()}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
-                    <div className="text-xs text-app-text-secondary">Sites</div>
-                    <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.sites}</div>
+            {canViewStats && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
+                        <div className="text-xs text-app-text-secondary">Sites</div>
+                        <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.sites}</div>
+                    </div>
+                    <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
+                        <div className="text-xs text-app-text-secondary">Categories</div>
+                        <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.categories}</div>
+                    </div>
+                    <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
+                        <div className="text-xs text-app-text-secondary">Tags</div>
+                        <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.tags}</div>
+                    </div>
                 </div>
-                <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
-                    <div className="text-xs text-app-text-secondary">Categories</div>
-                    <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.categories}</div>
+            )}
+
+            {canViewStats && (
+                <>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
+                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                            <TagIcon className="w-3.5 h-3.5" />
+                            Pricing Model Distribution
+                        </div>
+                        <div className="space-y-2">
+                            {(stats.pricingDistribution || []).length === 0 && !loadingStats && (
+                                <div className="text-xs text-app-text-muted">No pricing data yet.</div>
+                            )}
+                            {(stats.pricingDistribution || []).map(item => {
+                                const meta = PRICING_META[item.key] || {};
+                                return (
+                                    <div key={item.key} className="flex items-center justify-between text-xs">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`w-2.5 h-2.5 rounded-full ${meta.bg || 'bg-app-bg-secondary'}`} />
+                                            <span className="text-app-text-secondary">{meta.label || item.label || item.key}</span>
+                                        </div>
+                                        <span className={`${meta.text || 'text-app-text-tertiary'} font-semibold`}>{item.count || 0}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                            <FolderIcon className="w-3.5 h-3.5" />
+                            Top Categories
+                        </div>
+                        <div className="space-y-2">
+                            {(stats.topCategories || []).length === 0 && !loadingStats && (
+                                <div className="text-xs text-app-text-muted">No category usage yet.</div>
+                            )}
+                            {(stats.topCategories || []).map(item => (
+                                <div key={item.categoryId} className="flex items-center justify-between text-xs">
+                                    <span className="text-app-text-secondary truncate">{item.name}</span>
+                                    <span className="text-app-text-primary font-semibold">{item.count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                            <GlobeIcon className="w-3.5 h-3.5" />
+                            Sites Added
+                        </div>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-app-text-secondary">This month</span>
+                                <span className="text-lg font-semibold text-app-text-primary">{loadingStats ? '…' : stats.addedThisMonth}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-app-text-secondary">Last month</span>
+                                <span className="text-sm font-semibold text-app-text-secondary">{loadingStats ? '…' : stats.addedLastMonth}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-app-text-secondary">Delta</span>
+                                <span className={`text-sm font-semibold ${stats.addedThisMonth - stats.addedLastMonth > 0 ? 'text-green-400' : stats.addedThisMonth - stats.addedLastMonth < 0 ? 'text-red-400' : 'text-app-text-tertiary'}`}>
+                                    {loadingStats ? '…' : (stats.addedThisMonth - stats.addedLastMonth === 0 ? 'No change' : `${stats.addedThisMonth - stats.addedLastMonth > 0 ? '+' : ''}${stats.addedThisMonth - stats.addedLastMonth}`)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div className="p-3 bg-app-bg-secondary rounded-lg border border-app-border text-center">
-                    <div className="text-xs text-app-text-secondary">Tags</div>
-                    <div className="text-2xl font-semibold text-app-text-primary">{loadingStats ? '…' : stats.tags}</div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                            <TagIcon className="w-3.5 h-3.5" />
+                            Top Tags
+                        </div>
+                        <div className="space-y-2">
+                            {(stats.topTags || []).length === 0 && !loadingStats && (
+                                <div className="text-xs text-app-text-muted">No tag usage yet.</div>
+                            )}
+                            {(stats.topTags || []).map(item => (
+                                <div key={item.tagId} className="flex items-center justify-between text-xs">
+                                    <span className="text-app-text-secondary truncate">{item.name}</span>
+                                    <span className="text-app-text-primary font-semibold">{item.count}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                            <GlobeIcon className="w-3.5 h-3.5" />
+                            Recently Added
+                        </div>
+                        <div className="space-y-2">
+                            {(stats.recentSites || []).length === 0 && !loadingStats && (
+                                <div className="text-xs text-app-text-muted">No recent sites yet.</div>
+                            )}
+                            {(stats.recentSites || []).map(site => (
+                                <div key={site.id} className="text-xs text-app-text-secondary truncate">
+                                    {site.name || site.url}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
-            </div>
+                </>
+            )}
 
             {/* Over-limit warnings */}
-            {!loadingStats && (() => {
+            {canViewStats && !loadingStats && (() => {
                 const limits = TIER_LIMITS[tier] || TIER_LIMITS[TIER_FREE];
                 const overLimits = [];
                 if (limits.sites !== Infinity && stats.sites > limits.sites) overLimits.push({ type: 'sites', current: stats.sites, limit: limits.sites });

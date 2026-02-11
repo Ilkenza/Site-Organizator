@@ -160,6 +160,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
     const [formData, setFormData] = useState({
         name: '',
         url: '',
+        description: '',
         pricing: 'fully_free',
         is_favorite: false,
         categoryIds: [],
@@ -299,6 +300,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                 setFormData({
                     name: site.name || '',
                     url: site.url || '',
+                    description: site.description || '',
                     pricing: site.pricing || 'fully_free',
                     is_favorite: site.is_favorite || false,
                     categoryIds: extractRelationIds(siteCategories),
@@ -308,6 +310,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                 setFormData({
                     name: prefill?.name || '',
                     url: prefill?.url || '',
+                    description: '',
                     pricing: 'fully_free',
                     is_favorite: defaultFavorite,
                     categoryIds: defaultCategoryId ? [defaultCategoryId] : [],
@@ -498,6 +501,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
             const payload = {
                 name: formData.name.trim(),
                 url,
+                description: formData.description?.trim() || '',
                 pricing: formData.pricing,
                 category_ids: formData.categoryIds,
                 tag_ids: formData.tagIds,
@@ -560,6 +564,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
             const payload = {
                 name: formData.name.trim(),
                 url,
+                description: formData.description?.trim() || '',
                 pricing: formData.pricing,
                 category_ids: formData.categoryIds,
                 tag_ids: formData.tagIds,
@@ -636,6 +641,18 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                         }
                     }}
                 />
+
+                <div className="space-y-1">
+                    <label className="block text-sm font-medium text-app-text-secondary">Description</label>
+                    <textarea
+                        name="description"
+                        value={formData.description}
+                        onChange={handleChange}
+                        placeholder="Optional notes about this site..."
+                        rows={2}
+                        className="w-full bg-app-bg-light border border-app-border rounded-lg px-3 py-2 text-sm text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-2 focus:ring-app-accent/50 focus:border-app-accent/50 resize-none transition-colors"
+                    />
+                </div>
 
                 <Input
                     label="URL *"
@@ -944,32 +961,35 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                                 )}
                             </div>
                         )}
-                        <div className="flex items-center justify-between gap-2">
-                            <label className=" text-sm font-medium text-app-text-primary flex items-center gap-2">
-                                <FolderIcon className={ICON_SIZE_MD} />
-                                <span>Categories *
-                                    {formData.categoryIds.length > 0 && (
-                                        <span className="ml-2 text-xs text-app-accent">({formData.categoryIds.length} selected)</span>
-                                    )}
-                                </span>
-                            </label>
-                            <input
-                                type="text"
-                                value={categorySearch}
-                                onChange={(e) => setCategorySearch(e.target.value)}
-                                placeholder="Search..."
-                                className={`${STYLES.common.searchInput} focus:ring-app-accent`}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        const tagSearchInputs = document.querySelectorAll('input[placeholder="Search..."]');
-                                        const tagSearchInput = tagSearchInputs[1];
-                                        if (tagSearchInput) {
-                                            tagSearchInput.focus();
+                        <div className="space-y-0.5">
+                            <div className="flex items-center justify-between gap-2">
+                                <label className=" text-sm font-medium text-app-text-primary flex items-center gap-2">
+                                    <FolderIcon className={ICON_SIZE_MD} />
+                                    <span>Categories *
+                                        {formData.categoryIds.length > 0 && (
+                                            <span className="ml-2 text-xs text-app-accent">({formData.categoryIds.length} selected)</span>
+                                        )}
+                                    </span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={categorySearch}
+                                    onChange={(e) => setCategorySearch(e.target.value)}
+                                    placeholder="Search..."
+                                    className={`${STYLES.common.searchInput} focus:ring-app-accent`}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            const tagSearchInputs = document.querySelectorAll('input[placeholder="Search..."]');
+                                            const tagSearchInput = tagSearchInputs[1];
+                                            if (tagSearchInput) {
+                                                tagSearchInput.focus();
+                                            }
                                         }
-                                    }
-                                }}
-                            />
+                                    }}
+                                />
+                            </div>
+                            <p className="text-[10px] text-app-text-muted pl-0.5">Broad groups — e.g. Development, Design, AI Tools</p>
                         </div>
                         <div className={`bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 ${MAX_LIST_HEIGHT} overflow-y-auto`}>
                             {(() => {
@@ -1077,28 +1097,31 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                                 )}
                             </div>
                         )}
-                        <div className="flex items-center justify-between gap-2">
-                            <label className="text-sm font-medium text-app-text-primary flex items-center gap-2">
-                                <TagIcon className={ICON_SIZE_MD} />
-                                <span>Tags *
-                                    {formData.tagIds.length > 0 && (
-                                        <span className="ml-2 text-xs text-purple-400">({formData.tagIds.length} selected)</span>
-                                    )}
-                                </span>
-                            </label>
-                            <input
-                                type="text"
-                                value={tagSearch}
-                                onChange={(e) => setTagSearch(e.target.value)}
-                                placeholder="Search..."
-                                className={`${STYLES.common.searchInput} focus:ring-purple-500`}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        handleSubmit(e);
-                                    }
-                                }}
-                            />
+                        <div className="space-y-0.5">
+                            <div className="flex items-center justify-between gap-2">
+                                <label className="text-sm font-medium text-app-text-primary flex items-center gap-2">
+                                    <TagIcon className={ICON_SIZE_MD} />
+                                    <span>Tags *
+                                        {formData.tagIds.length > 0 && (
+                                            <span className="ml-2 text-xs text-purple-400">({formData.tagIds.length} selected)</span>
+                                        )}
+                                    </span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={tagSearch}
+                                    onChange={(e) => setTagSearch(e.target.value)}
+                                    placeholder="Search..."
+                                    className={`${STYLES.common.searchInput} focus:ring-purple-500`}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleSubmit(e);
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <p className="text-[10px] text-app-text-muted pl-0.5">Specific labels — e.g. React, Free, Tutorial, Color Picker</p>
                         </div>
                         <div className={`bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 ${MAX_LIST_HEIGHT} overflow-y-auto`}>
                             {(() => {

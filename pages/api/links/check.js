@@ -17,8 +17,20 @@ function checkHeaders(ref, extra = {}) {
     return { ...h, ...extra };
 }
 
+const BLOCKED_HOSTS = /^(localhost|127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|0\.|169\.254\.|\[::1\]|\[fc|\[fd)/i;
+
+function isUrlSafe(url) {
+    try {
+        const u = new URL(url);
+        if (!['http:', 'https:'].includes(u.protocol)) return false;
+        if (BLOCKED_HOSTS.test(u.hostname)) return false;
+        return true;
+    } catch { return false; }
+}
+
 async function checkUrl(url) {
     if (!url || typeof url !== 'string') return { ok: false, status: 'invalid' };
+    if (!isUrlSafe(url)) return { ok: false, status: 'blocked' };
     const ref = referer();
     let lastErr = null;
 
@@ -60,8 +72,6 @@ async function fetchSites(token, cfg) {
 }
 
 export default async function handler(req, res) {
-    const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' };
-    Object.entries(CORS).forEach(([k, v]) => res.setHeader(k, v));
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return sendError(res, HTTP.METHOD_NOT_ALLOWED, 'Method not allowed');
 
