@@ -5,16 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-
-const COLORS = [
-    '#667eea', // Purple
-    '#6CBBFB', // Blue
-    '#52A69B', // Teal
-    '#D98B8B', // Coral
-    '#E0A96D', // Orange
-    '#D98BAC', // Pink
-    '#D4B86A', // Yellow/Gold
-];
+import { CATEGORY_COLORS as COLORS } from '../../lib/sharedColors';
 
 export default function CategoryModal({ isOpen, onClose, category = null }) {
     const { addCategory, updateCategory } = useDashboard();

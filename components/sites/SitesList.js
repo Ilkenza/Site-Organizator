@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import SiteCard from './SiteCard';
 import CategoryColorIndicator from '../layout/CategoryColorIndicator';
 import Pagination from '../ui/Pagination';
 import { SearchIcon, GlobeIcon } from '../ui/Icons';
+import { fetchAPI } from '../../lib/supabase';
 
 const RENDER_DELAY_MS = 500;
 
@@ -36,6 +37,11 @@ export default function SitesList({ onEdit, onDelete }) {
     // Calculate display indices
     const startIndex = (currentPage - 1) * SITES_PAGE_SIZE;
     const endIndex = startIndex + filteredSites.length;
+
+    // Track site click for Rediscover (fire & forget)
+    const handleVisitSite = useCallback((siteId) => {
+        fetchAPI('/rediscover', { method: 'POST', body: JSON.stringify({ siteId }) }).catch(() => { });
+    }, []);
 
     // Handle page change — fetch new page from server
     const handlePageChange = (newPage) => {
@@ -105,6 +111,7 @@ export default function SitesList({ onEdit, onDelete }) {
                             site={site}
                             onEdit={onEdit}
                             onDelete={onDelete}
+                            onVisit={handleVisitSite}
                         />
                     </div>
                 ))}

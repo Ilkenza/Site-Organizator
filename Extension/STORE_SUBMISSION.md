@@ -107,7 +107,7 @@ Find any bookmark in under 2 seconds. One-click save, smart categories, and inst
 
 ### Description (Full)
 
-**Stop Wasting Time Searching for Links**
+#### Stop Wasting Time Searching for Links
 
 Average person spends 20 minutes per day looking for bookmarks. That's 120 hours per year. Site Organizer gets you there in 2 seconds.
 

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { fetchAPI, supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { canAdd, getTierLimits, TIER_LABELS, TIER_FREE } from '../lib/tierConfig';
@@ -89,6 +89,19 @@ function handleResponseWarnings(response, siteId, siteData, setFailedRelationUpd
         return true;
     }
     return false;
+}
+
+// Helper to count items per entity from fetched sites data
+function countByField(data, field, noneLabel) {
+    const counts = {};
+    let noneCount = 0;
+    (data || []).forEach(site => {
+        const ids = site[field] || [];
+        if (ids.length === 0) noneCount++;
+        else ids.forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+    });
+    if (noneLabel) counts[noneLabel] = noneCount;
+    return counts;
 }
 
 export function DashboardProvider({ children }) {
@@ -611,18 +624,8 @@ export function DashboardProvider({ children }) {
                     if (selectedImportSource) p.set('import_source', selectedImportSource);
                     const res = await fetchAPI(`/sites?${p.toString()}`);
                     const data = Array.isArray(res) ? res : (res?.data || []);
-                    const catCounts = {}; let uncatCount = 0;
-                    const tagCounts = {}; let untagCount = 0;
-                    data.forEach(site => {
-                        const cids = site.category_ids || [];
-                        const tids = site.tag_ids || [];
-                        if (cids.length === 0) { uncatCount++; } else { cids.forEach(id => { catCounts[id] = (catCounts[id] || 0) + 1; }); }
-                        if (tids.length === 0) { untagCount++; } else { tids.forEach(id => { tagCounts[id] = (tagCounts[id] || 0) + 1; }); }
-                    });
-                    catCounts['uncategorized'] = uncatCount;
-                    tagCounts['untagged'] = untagCount;
-                    newCounts.categories = catCounts;
-                    newCounts.tags = tagCounts;
+                    newCounts.categories = countByField(data, 'category_ids', 'uncategorized');
+                    newCounts.tags = countByField(data, 'tag_ids', 'untagged');
                 } catch (e) { console.warn('Cross-filter shared counts failed:', e); }
             } else {
                 // 1. Category cross-counts: fetch sites matching tag + import source (WITHOUT category filter)
@@ -635,13 +638,7 @@ export function DashboardProvider({ children }) {
                         if (selectedImportSource) p.set('import_source', selectedImportSource);
                         const res = await fetchAPI(`/sites?${p.toString()}`);
                         const data = Array.isArray(res) ? res : (res?.data || []);
-                        const catCounts = {}; let uncatCount = 0;
-                        data.forEach(site => {
-                            const cids = site.category_ids || [];
-                            if (cids.length === 0) { uncatCount++; } else { cids.forEach(id => { catCounts[id] = (catCounts[id] || 0) + 1; }); }
-                        });
-                        catCounts['uncategorized'] = uncatCount;
-                        newCounts.categories = catCounts;
+                        newCounts.categories = countByField(data, 'category_ids', 'uncategorized');
                     } catch (e) { console.warn('Cross-filter category counts failed:', e); }
                 }
 
@@ -655,13 +652,7 @@ export function DashboardProvider({ children }) {
                         if (selectedImportSource) p.set('import_source', selectedImportSource);
                         const res = await fetchAPI(`/sites?${p.toString()}`);
                         const data = Array.isArray(res) ? res : (res?.data || []);
-                        const tagCounts = {}; let untagCount = 0;
-                        data.forEach(site => {
-                            const tids = site.tag_ids || [];
-                            if (tids.length === 0) { untagCount++; } else { tids.forEach(id => { tagCounts[id] = (tagCounts[id] || 0) + 1; }); }
-                        });
-                        tagCounts['untagged'] = untagCount;
-                        newCounts.tags = tagCounts;
+                        newCounts.tags = countByField(data, 'tag_ids', 'untagged');
                     } catch (e) { console.warn('Cross-filter tag counts failed:', e); }
                 }
             }
@@ -967,17 +958,16 @@ export function DashboardProvider({ children }) {
 
     // Sites are already filtered and sorted by the server
     // Only apply pinned-first ordering on the current page
-    const filteredSites = sites.slice().sort((a, b) => {
-        const aPin = a.is_pinned ? 1 : 0;
-        const bPin = b.is_pinned ? 1 : 0;
-        return bPin - aPin;
-    });
+    const filteredSites = useMemo(() =>
+        sites.slice().sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0)),
+        [sites]
+    );
 
     // Sorted and filtered categories
-    const filteredCategories = sortItems(categories, sortByCategories, sortOrderCategories);
+    const filteredCategories = useMemo(() => sortItems(categories, sortByCategories, sortOrderCategories), [categories, sortByCategories, sortOrderCategories]);
 
     // Sorted and filtered tags
-    const filteredTags = sortItems(tags, sortByTags, sortOrderTags);
+    const filteredTags = useMemo(() => sortItems(tags, sortByTags, sortOrderTags), [tags, sortByTags, sortOrderTags]);
     const value = {
         // Data
         sites,

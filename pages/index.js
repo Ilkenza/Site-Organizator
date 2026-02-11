@@ -1,12 +1,11 @@
 /**
  * @fileoverview Landing page for Site Organizer
- * Shows marketing content and redirects authenticated users to dashboard
+ * Shows marketing content for the Site Organizer app
  */
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
-import { useAuth } from '../context/AuthContext';
 import { SiGooglechrome, SiFirefoxbrowser } from 'react-icons/si';
 import { FaEdge } from 'react-icons/fa';
 import { Modal } from '../components/ui';
@@ -14,8 +13,8 @@ import { CollectionIcon, CheckCircleFilledIcon, LockFilledIcon, CpuIcon, Lightni
 
 // Configuration
 const PAGE_CONFIG = {
-  TITLE: 'Site Organizer - Organize Your Favorite Websites | Free Bookmark Manager',
-  DESCRIPTION: 'Free online bookmark manager. Save, categorize, and tag your favorite websites. Access them from anywhere with cloud sync. Better than browser bookmarks.',
+  TITLE: 'Site Organizer - Organize Your Favorite Websites | Smart Bookmark Manager',
+  DESCRIPTION: 'Smart online bookmark manager with AI-powered organization. Save, categorize, and tag your favorite websites. Free plan available with Pro upgrades for power users.',
   APP_NAME: 'Site Organizer',
   DASHBOARD_URL: '/dashboard/sites',
   LOGIN_URL: '/login',
@@ -68,15 +67,7 @@ const Logo = ({ size = 'md' }) => {
  * @returns {JSX.Element} Home page
  */
 export default function Home() {
-  const { user, loading } = useAuth();
   const [comingSoonModal, setComingSoonModal] = useState({ isOpen: false, browser: '', message: '' });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!loading && user) {
-      window.location.href = PAGE_CONFIG.DASHBOARD_URL;
-    }
-  }, [user, loading]);
 
   // Scroll animation observer
   useEffect(() => {
@@ -117,14 +108,6 @@ export default function Home() {
     };
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-app-accent"></div>
-      </div>
-    );
-  }
-
   return (
     <>
       <Head>
@@ -161,9 +144,10 @@ export default function Home() {
             "description": PAGE_CONFIG.DESCRIPTION,
             "applicationCategory": "BusinessApplication",
             "offers": {
-              "@type": "Offer",
-              "price": "0",
-              "priceCurrency": "USD"
+              "@type": "AggregateOffer",
+              "lowPrice": "0",
+              "priceCurrency": "USD",
+              "offerCount": "3"
             },
             "operatingSystem": "Web Browser",
             "browserRequirements": "Requires JavaScript. Modern browser required.",
@@ -176,12 +160,7 @@ export default function Home() {
               "Browser extension",
               "Export/import data",
               "Multi-device access"
-            ],
-            "aggregateRating": {
-              "@type": "AggregateRating",
-              "ratingValue": "4.8",
-              "ratingCount": "100"
-            }
+            ]
           })}
         </script>
       </Head>
@@ -229,35 +208,38 @@ export default function Home() {
               <div className="flex justify-center mb-8">
                 <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-app-bg-light/50 border border-app-border backdrop-blur-sm hover:border-app-accent/50 transition-all duration-300">
                   <Logo size="sm" />
-                  <span className="text-sm font-medium text-gray-300">🚀 Save Once, Find Forever</span>
+                  <span className="text-sm font-medium text-gray-300">🚀 Bookmark manager with AI-powered suggestions</span>
                 </div>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white mb-6 leading-tight">
-                Never Lose a Link.
+                You Saved the Link.
                 <br />
-                <span className="bg-gradient-to-r from-app-accent to-purple-400 bg-clip-text text-transparent">Ever Again.</span>
+                <span className="bg-gradient-to-r from-app-accent to-purple-400 bg-clip-text text-transparent">Then Googled It Again.</span>
               </h1>
 
-              <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-6 leading-relaxed">
-                That article you saved 3 months ago? Found in <span className="text-white font-semibold">2 seconds</span>. No folders. No digging. Just search.
-                <br className="hidden sm:block" />
-                <span className="text-gray-300">Free forever. Works everywhere.</span>
+              <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-4 leading-relaxed">
+                Browser bookmarks become a mess. You save stuff but never find it.
               </p>
 
-              {/* Quick Stats */}
-              <div className="flex items-center justify-center gap-6 mb-10 text-sm">
+              <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-10 leading-relaxed">
+                <span className="text-white font-semibold">Site Organizer</span> lets you add any link, get AI-suggested categories &amp; tags,
+                and find anything with instant search.
+              </p>
+
+              {/* Trust Badges */}
+              <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 mb-10 text-sm">
                 <div className="flex items-center gap-2 text-gray-400">
                   <CheckCircleFilledIcon className="w-5 h-5 text-green-400" />
-                  <span>Forever Free</span>
-                </div>
-                <div className="flex items-center gap-2 text-gray-400">
-                  <LockFilledIcon className="w-5 h-5 text-blue-400" />
-                  <span>Your Data Only</span>
+                  <span>1,000 bookmarks free</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-400">
                   <CpuIcon className="w-5 h-5 text-purple-400" />
-                  <span>Zero Setup</span>
+                  <span>AI suggests tags &amp; categories</span>
+                </div>
+                <div className="flex items-center gap-2 text-gray-400">
+                  <LockFilledIcon className="w-5 h-5 text-blue-400" />
+                  <span>Only you see your data</span>
                 </div>
               </div>
 
@@ -266,13 +248,13 @@ export default function Home() {
                   href={PAGE_CONFIG.LOGIN_URL}
                   className={`w-full sm:w-auto px-8 py-4 ${BUTTON_CLASSES.PRIMARY_LARGE}`}
                 >
-                  Get Started Free
+                  Organize My Bookmarks
                 </Link>
                 <a
-                  href="#features"
+                  href="#how-it-works"
                   className={`w-full sm:w-auto px-8 py-4 ${BUTTON_CLASSES.SECONDARY}`}
                 >
-                  Learn More
+                  See How It Works
                 </a>
               </div>
             </div>
@@ -297,16 +279,61 @@ export default function Home() {
                     </div>
                   </div>
                   {/* Mock Dashboard Content */}
-                  <div className="p-6 space-y-4">
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="h-20 bg-app-bg-light/50 rounded-lg"></div>
-                      <div className="h-20 bg-app-bg-light/50 rounded-lg"></div>
-                      <div className="h-20 bg-app-bg-light/50 rounded-lg"></div>
+                  <div className="p-4 sm:p-6 flex gap-4">
+                    {/* Mock Sidebar */}
+                    <div className="hidden sm:flex flex-col gap-3 w-48 flex-shrink-0 border-r border-app-border/30 pr-4">
+                      <div className="h-8 bg-app-accent/20 rounded-lg flex items-center px-3">
+                        <span className="text-xs text-app-accent font-medium">All Sites</span>
+                      </div>
+                      <div className="h-7 bg-app-bg-light/30 rounded-lg flex items-center px-3">
+                        <span className="text-xs text-gray-500">Favorites</span>
+                      </div>
+                      <div className="h-7 bg-app-bg-light/30 rounded-lg flex items-center px-3">
+                        <span className="text-xs text-gray-500">Categories</span>
+                      </div>
+                      <div className="h-7 bg-app-bg-light/30 rounded-lg flex items-center px-3">
+                        <span className="text-xs text-gray-500">Tags</span>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-app-border/30">
+                        <div className="text-[10px] text-gray-600 mb-2 uppercase tracking-wide">Categories</div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-400"></div><span className="text-xs text-gray-500">Development</span></div>
+                          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-400"></div><span className="text-xs text-gray-500">Design</span></div>
+                          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-purple-400"></div><span className="text-xs text-gray-500">Marketing</span></div>
+                          <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-400"></div><span className="text-xs text-gray-500">Tools</span></div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <div className="h-16 bg-app-bg-light/30 rounded-lg"></div>
-                      <div className="h-16 bg-app-bg-light/30 rounded-lg"></div>
-                      <div className="h-16 bg-app-bg-light/30 rounded-lg"></div>
+                    {/* Mock Main Content */}
+                    <div className="flex-1 space-y-3">
+                      {/* Search bar */}
+                      <div className="h-10 bg-app-bg-light/40 rounded-lg flex items-center px-3 border border-app-border/30">
+                        <span className="text-xs text-gray-600">Search bookmarks...</span>
+                      </div>
+                      {/* Site cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {[{ name: 'GitHub', url: 'github.com', cat: 'Development', catColor: 'bg-blue-400', tag: 'Code' },
+                        { name: 'Figma', url: 'figma.com', cat: 'Design', catColor: 'bg-green-400', tag: 'UI' },
+                        { name: 'Vercel', url: 'vercel.com', cat: 'Development', catColor: 'bg-blue-400', tag: 'Hosting' },
+                        { name: 'Notion', url: 'notion.so', cat: 'Tools', catColor: 'bg-amber-400', tag: 'Notes' },
+                        { name: 'Stripe', url: 'stripe.com', cat: 'Development', catColor: 'bg-blue-400', tag: 'Payments' },
+                        { name: 'Dribbble', url: 'dribbble.com', cat: 'Design', catColor: 'bg-green-400', tag: 'Inspiration' }].map((s) => (
+                          <div key={s.name} className="bg-app-bg-light/30 border border-app-border/30 rounded-lg p-3 hover:border-app-accent/30 transition-colors">
+                            <div className="flex items-center gap-2 mb-2">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={`https://www.google.com/s2/favicons?domain=${s.url}&sz=32`} alt="" width={16} height={16} className="w-4 h-4 rounded" loading="lazy" referrerPolicy="no-referrer" />
+                              <span className="text-xs font-medium text-white truncate">{s.name}</span>
+                            </div>
+                            <div className="text-[10px] text-gray-600 truncate mb-2">{s.url}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-opacity-20 ${s.catColor}/20 text-gray-400`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${s.catColor}`}></span>{s.cat}
+                              </span>
+                              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-app-bg-light/50 text-gray-500">{s.tag}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -314,54 +341,49 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Features Section */}
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32">
-            <div className="text-center mb-20">
-              <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">
-                Bookmarking.
-                <br />
-                <span className="bg-gradient-to-r from-app-accent to-purple-400 bg-clip-text text-transparent">But Actually Good.</span>
+          {/* How It Works Section */}
+          <div id="how-it-works" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 scroll-animate">
+            <div className="text-center mb-16">
+              <div className="inline-block px-4 py-1.5 bg-app-accent/10 border border-app-accent/30 rounded-full text-app-accent text-sm font-medium mb-4">
+                3 Steps
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                How It Works
               </h2>
-              <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-                Everything browser bookmarks should be, but aren&apos;t.
+              <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                From chaos to organized in under a minute.
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
-              {/* Feature 1 */}
-              <div className="scroll-animate-stagger group relative bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 hover:from-app-bg-light/70 hover:to-app-bg-light/50 border border-app-border hover:border-app-accent/50 rounded-3xl p-8 transition-all duration-500 hover:shadow-2xl hover:shadow-app-accent/10 hover:-translate-y-2">
-                <div className="absolute inset-0 bg-gradient-to-br from-app-accent/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-app-accent/20 to-app-accent/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-500">
-                    <LightningIcon className="w-8 h-8 text-app-accent" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">Instant Search</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">Type. See results. Done. Faster than you can say &quot;loading spinner.&quot;</p>
+            <div className="grid md:grid-cols-3 gap-8 relative">
+              {/* Connector line (desktop only) */}
+              <div className="hidden md:block absolute top-16 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-app-accent/50 via-purple-500/50 to-green-500/50"></div>
+
+              {/* Step 1 */}
+              <div className="scroll-animate-stagger relative text-center">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-app-accent/20 to-app-accent/10 border-2 border-app-accent/30 flex items-center justify-center mx-auto mb-6 relative z-10">
+                  <span className="text-xl font-bold text-app-accent">1</span>
                 </div>
+                <h3 className="text-xl font-bold text-white mb-3">Add a Link</h3>
+                <p className="text-gray-400 leading-relaxed">Paste a URL, use the browser extension, or share from your phone. Already have bookmarks? Import them from a file (JSON, CSV, or HTML).</p>
               </div>
 
-              {/* Feature 2 */}
-              <div className="scroll-animate-stagger group relative bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 hover:from-app-bg-light/70 hover:to-app-bg-light/50 border border-app-border hover:border-purple-500/50 rounded-3xl p-8 transition-all duration-500 hover:shadow-2xl hover:shadow-purple-500/10 hover:-translate-y-2">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-500">
-                    <TagIcon className="w-8 h-8 text-purple-400" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">Auto-Organize</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">Categories and tags suggested automatically. Your bookmarks organize themselves.</p>
+              {/* Step 2 */}
+              <div className="scroll-animate-stagger relative text-center">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/10 border-2 border-purple-500/30 flex items-center justify-center mx-auto mb-6 relative z-10">
+                  <span className="text-xl font-bold text-purple-400">2</span>
                 </div>
+                <h3 className="text-xl font-bold text-white mb-3">AI Suggests, You Pick</h3>
+                <p className="text-gray-400 leading-relaxed">AI analyzes the URL and recommends categories and tags. Accept what fits, skip what doesn&apos;t. You&apos;re always in control.</p>
               </div>
 
-              {/* Feature 3 */}
-              <div className="scroll-animate-stagger group relative bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 hover:from-app-bg-light/70 hover:to-app-bg-light/50 border border-app-border hover:border-green-500/50 rounded-3xl p-8 transition-all duration-500 hover:shadow-2xl hover:shadow-green-500/10 hover:-translate-y-2">
-                <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                <div className="relative">
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500/20 to-green-500/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-all duration-500">
-                    <CurrencyDollarIcon className="w-8 h-8 text-green-400" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">Actually Free</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">Free means free. Not &quot;free trial.&quot; Not &quot;freemium.&quot; Just free. Forever.</p>
+              {/* Step 3 */}
+              <div className="scroll-animate-stagger relative text-center">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500/20 to-green-500/10 border-2 border-green-500/30 flex items-center justify-center mx-auto mb-6 relative z-10">
+                  <span className="text-xl font-bold text-green-400">3</span>
                 </div>
+                <h3 className="text-xl font-bold text-white mb-3">Find It Instantly</h3>
+                <p className="text-gray-400 leading-relaxed">Type a few letters and your bookmark appears. Search across names, URLs, categories, and tags at the same time.</p>
               </div>
             </div>
           </div>
@@ -370,10 +392,10 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32">
             <div className="text-center mb-20">
               <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">
-                Save From Anywhere.
+                See It. Save It. Find It Later.
               </h2>
               <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-                One-click browser extension. Save any page in under a second. Chrome, Firefox, Edge.
+                One click in your browser and the page is saved, categorized, and searchable forever.
               </p>
             </div>
 
@@ -386,7 +408,7 @@ export default function Home() {
                     <SiGooglechrome className="w-16 h-16" style={{ color: '#4285F4' }} />
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-blue-400 transition-colors duration-300">Chrome</h3>
-                  <p className="text-gray-400 text-sm mb-6">Fast & simple extension</p>
+                  <p className="text-gray-400 text-sm mb-6">Most popular. Works out of the box.</p>
                   <a
                     href="#"
                     className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-500/20 to-blue-600/20 hover:from-blue-500/30 hover:to-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl transition-all duration-300 font-semibold group-hover:shadow-lg group-hover:shadow-blue-500/20"
@@ -406,7 +428,7 @@ export default function Home() {
                     <SiFirefoxbrowser className="w-16 h-16" style={{ color: '#FF7139' }} />
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-purple-400 transition-colors duration-300">Firefox</h3>
-                  <p className="text-gray-400 text-sm mb-6">Privacy-focused browser</p>
+                  <p className="text-gray-400 text-sm mb-6">Full support. Same one-click save.</p>
                   <a
                     href="#"
                     className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-orange-500/20 to-orange-600/20 hover:from-orange-500/30 hover:to-orange-600/30 text-orange-400 border border-orange-500/30 rounded-xl transition-all duration-300 font-semibold group-hover:shadow-lg group-hover:shadow-orange-500/20"
@@ -426,7 +448,7 @@ export default function Home() {
                     <FaEdge className="w-16 h-16" style={{ color: '#0078D7' }} />
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-cyan-400 transition-colors duration-300">Edge</h3>
-                  <p className="text-gray-400 text-sm mb-6">Modern & fast browser</p>
+                  <p className="text-gray-400 text-sm mb-6">Chromium-based. Installs instantly.</p>
                   <a
                     href="#"
                     className="inline-flex items-center gap-2 px-8 py-3.5 bg-gradient-to-r from-blue-600/20 to-blue-700/20 hover:from-blue-600/30 hover:to-blue-700/30 text-blue-400 border border-blue-600/30 rounded-xl transition-all duration-300 font-semibold group-hover:shadow-lg group-hover:shadow-blue-600/20"
@@ -447,10 +469,10 @@ export default function Home() {
                 Everything You Need
               </div>
               <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                Built Different
+                What You Actually Get
               </h2>
               <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-                Everything browser bookmarks should be, but aren&apos;t.
+                Six reasons people stop using browser bookmarks after trying this.
               </p>
             </div>
 
@@ -461,7 +483,7 @@ export default function Home() {
                   <LightningIcon className="w-7 h-7 text-app-accent" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Instant Search</h3>
-                <p className="text-gray-400 leading-relaxed">Type. See results. Done. Search 10,000 bookmarks in under a second.</p>
+                <p className="text-gray-400 leading-relaxed">Start typing, results show up. Searches names, URLs, categories, and tags at the same time. No scrolling through folders.</p>
               </div>
 
               {/* Feature 2 - Auto-Organize */}
@@ -469,8 +491,8 @@ export default function Home() {
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <TagIcon className="w-7 h-7 text-purple-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Auto-Organize</h3>
-                <p className="text-gray-400 leading-relaxed">Categories and tags suggested automatically. Your bookmarks organize themselves.</p>
+                <h3 className="text-xl font-semibold text-white mb-3">AI Suggestions</h3>
+                <p className="text-gray-400 leading-relaxed">Add a link and AI recommends categories and tags that make sense. You pick, you skip — your call. Organizing goes from minutes to seconds.</p>
               </div>
 
               {/* Feature 3 - One-Click Save */}
@@ -479,7 +501,7 @@ export default function Home() {
                   <BookmarkIcon className="w-7 h-7 text-blue-400" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">One-Click Save</h3>
-                <p className="text-gray-400 leading-relaxed">See it. Save it. Done. Browser extension works everywhere.</p>
+                <p className="text-gray-400 leading-relaxed">Browser extension saves the page you&apos;re on with one click. No copy-pasting URLs. Works on Chrome, Firefox, and Edge.</p>
               </div>
 
               {/* Feature 4 - Works Everywhere */}
@@ -488,7 +510,7 @@ export default function Home() {
                   <DeviceMobileIcon className="w-7 h-7 text-emerald-400" />
                 </div>
                 <h3 className="text-xl font-semibold text-white mb-3">Works Everywhere</h3>
-                <p className="text-gray-400 leading-relaxed">Phone. Tablet. Desktop. Always in sync. Access from anywhere.</p>
+                <p className="text-gray-400 leading-relaxed">Save on desktop, find it on your phone. PWA works on any device with a browser — no app store needed.</p>
               </div>
 
               {/* Feature 5 - Your Data Only */}
@@ -496,17 +518,17 @@ export default function Home() {
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <LockIcon className="w-7 h-7 text-cyan-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Your Data Only</h3>
-                <p className="text-gray-400 leading-relaxed">Export everything anytime. Zero lock-in. Leave whenever you want.</p>
+                <h3 className="text-xl font-semibold text-white mb-3">Your Data, Always</h3>
+                <p className="text-gray-400 leading-relaxed">Full JSON export anytime. No lock-in, no hidden catches. If you want to leave, your bookmarks come with you.</p>
               </div>
 
-              {/* Feature 6 - Actually Free */}
+              {/* Feature 6 - Free + Pro Plans */}
               <div className="scroll-animate-stagger group bg-app-bg-light/30 hover:bg-app-bg-light/50 border border-app-border hover:border-green-500/50 rounded-2xl p-6 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-green-500/10">
                 <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500/20 to-green-500/5 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                   <CurrencyDollarIcon className="w-7 h-7 text-green-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white mb-3">Actually Free</h3>
-                <p className="text-gray-400 leading-relaxed">Not a trial. Not freemium. Just free. No credit card. Ever.</p>
+                <h3 className="text-xl font-semibold text-white mb-3">Start Free, Scale Up</h3>
+                <p className="text-gray-400 leading-relaxed">1,000 bookmarks and 30 AI suggestions a month for free. Hit the limit? Pro and Pro Max remove the ceiling.</p>
               </div>
             </div>
           </div>
@@ -515,13 +537,13 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-animate">
             <div className="text-center mb-12 animate-fadeInUp">
               <div className="inline-block px-4 py-1.5 bg-gradient-to-r from-app-accent/10 to-purple-500/10 border border-app-accent/30 rounded-full text-app-accent text-sm font-medium mb-4">
-                The Difference
+                Side by Side
               </div>
               <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                Browser Bookmarks vs Site Organizer
+                What Changes When You Switch
               </h2>
               <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-                See why thousands ditched their browser bookmarks.
+                Same bookmarks. Completely different experience.
               </p>
             </div>
 
@@ -537,16 +559,16 @@ export default function Home() {
                   </thead>
                   <tbody className="divide-y divide-app-border">
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
-                      <td className="py-4 px-6 text-white font-medium">Search Speed</td>
+                      <td className="py-4 px-6 text-white font-medium">Finding a saved link</td>
                       <td className="py-4 px-6 text-center">
-                        <span className="text-red-400">Slow / Manual</span>
+                        <span className="text-red-400">Scroll and hope</span>
                       </td>
                       <td className="py-4 px-6 text-center">
-                        <span className="text-green-400 font-semibold">&lt;2 seconds</span>
+                        <span className="text-green-400 font-semibold">Type 2 letters, done</span>
                       </td>
                     </tr>
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
-                      <td className="py-4 px-6 text-white font-medium">Auto-Categorize</td>
+                      <td className="py-4 px-6 text-white font-medium">Organizing</td>
                       <td className="py-4 px-6 text-center">
                         <CloseIcon className="w-5 h-5 text-red-400 mx-auto" />
                       </td>
@@ -555,16 +577,16 @@ export default function Home() {
                       </td>
                     </tr>
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
-                      <td className="py-4 px-6 text-white font-medium">Sync Across Devices</td>
+                      <td className="py-4 px-6 text-white font-medium">Access from other devices</td>
                       <td className="py-4 px-6 text-center">
-                        <span className="text-yellow-400">Browser only</span>
+                        <span className="text-yellow-400">Same browser only</span>
                       </td>
                       <td className="py-4 px-6 text-center">
-                        <span className="text-green-400 font-semibold">All devices</span>
+                        <span className="text-green-400 font-semibold">Any device, any browser</span>
                       </td>
                     </tr>
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
-                      <td className="py-4 px-6 text-white font-medium">Dead Link Detection</td>
+                      <td className="py-4 px-6 text-white font-medium">Broken links</td>
                       <td className="py-4 px-6 text-center">
                         <CloseIcon className="w-5 h-5 text-red-400 mx-auto" />
                       </td>
@@ -573,7 +595,7 @@ export default function Home() {
                       </td>
                     </tr>
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
-                      <td className="py-4 px-6 text-white font-medium">Smart Tags</td>
+                      <td className="py-4 px-6 text-white font-medium">Tags &amp; categories</td>
                       <td className="py-4 px-6 text-center">
                         <CloseIcon className="w-5 h-5 text-red-400 mx-auto" />
                       </td>
@@ -582,12 +604,12 @@ export default function Home() {
                       </td>
                     </tr>
                     <tr className="hover:bg-app-bg-light/20 transition-colors">
-                      <td className="py-4 px-6 text-white font-medium">Export Data</td>
+                      <td className="py-4 px-6 text-white font-medium">Getting your data out</td>
                       <td className="py-4 px-6 text-center">
-                        <span className="text-yellow-400">Manual</span>
+                        <span className="text-yellow-400">HTML file, maybe</span>
                       </td>
                       <td className="py-4 px-6 text-center">
-                        <span className="text-green-400 font-semibold">One-click</span>
+                        <span className="text-green-400 font-semibold">JSON, CSV, or HTML</span>
                       </td>
                     </tr>
                   </tbody>
@@ -601,13 +623,13 @@ export default function Home() {
             <div className="bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-3xl p-8 sm:p-12 hover:border-purple-500/30 transition-all duration-500">
               <div className="text-center mb-12 animate-fadeInUp">
                 <div className="inline-block px-4 py-1.5 bg-purple-500/10 border border-purple-500/30 rounded-full text-purple-400 text-sm font-medium mb-4">
-                  The Difference
+                  Why It Sticks
                 </div>
                 <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                  Why You&apos;ll Actually Use This
+                  Built for People Who Gave Up on Bookmarks
                 </h2>
                 <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-                  Finding that link you saved 3 months ago? 2 seconds. Not 20 minutes.
+                  You&apos;ve tried folders. You&apos;ve tried &quot;Read Later&quot; apps. Here&apos;s why this one actually works.
                 </p>
               </div>
 
@@ -617,8 +639,8 @@ export default function Home() {
                     <CheckmarkIcon className="w-6 h-6 text-green-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Zero Learning Curve</h3>
-                    <p className="text-gray-400 text-sm leading-relaxed">Can you use Google? Then you already know how to use this. Search bar. That&apos;s it.</p>
+                    <h3 className="text-lg font-semibold text-white mb-2">Nothing to Learn</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed">If you can type into a search bar, you already know the whole app. No tutorials, no onboarding videos.</p>
                   </div>
                 </div>
 
@@ -627,8 +649,8 @@ export default function Home() {
                     <LightningIcon className="w-6 h-6 text-blue-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Ridiculously Fast</h3>
-                    <p className="text-gray-400 text-sm leading-relaxed">Search 10,000 bookmarks in under a second. Yes, really. No loading screens. Ever.</p>
+                    <h3 className="text-lg font-semibold text-white mb-2">Fast Enough to Be Useful</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed">Search results appear while you type. If it took longer than your browser&apos;s address bar, nobody would use it. It doesn&apos;t.</p>
                   </div>
                 </div>
 
@@ -637,8 +659,8 @@ export default function Home() {
                     <LockIcon className="w-6 h-6 text-purple-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Your Data. Period.</h3>
-                    <p className="text-gray-400 text-sm leading-relaxed">Export everything anytime. Switch to anything. Zero lock-in. We don&apos;t hold your data hostage.</p>
+                    <h3 className="text-lg font-semibold text-white mb-2">Your Data Leaves When You Do</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed">One-click export to JSON, CSV, or HTML. No lock-in. If you find something better tomorrow, take everything with you.</p>
                   </div>
                 </div>
 
@@ -647,9 +669,113 @@ export default function Home() {
                     <CurrencyDollarIcon className="w-6 h-6 text-pink-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Actually Free</h3>
-                    <p className="text-gray-400 text-sm leading-relaxed">Not a trial. Not freemium. Just free. No credit card. No upgrade prompts. Ever.</p>
+                    <h3 className="text-lg font-semibold text-white mb-2">Free Means Free</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed">1,000 bookmarks, 100 categories, 300 tags, 30 AI suggestions a month. No credit card. No &quot;free trial.&quot; Just free.</p>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pricing Section */}
+          <div id="pricing" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 scroll-animate">
+            <div className="text-center mb-12 animate-fadeInUp">
+              <div className="inline-block px-4 py-1.5 bg-green-500/10 border border-green-500/30 rounded-full text-green-400 text-sm font-medium mb-4">
+                Pricing
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                Pick What Fits
+              </h2>
+              <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                Most people never need more than the free plan. But if you do, it&apos;s here.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-6">
+              {/* Free */}
+              <div className="scroll-animate-stagger bg-app-bg-light/30 border border-app-border rounded-2xl p-8 hover:border-gray-500/50 transition-all">
+                <div className="text-sm font-medium text-gray-400 mb-2">Free</div>
+                <div className="text-3xl font-bold text-white mb-1">$0</div>
+                <div className="text-sm text-gray-500 mb-6">Forever. No card needed.</div>
+                <ul className="space-y-3 mb-8">
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-green-400 flex-shrink-0" />1,000 bookmarks
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-green-400 flex-shrink-0" />100 categories
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-green-400 flex-shrink-0" />300 tags
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-green-400 flex-shrink-0" />30 AI suggestions / month
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-green-400 flex-shrink-0" />Full export (JSON, CSV, HTML)
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-green-400 flex-shrink-0" />All devices &amp; browser extension
+                  </li>
+                </ul>
+                <Link href={PAGE_CONFIG.LOGIN_URL} className={`block text-center px-6 py-3 ${BUTTON_CLASSES.PRIMARY} w-full`}>
+                  Get Started
+                </Link>
+              </div>
+
+              {/* Pro */}
+              <div className="scroll-animate-stagger relative bg-app-bg-light/30 border-2 border-amber-500/50 rounded-2xl p-8 hover:border-amber-400/70 transition-all shadow-lg shadow-amber-500/5">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-amber-500/20 border border-amber-500/30 rounded-full text-amber-400 text-xs font-medium">
+                  Most popular
+                </div>
+                <div className="text-sm font-medium text-amber-400 mb-2">Pro</div>
+                <div className="text-3xl font-bold text-white mb-1">Coming soon</div>
+                <div className="text-sm text-gray-500 mb-6">For power users.</div>
+                <ul className="space-y-3 mb-8">
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />10,000 bookmarks
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />500 categories
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />1,000 tags
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />500 AI suggestions / month
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />Link health check
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />Everything in Free
+                  </li>
+                </ul>
+                <div className="block text-center px-6 py-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 font-medium rounded-lg cursor-default w-full">
+                  Coming Soon
+                </div>
+              </div>
+
+              {/* Pro Max */}
+              <div className="scroll-animate-stagger bg-app-bg-light/30 border border-purple-500/30 rounded-2xl p-8 hover:border-purple-500/50 transition-all">
+                <div className="text-sm font-medium text-purple-400 mb-2">Pro Max</div>
+                <div className="text-3xl font-bold text-white mb-1">Coming soon</div>
+                <div className="text-sm text-gray-500 mb-6">No limits. Period.</div>
+                <ul className="space-y-3 mb-8">
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-purple-400 flex-shrink-0" />Unlimited bookmarks
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-purple-400 flex-shrink-0" />Unlimited categories &amp; tags
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-purple-400 flex-shrink-0" />Unlimited AI suggestions
+                  </li>
+                  <li className="flex items-center gap-3 text-sm text-gray-300">
+                    <CheckmarkIcon className="w-4 h-4 text-purple-400 flex-shrink-0" />Everything in Pro
+                  </li>
+                </ul>
+                <div className="block text-center px-6 py-3 bg-purple-500/10 border border-purple-500/30 text-purple-400 font-medium rounded-lg cursor-default w-full">
+                  Coming Soon
                 </div>
               </div>
             </div>
@@ -662,7 +788,7 @@ export default function Home() {
                 ❓ FAQ
               </div>
               <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-                Quick Questions
+                Before You Sign Up
               </h2>
             </div>
 
@@ -670,33 +796,66 @@ export default function Home() {
               {/* FAQ 1 */}
               <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-app-accent/50 transition-all">
                 <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-app-accent transition-colors">
-                  <span>Is it really free forever?</span>
+                  <span>I have 500+ bookmarks in Chrome. Can I bring them over?</span>
                   <ChevronDownIcon className="w-5 h-5 transform group-open:rotate-180 transition-transform text-app-accent" />
                 </summary>
                 <div className="px-6 pb-6 text-gray-400 leading-relaxed">
-                  Yes. No credit card required. No &quot;premium&quot; tiers. No upgrade prompts. Just free. We believe bookmarking should be a basic internet right.
+                  Yes. Export your bookmarks from any browser as an HTML file, then import them into Site Organizer with one click. Categories and folder structure are preserved. You can also import from JSON and CSV files.
                 </div>
               </details>
 
               {/* FAQ 2 */}
               <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-purple-500/50 transition-all">
                 <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-purple-400 transition-colors">
-                  <span>Can I export my data?</span>
+                  <span>What if I want to leave? Am I stuck here?</span>
                   <ChevronDownIcon className="w-5 h-5 transform group-open:rotate-180 transition-transform text-purple-400" />
                 </summary>
                 <div className="px-6 pb-6 text-gray-400 leading-relaxed">
-                  Always. One-click export to JSON or CSV. Your data is YOURS. Take it anywhere, anytime. Zero lock-in.
+                  Not at all. One-click export to JSON, CSV, or HTML anytime from Settings. Every bookmark, category, and tag comes with you. No emails, no &quot;are you sure?&quot; screens. Your data, your choice.
                 </div>
               </details>
 
               {/* FAQ 3 */}
               <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-green-500/50 transition-all">
                 <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-green-400 transition-colors">
-                  <span>How fast is the search really?</span>
+                  <span>Does the AI auto-organize my bookmarks?</span>
                   <ChevronDownIcon className="w-5 h-5 transform group-open:rotate-180 transition-transform text-green-400" />
                 </summary>
                 <div className="px-6 pb-6 text-gray-400 leading-relaxed">
-                  Sub-second. Even with 10,000+ bookmarks. Type and see results instantly. No loading spinners. No &quot;please wait.&quot; Just results.
+                  AI suggests categories and tags when you add a link &mdash; you decide which ones to apply. Nothing happens without your approval. Think of it as a smart assistant that recommends, not a robot that rearranges your stuff.
+                </div>
+              </details>
+
+              {/* FAQ 4 */}
+              <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-amber-500/50 transition-all">
+                <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-amber-400 transition-colors">
+                  <span>What happens when I hit the free plan limit?</span>
+                  <ChevronDownIcon className="w-5 h-5 transform group-open:rotate-180 transition-transform text-amber-400" />
+                </summary>
+                <div className="px-6 pb-6 text-gray-400 leading-relaxed">
+                  Nothing breaks. You keep all your existing bookmarks and can still search, edit, and export everything. You just can&apos;t add new ones until you upgrade or free up space. Free tier includes 1,000 bookmarks, 100 categories, 300 tags, and 30 AI suggestions per month.
+                </div>
+              </details>
+
+              {/* FAQ 5 */}
+              <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-cyan-500/50 transition-all">
+                <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-cyan-400 transition-colors">
+                  <span>Can other people see my bookmarks?</span>
+                  <ChevronDownIcon className="w-5 h-5 transform group-open:rotate-180 transition-transform text-cyan-400" />
+                </summary>
+                <div className="px-6 pb-6 text-gray-400 leading-relaxed">
+                  No. Every bookmark is tied to your account and filtered by your user ID at the database level. There are no public profiles, no social features, no sharing by default. Only you see your data.
+                </div>
+              </details>
+
+              {/* FAQ 6 */}
+              <details className="scroll-animate-stagger group bg-gradient-to-br from-app-bg-light/50 to-app-bg-light/30 border border-app-border rounded-2xl overflow-hidden hover:border-rose-500/50 transition-all">
+                <summary className="cursor-pointer p-6 flex items-center justify-between text-lg font-semibold text-white hover:text-rose-400 transition-colors">
+                  <span>I don&apos;t use a computer much. Does it work on my phone?</span>
+                  <ChevronDownIcon className="w-5 h-5 transform group-open:rotate-180 transition-transform text-rose-400" />
+                </summary>
+                <div className="px-6 pb-6 text-gray-400 leading-relaxed">
+                  Yes. Site Organizer is a PWA &mdash; it works in any mobile browser and you can install it to your home screen like a native app. On Android, you can even share links directly from your browser to Site Organizer using the Share menu.
                 </div>
               </details>
             </div>
@@ -711,28 +870,28 @@ export default function Home() {
                   <Logo size="lg" />
                 </div>
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-4">
-                  Ready to Find
+                  Stop Googling Links
                   <br />
-                  Anything in 2 Seconds?
+                  You Already Saved.
                 </h2>
                 <p className="text-gray-400 text-lg sm:text-xl max-w-2xl mx-auto mb-8">
-                  Join thousands who stopped losing links.
+                  Create a free account, import your bookmarks, and find anything in seconds.
                   <br className="hidden sm:block" />
-                  <span className="text-white font-semibold">60-second setup. Zero cost. Forever.</span>
+                  <span className="text-white font-semibold">Takes under a minute. No card required.</span>
                 </p>
 
                 <div className="flex flex-wrap gap-6 justify-center mb-12 text-sm">
                   <div className="flex items-center gap-2 text-gray-300">
                     <CheckCircleFilledIcon className="w-5 h-5 text-green-400" />
-                    Free forever
+                    1,000 bookmarks free
                   </div>
                   <div className="flex items-center gap-2 text-gray-300">
                     <CheckCircleFilledIcon className="w-5 h-5 text-green-400" />
-                    No card needed
+                    Import from any browser
                   </div>
                   <div className="flex items-center gap-2 text-gray-300">
                     <CheckCircleFilledIcon className="w-5 h-5 text-green-400" />
-                    Ready in 60s
+                    Export anytime
                   </div>
                 </div>
 
@@ -740,12 +899,12 @@ export default function Home() {
                   href={PAGE_CONFIG.LOGIN_URL}
                   className={`inline-flex items-center gap-2 px-10 py-5 ${BUTTON_CLASSES.PRIMARY_LARGE} group text-xl`}
                 >
-                  Get Started Now
+                  Create Free Account
                   <ArrowRightIcon className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
                 </Link>
 
                 <p className="text-gray-500 text-xs mt-6">
-                  No spam. No credit card. No bullshit.
+                  No credit card. No trial period. Free means free.
                 </p>
               </div>
             </div>
@@ -764,7 +923,7 @@ export default function Home() {
                 <span className="text-white font-semibold text-lg">{PAGE_CONFIG.APP_NAME}</span>
               </div>
               <p className="text-gray-400 text-sm text-center md:text-left">
-                Never lose a link. Ever again.
+                Your bookmarks, finally organized.
               </p>
             </div>
 
@@ -783,11 +942,11 @@ export default function Home() {
 
             {/* Info */}
             <div className="flex flex-col items-center md:items-end">
-              <h3 className="text-white font-semibold mb-3 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Info</h3>
+              <h3 className="text-white font-semibold mb-3 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">What You Get</h3>
               <div className="flex flex-col gap-2 text-sm items-center md:items-end">
-                <span className="text-gray-300">💎 100% Free Forever</span>
-                <span className="text-gray-300">⚡ No Credit Card Required</span>
-                <span className="text-gray-300">📤 Full Data Export</span>
+                <span className="text-gray-300">💎 Free plan with 1,000 bookmarks</span>
+                <span className="text-gray-300">🤖 AI category &amp; tag suggestions</span>
+                <span className="text-gray-300">📤 JSON, CSV &amp; HTML export</span>
               </div>
             </div>
           </div>
@@ -799,7 +958,7 @@ export default function Home() {
                 © {new Date().getFullYear()} <span className="text-app-accent">{PAGE_CONFIG.APP_NAME}</span>. All rights reserved.
               </p>
               <div className="flex items-center gap-2 text-gray-400 text-sm">
-                <span>Built with</span>
+                <span>Made for people who save too many links</span>
                 <span className="text-pink-500 animate-pulse">❤️</span>
               </div>
             </div>

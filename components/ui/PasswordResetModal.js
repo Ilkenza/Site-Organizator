@@ -1,3 +1,4 @@
+/** @deprecated UNUSED — PasswordModal in settings handles password changes. Safe to delete. */
 import { useState } from 'react';
 import Modal from './Modal';
 import Button from './Button';
@@ -105,10 +106,10 @@ export default function PasswordResetModal({ isOpen, onClose }) {
                 {message && (
                     <div
                         className={`p-3 rounded-lg text-sm ${message.type === 'success'
-                                ? 'bg-success-bg/30 text-success-text'
-                                : message.type === 'error'
-                                    ? 'bg-btn-danger/30 text-app-text-primary'
-                                    : 'bg-app-accent/20 text-app-accent'
+                            ? 'bg-success-bg/30 text-success-text'
+                            : message.type === 'error'
+                                ? 'bg-btn-danger/30 text-app-text-primary'
+                                : 'bg-app-accent/20 text-app-accent'
                             }`}
                     >
                         {message.text}

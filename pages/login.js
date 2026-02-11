@@ -84,7 +84,6 @@ export default function Login() {
         };
         return () => { window.alert = originalAlert; };
     }, [setLoading]);
-    const [_verifyDebug, setVerifyDebug] = useState(null);
 
     // MFA states
     const [mfaRequired, setMfaRequired] = useState(false);
@@ -94,32 +93,6 @@ export default function Login() {
     const [factorId, setFactorId] = useState(null);
     const [aal1Token, setAal1Token] = useState(null); // Store AAL1 token from sign-in for MFA verify
     const [isFreshLogin, setIsFreshLogin] = useState(false); // true if user just signed in (vs page refresh restore)
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const _origFetch = window.fetch;
-        window.fetch = async function (input, init) {
-            const res = await _origFetch(input, init);
-            try {
-                const url = typeof input === 'string' ? input : (input && input.url);
-                if (url && url.includes('/auth/v1/factors/') && url.includes('/verify')) {
-                    const cloned = res.clone();
-                    cloned.text().then(t => {
-                        try {
-                            const payload = { time: Date.now(), url, status: res.status, text: t };
-                            localStorage.setItem('debug.supabase.verify', JSON.stringify(payload));
-                            window.__debugSupabaseVerify = payload;
-                            if (typeof setVerifyDebug === 'function') setVerifyDebug(payload);
-                        } catch (e) {
-                            console.error('DEBUG save error', e);
-                        }
-                    }).catch(e => console.error('DEBUG read text error', e));
-                }
-            } catch (e) { console.error('fetch-override-debug error', e); }
-            return res;
-        };
-        return () => { window.fetch = _origFetch };
-    }, []);
 
     // Safety guard: if a network call hangs, clear loading after a timeout
     const safetyTimerRef = useRef(null);
@@ -929,9 +902,14 @@ export default function Login() {
                         </div>
 
                         {/* Footer */}
-                        <p className="text-center text-app-text-muted text-xs mt-6">
-                            Your data is securely stored and encrypted
-                        </p>
+                        <div className="text-center mt-6 space-y-2">
+                            <p className="text-app-text-muted text-xs">
+                                Your data is securely stored and encrypted
+                            </p>
+                            <a href="/" className="inline-block text-app-accent hover:text-app-accent/80 text-sm transition-colors">
+                                ← Back to homepage
+                            </a>
+                        </div>
                     </div>
                 </div>
             )}
