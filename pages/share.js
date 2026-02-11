@@ -1,6 +1,7 @@
 /** Share Target + Public Share page */
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../context/AuthContext';
 import { fetchAPI } from '../lib/supabase';
@@ -33,7 +34,11 @@ function PublicShareView({ token }) {
       setError(null);
       try {
         const r = await fetch(`/api/share?token=${encodeURIComponent(token)}`);
-        if (!r.ok) throw new Error(await r.text());
+        if (!r.ok) {
+          const errJson = await r.json().catch(() => null);
+          const message = errJson?.error || errJson?.message || 'Failed to load shared sites';
+          throw new Error(message);
+        }
         const json = await r.json();
         if (!mounted) return;
         setShare(json.share || null);
@@ -93,19 +98,19 @@ function PublicShareView({ token }) {
       <div className="max-w-[96rem] mx-auto px-4 py-10">
         <div className="flex items-center justify-between gap-3 mb-2">
           <h1 className="text-2xl font-semibold text-app-text-primary">{share?.name || 'Shared Collection'}</h1>
-          <a
+          <Link
             href="/dashboard/sites"
             className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-app-border bg-app-bg-secondary/60 text-app-text-secondary hover:text-app-text-primary"
           >
             <ArrowLeftIcon className="w-4 h-4" />
             Back to dashboard
-          </a>
+          </Link>
         </div>
         <p className="text-sm text-app-text-secondary mb-6">Readonly list of shared sites.</p>
 
         {!user && (
           <div className="mb-4 p-3 rounded-lg border border-app-border bg-app-bg-light/50 text-xs text-app-text-secondary">
-            Sign in to save these sites to your collection. <a href="/login" className="text-app-accent">Login</a>
+            Sign in to save these sites to your collection. <Link href="/login" className="text-app-accent">Login</Link>
           </div>
         )}
 
@@ -336,13 +341,13 @@ function ShareManager() {
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-6xl mx-auto px-4 py-10">
         <div className="mb-4">
-          <a
+          <Link
             href="/dashboard/sites"
             className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-app-border bg-app-bg-secondary/60 text-app-text-secondary hover:text-app-text-primary"
           >
             <ArrowLeftIcon className="w-4 h-4" />
             Back to dashboard
-          </a>
+          </Link>
         </div>
         <h1 className="text-2xl font-semibold text-app-text-primary mb-2">Public Share</h1>
         <p className="text-sm text-app-text-secondary mb-6">Create a shareable link with selected categories and tags.</p>
@@ -531,7 +536,7 @@ export default function SharePage() {
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-400 mb-3">Sign in to create share links.</p>
-          <a href="/login" className="px-4 py-2 rounded-lg border border-app-border text-app-text-secondary">Go to login</a>
+          <Link href="/login" className="px-4 py-2 rounded-lg border border-app-border text-app-text-secondary">Go to login</Link>
         </div>
       </div>
     );
