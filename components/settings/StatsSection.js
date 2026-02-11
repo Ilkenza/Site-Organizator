@@ -209,109 +209,109 @@ export default function StatsSection({ user, activeTab, showToast }) {
 
             {canViewStats && (
                 <>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
-                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
-                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
-                            <TagIcon className="w-3.5 h-3.5" />
-                            Pricing Model Distribution
-                        </div>
-                        <div className="space-y-2">
-                            {(stats.pricingDistribution || []).length === 0 && !loadingStats && (
-                                <div className="text-xs text-app-text-muted">No pricing data yet.</div>
-                            )}
-                            {(stats.pricingDistribution || []).map(item => {
-                                const meta = PRICING_META[item.key] || {};
-                                return (
-                                    <div key={item.key} className="flex items-center justify-between text-xs">
-                                        <div className="flex items-center gap-2">
-                                            <span className={`w-2.5 h-2.5 rounded-full ${meta.bg || 'bg-app-bg-secondary'}`} />
-                                            <span className="text-app-text-secondary">{meta.label || item.label || item.key}</span>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
+                        <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                            <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                                <TagIcon className="w-3.5 h-3.5" />
+                                Pricing Model Distribution
+                            </div>
+                            <div className="space-y-2">
+                                {(stats.pricingDistribution || []).length === 0 && !loadingStats && (
+                                    <div className="text-xs text-app-text-muted">No pricing data yet.</div>
+                                )}
+                                {(stats.pricingDistribution || []).map(item => {
+                                    const meta = PRICING_META[item.key] || {};
+                                    return (
+                                        <div key={item.key} className="flex items-center justify-between text-xs">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-2.5 h-2.5 rounded-full ${meta.bg || 'bg-app-bg-secondary'}`} />
+                                                <span className="text-app-text-secondary">{meta.label || item.label || item.key}</span>
+                                            </div>
+                                            <span className={`${meta.text || 'text-app-text-tertiary'} font-semibold`}>{item.count || 0}</span>
                                         </div>
-                                        <span className={`${meta.text || 'text-app-text-tertiary'} font-semibold`}>{item.count || 0}</span>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                            <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                                <FolderIcon className="w-3.5 h-3.5" />
+                                Top Categories
+                            </div>
+                            <div className="space-y-2">
+                                {(stats.topCategories || []).length === 0 && !loadingStats && (
+                                    <div className="text-xs text-app-text-muted">No category usage yet.</div>
+                                )}
+                                {(stats.topCategories || []).map(item => (
+                                    <div key={item.categoryId} className="flex items-center justify-between text-xs">
+                                        <span className="text-app-text-secondary truncate">{item.name}</span>
+                                        <span className="text-app-text-primary font-semibold">{item.count}</span>
                                     </div>
-                                );
-                            })}
+                                ))}
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
-                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
-                            <FolderIcon className="w-3.5 h-3.5" />
-                            Top Categories
-                        </div>
-                        <div className="space-y-2">
-                            {(stats.topCategories || []).length === 0 && !loadingStats && (
-                                <div className="text-xs text-app-text-muted">No category usage yet.</div>
-                            )}
-                            {(stats.topCategories || []).map(item => (
-                                <div key={item.categoryId} className="flex items-center justify-between text-xs">
-                                    <span className="text-app-text-secondary truncate">{item.name}</span>
-                                    <span className="text-app-text-primary font-semibold">{item.count}</span>
+                        <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                            <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                                <GlobeIcon className="w-3.5 h-3.5" />
+                                Sites Added
+                            </div>
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-app-text-secondary">This month</span>
+                                    <span className="text-lg font-semibold text-app-text-primary">{loadingStats ? '…' : stats.addedThisMonth}</span>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
-                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
-                            <GlobeIcon className="w-3.5 h-3.5" />
-                            Sites Added
-                        </div>
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs text-app-text-secondary">This month</span>
-                                <span className="text-lg font-semibold text-app-text-primary">{loadingStats ? '…' : stats.addedThisMonth}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs text-app-text-secondary">Last month</span>
-                                <span className="text-sm font-semibold text-app-text-secondary">{loadingStats ? '…' : stats.addedLastMonth}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs text-app-text-secondary">Delta</span>
-                                <span className={`text-sm font-semibold ${stats.addedThisMonth - stats.addedLastMonth > 0 ? 'text-green-400' : stats.addedThisMonth - stats.addedLastMonth < 0 ? 'text-red-400' : 'text-app-text-tertiary'}`}>
-                                    {loadingStats ? '…' : (stats.addedThisMonth - stats.addedLastMonth === 0 ? 'No change' : `${stats.addedThisMonth - stats.addedLastMonth > 0 ? '+' : ''}${stats.addedThisMonth - stats.addedLastMonth}`)}
-                                </span>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-app-text-secondary">Last month</span>
+                                    <span className="text-sm font-semibold text-app-text-secondary">{loadingStats ? '…' : stats.addedLastMonth}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs text-app-text-secondary">Delta</span>
+                                    <span className={`text-sm font-semibold ${stats.addedThisMonth - stats.addedLastMonth > 0 ? 'text-green-400' : stats.addedThisMonth - stats.addedLastMonth < 0 ? 'text-red-400' : 'text-app-text-tertiary'}`}>
+                                        {loadingStats ? '…' : (stats.addedThisMonth - stats.addedLastMonth === 0 ? 'No change' : `${stats.addedThisMonth - stats.addedLastMonth > 0 ? '+' : ''}${stats.addedThisMonth - stats.addedLastMonth}`)}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
-                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
-                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
-                            <TagIcon className="w-3.5 h-3.5" />
-                            Top Tags
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+                        <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                            <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                                <TagIcon className="w-3.5 h-3.5" />
+                                Top Tags
+                            </div>
+                            <div className="space-y-2">
+                                {(stats.topTags || []).length === 0 && !loadingStats && (
+                                    <div className="text-xs text-app-text-muted">No tag usage yet.</div>
+                                )}
+                                {(stats.topTags || []).map(item => (
+                                    <div key={item.tagId} className="flex items-center justify-between text-xs">
+                                        <span className="text-app-text-secondary truncate">{item.name}</span>
+                                        <span className="text-app-text-primary font-semibold">{item.count}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div className="space-y-2">
-                            {(stats.topTags || []).length === 0 && !loadingStats && (
-                                <div className="text-xs text-app-text-muted">No tag usage yet.</div>
-                            )}
-                            {(stats.topTags || []).map(item => (
-                                <div key={item.tagId} className="flex items-center justify-between text-xs">
-                                    <span className="text-app-text-secondary truncate">{item.name}</span>
-                                    <span className="text-app-text-primary font-semibold">{item.count}</span>
-                                </div>
-                            ))}
+
+                        <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                            <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                                <GlobeIcon className="w-3.5 h-3.5" />
+                                Recently Added
+                            </div>
+                            <div className="space-y-2">
+                                {(stats.recentSites || []).length === 0 && !loadingStats && (
+                                    <div className="text-xs text-app-text-muted">No recent sites yet.</div>
+                                )}
+                                {(stats.recentSites || []).map(site => (
+                                    <div key={site.id} className="text-xs text-app-text-secondary truncate">
+                                        {site.name || site.url}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
-
-                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
-                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
-                            <GlobeIcon className="w-3.5 h-3.5" />
-                            Recently Added
-                        </div>
-                        <div className="space-y-2">
-                            {(stats.recentSites || []).length === 0 && !loadingStats && (
-                                <div className="text-xs text-app-text-muted">No recent sites yet.</div>
-                            )}
-                            {(stats.recentSites || []).map(site => (
-                                <div key={site.id} className="text-xs text-app-text-secondary truncate">
-                                    {site.name || site.url}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
                 </>
             )}
 

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../context/AuthContext';
 import { fetchAPI } from '../lib/supabase';
-import { GlobeIcon } from '../components/ui/Icons';
+import { ArrowLeftIcon, GlobeIcon } from '../components/ui/Icons';
 
 const getFaviconUrl = (url) => {
   try {
@@ -91,7 +91,16 @@ function PublicShareView({ token }) {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-[96rem] mx-auto px-4 py-10">
-        <h1 className="text-2xl font-semibold text-app-text-primary mb-2">{share?.name || 'Shared Collection'}</h1>
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <h1 className="text-2xl font-semibold text-app-text-primary">{share?.name || 'Shared Collection'}</h1>
+          <a
+            href="/dashboard/sites"
+            className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-app-border bg-app-bg-secondary/60 text-app-text-secondary hover:text-app-text-primary"
+          >
+            <ArrowLeftIcon className="w-4 h-4" />
+            Back to dashboard
+          </a>
+        </div>
         <p className="text-sm text-app-text-secondary mb-6">Readonly list of shared sites.</p>
 
         {!user && (
@@ -326,6 +335,15 @@ function ShareManager() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-6xl mx-auto px-4 py-10">
+        <div className="mb-4">
+          <a
+            href="/dashboard/sites"
+            className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-app-border bg-app-bg-secondary/60 text-app-text-secondary hover:text-app-text-primary"
+          >
+            <ArrowLeftIcon className="w-4 h-4" />
+            Back to dashboard
+          </a>
+        </div>
         <h1 className="text-2xl font-semibold text-app-text-primary mb-2">Public Share</h1>
         <p className="text-sm text-app-text-secondary mb-6">Create a shareable link with selected categories and tags.</p>
 

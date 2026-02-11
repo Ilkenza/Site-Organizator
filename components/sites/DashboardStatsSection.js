@@ -93,68 +93,68 @@ export default function DashboardStatsSection() {
 
             {canView && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
-                    <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
-                        <TagIcon className="w-3.5 h-3.5" />
-                        Pricing Model Distribution
-                    </div>
-                    <div className="space-y-2">
-                        {pricing.length === 0 && !loading && (
-                            <div className="text-xs text-app-text-muted">No pricing data yet.</div>
-                        )}
-                        {pricing.map(item => (
-                            <div key={item.key} className="flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-2">
-                                    <span className={`w-2.5 h-2.5 rounded-full ${item.bg}`} />
-                                    <span className="text-app-text-secondary">{item.label}</span>
+                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                            <TagIcon className="w-3.5 h-3.5" />
+                            Pricing Model Distribution
+                        </div>
+                        <div className="space-y-2">
+                            {pricing.length === 0 && !loading && (
+                                <div className="text-xs text-app-text-muted">No pricing data yet.</div>
+                            )}
+                            {pricing.map(item => (
+                                <div key={item.key} className="flex items-center justify-between text-xs">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`w-2.5 h-2.5 rounded-full ${item.bg}`} />
+                                        <span className="text-app-text-secondary">{item.label}</span>
+                                    </div>
+                                    <span className={`${item.text} font-semibold`}>{item.count}</span>
                                 </div>
-                                <span className={`${item.text} font-semibold`}>{item.count}</span>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
-                </div>
 
-                <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
-                    <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
-                        <FolderIcon className="w-3.5 h-3.5" />
-                        Top Categories
+                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                            <FolderIcon className="w-3.5 h-3.5" />
+                            Top Categories
+                        </div>
+                        <div className="space-y-2">
+                            {topCategories.length === 0 && !loading && (
+                                <div className="text-xs text-app-text-muted">No category usage yet.</div>
+                            )}
+                            {topCategories.map(item => (
+                                <div key={item.categoryId} className="flex items-center justify-between text-xs">
+                                    <span className="text-app-text-secondary truncate">{item.name}</span>
+                                    <span className="text-app-text-primary font-semibold">{item.count}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div className="space-y-2">
-                        {topCategories.length === 0 && !loading && (
-                            <div className="text-xs text-app-text-muted">No category usage yet.</div>
-                        )}
-                        {topCategories.map(item => (
-                            <div key={item.categoryId} className="flex items-center justify-between text-xs">
-                                <span className="text-app-text-secondary truncate">{item.name}</span>
-                                <span className="text-app-text-primary font-semibold">{item.count}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
 
-                <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
-                    <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
-                        <GlobeIcon className="w-3.5 h-3.5" />
-                        Sites Added
-                    </div>
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-app-text-secondary">This month</span>
-                            <span className="text-lg font-semibold text-app-text-primary">{loading ? '…' : addedThisMonth}</span>
+                    <div className="bg-app-bg-dark/50 rounded-lg border border-app-border p-3">
+                        <div className="text-xs text-app-text-tertiary mb-2 flex items-center gap-2">
+                            <GlobeIcon className="w-3.5 h-3.5" />
+                            Sites Added
                         </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-app-text-secondary">Last month</span>
-                            <span className="text-sm font-semibold text-app-text-secondary">{loading ? '…' : addedLastMonth}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-app-text-secondary">Delta</span>
-                            <span className={`text-sm font-semibold ${delta > 0 ? 'text-green-400' : delta < 0 ? 'text-red-400' : 'text-app-text-tertiary'}`}>
-                                {loading ? '…' : deltaLabel}
-                            </span>
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-app-text-secondary">This month</span>
+                                <span className="text-lg font-semibold text-app-text-primary">{loading ? '…' : addedThisMonth}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-app-text-secondary">Last month</span>
+                                <span className="text-sm font-semibold text-app-text-secondary">{loading ? '…' : addedLastMonth}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-app-text-secondary">Delta</span>
+                                <span className={`text-sm font-semibold ${delta > 0 ? 'text-green-400' : delta < 0 ? 'text-red-400' : 'text-app-text-tertiary'}`}>
+                                    {loading ? '…' : deltaLabel}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
             )}
         </div>
     );
