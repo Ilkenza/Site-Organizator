@@ -4,16 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-
-// 6 soft tag colors (different from category colors)
-const TAG_COLORS = [
-    { hex: '#7B9FD3', name: 'Ocean Blue' },
-    { hex: '#6EAF8D', name: 'Emerald Green' },
-    { hex: '#D8899E', name: 'Rose Pink' },
-    { hex: '#A788C9', name: 'Purple' },
-    { hex: '#D4A574', name: 'Orange' },
-    { hex: '#85C5CE', name: 'Cyan' },
-];
+import { TAG_COLORS } from '../../lib/sharedColors';
 
 export default function TagModal({ isOpen, onClose, tag = null }) {
     const { addTag, updateTag } = useDashboard();

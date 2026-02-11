@@ -102,6 +102,12 @@ function createUserWithProfile(baseUser, profile) {
     };
 }
 
+// Helper to fetch profile and create enriched user in one step
+async function resolveUserWithProfile(baseUser) {
+    const { profile } = await fetchProfileViaAPI();
+    return createUserWithProfile(baseUser, profile);
+}
+
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -264,13 +270,7 @@ export function AuthProvider({ children }) {
                 supabase.auth.refreshSession().then(async ({ data: refreshData }) => {
                     if (!isMounted || !refreshData?.session?.user) return;
                     try {
-                        const { profile } = await fetchProfileViaAPI();
-                        if (isMounted) {
-                            setUser(profile
-                                ? createUserWithProfile(refreshData.session.user, profile)
-                                : refreshData.session.user
-                            );
-                        }
+                        setUser(await resolveUserWithProfile(refreshData.session.user));
                     } catch (_) { /* non-critical */ }
                 }).catch(() => { /* non-critical */ });
             }
@@ -286,8 +286,7 @@ export function AuthProvider({ children }) {
                 supabase.auth.getSession().then(async ({ data }) => {
                     if (isMounted && data?.session?.user) {
                         try {
-                            const { profile } = await fetchProfileViaAPI();
-                            setUser(profile ? createUserWithProfile(data.session.user, profile) : data.session.user);
+                            setUser(await resolveUserWithProfile(data.session.user));
                         } catch (err) {
                             console.warn('[AuthContext] Late recovery: failed to fetch profile:', err);
                             setUser(data.session.user);
@@ -300,8 +299,7 @@ export function AuthProvider({ children }) {
                             userSetFromLocalStorageRef.current = true;
 
                             try {
-                                const { profile } = await fetchProfileViaAPI();
-                                setUser(profile ? createUserWithProfile(tokens.user, profile) : tokens.user);
+                                setUser(await resolveUserWithProfile(tokens.user));
                             } catch (err) {
                                 console.warn('[AuthContext] Late recovery: failed to fetch profile:', err);
                                 setUser(tokens.user);
@@ -431,7 +429,7 @@ export function AuthProvider({ children }) {
         }
 
         // Fire-and-forget SDK cleanup
-        try { supabase.auth.signOut({ scope: 'local' }); } catch (_) {}
+        try { supabase.auth.signOut({ scope: 'local' }); } catch (_) { }
 
         // Full page redirect — instant navigation, clears all JS state.
         // Router.push would wait for getServerSideProps which can be slow.
@@ -448,17 +446,7 @@ export function AuthProvider({ children }) {
             // Refresh session to get updated user_metadata (e.g. tier changes from admin)
             const { data: refreshData } = await supabase.auth.refreshSession();
             const freshUser = refreshData?.session?.user || user;
-
-            const { profile, error } = await fetchProfileViaAPI();
-
-            if (error) {
-                console.warn('Profile refresh error:', error.message);
-                // Still update with refreshed session user
-                setUser(createUserWithProfile(freshUser, null));
-                return;
-            }
-
-            setUser(createUserWithProfile(freshUser, profile));
+            setUser(await resolveUserWithProfile(freshUser));
         } catch (error) {
             console.error('Error refreshing user:', error);
         }

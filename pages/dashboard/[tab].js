@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Component } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { DashboardProvider, useDashboard } from '../../context/DashboardContext';
@@ -8,6 +8,7 @@ import Header from '../../components/layout/Header';
 import MobileToolbar from '../../components/layout/MobileToolbar';
 import SitesList from '../../components/sites/SitesList';
 import FavoritesList from '../../components/sites/FavoritesList';
+import RediscoverSection from '../../components/sites/RediscoverSection';
 import SiteModal from '../../components/sites/SiteModal';
 import CategoriesList from '../../components/categories/CategoriesList';
 import CategoryModal from '../../components/categories/CategoryModal';
@@ -19,33 +20,8 @@ import Toast from '../../components/ui/Toast';
 import CommandMenu from '../../components/ui/CommandMenu';
 import UndoToast from '../../components/ui/UndoToast';
 import OnboardingTour from '../../components/ui/OnboardingTour';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { fetchAPI } from '../../lib/supabase';
-
-class ErrorBoundary extends Component {
-    constructor(props) {
-        super(props);
-        this.state = { hasError: false };
-    }
-
-    static getDerivedStateFromError() {
-        return { hasError: true };
-    }
-
-    componentDidCatch(error, errorInfo) {
-        console.error('ErrorBoundary caught an error:', error, errorInfo);
-    }
-
-    render() {
-        if (this.state.hasError) {
-            return (
-                <div className="p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-300">
-                    <p className="font-medium">Something went wrong.</p>
-                </div>
-            );
-        }
-        return this.props.children;
-    }
-}
 
 function DashboardContent() {
     const router = useRouter();
@@ -109,6 +85,21 @@ function DashboardContent() {
 
     // Delete confirmation
     const [deleteConfirm, setDeleteConfirm] = useState({ open: false, type: null, item: null });
+
+    // Pre-fill data for SiteModal (from Share Target / external links)
+    const [prefillSite, setPrefillSite] = useState(null);
+
+    // Handle shared URL from PWA Share Target or external link
+    useEffect(() => {
+        const { addUrl, addTitle } = router.query;
+        if (addUrl) {
+            setPrefillSite({ url: addUrl, name: addTitle || '' });
+            setSiteModalOpen(true);
+            // Clean URL params without re-render
+            const { addUrl: _u, addTitle: _t, ...rest } = router.query;
+            router.replace({ pathname: router.pathname, query: { ...rest, tab } }, undefined, { shallow: true });
+        }
+    }, [router.query.addUrl]);
 
     // Listen for openAddSiteModal event from Sidebar
     useEffect(() => {
@@ -402,7 +393,12 @@ function DashboardContent() {
     const renderContent = () => {
         switch (activeTab) {
             case 'sites':
-                return <SitesList onEdit={handleEditSite} onDelete={handleDeleteSite} />;
+                return (
+                    <>
+                        <RediscoverSection />
+                        <SitesList onEdit={handleEditSite} onDelete={handleDeleteSite} />
+                    </>
+                );
             case 'favorites':
                 return <FavoritesList onEdit={handleEditSite} onDelete={handleDeleteSite} />;
             case 'categories':
@@ -466,9 +462,11 @@ function DashboardContent() {
                 onClose={() => {
                     setSiteModalOpen(false);
                     setEditingSite(null);
+                    setPrefillSite(null);
                     setSaveConfirm(prev => ({ ...prev, formData: null }));
                 }}
                 site={editingSite}
+                prefill={prefillSite}
                 defaultFavorite={activeTab === 'favorites'}
                 defaultCategoryId={selectedCategory}
                 defaultTagId={selectedTag}

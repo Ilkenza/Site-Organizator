@@ -487,6 +487,36 @@ function SectionCard({ title, children, className = '', action }) {
 }
 
 // ========================================
+// Shared Confirm Modal
+// ========================================
+function ConfirmModal({ target, onClose, busy, icon, title, children, onConfirm, confirmLabel, confirmClass, confirmDisabled }) {
+    if (!target) return null;
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={() => !busy && onClose()}>
+            <div className="bg-app-bg-secondary border border-app-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
+                onClick={e => e.stopPropagation()}>
+                <div className="text-center mb-4">
+                    {icon}
+                    <h3 className="text-lg font-bold text-app-text-primary">{title}</h3>
+                </div>
+                {children}
+                <div className="flex gap-3">
+                    <button onClick={onClose} disabled={busy}
+                        className="flex-1 px-4 py-2 text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">
+                        Cancel
+                    </button>
+                    <button onClick={onConfirm} disabled={busy || confirmDisabled}
+                        className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors font-medium disabled:opacity-50 ${confirmClass}`}>
+                        {confirmLabel}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ========================================
 // Main Admin Page
 // ========================================
 export default function AdminDashboard() {
@@ -564,68 +594,29 @@ export default function AdminDashboard() {
     // ========================================
     // User actions
     // ========================================
-    const handleDeleteUser = async () => {
-        if (!deleteTarget) return;
-        setDeleting(true);
+    const adminAction = useCallback(async (url, method, body, setTarget, setLoading) => {
+        setLoading(true);
         try {
             const token = await getToken();
-            const res = await fetch('/api/admin/delete-user', {
-                method: 'DELETE',
+            const res = await fetch(url, {
+                method,
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: deleteTarget.id })
+                body: JSON.stringify(body)
             });
             const json = await res.json();
             if (!res.ok) throw new Error(json.error);
-            setDeleteTarget(null);
-            fetchData();
-        } catch (err) {
-            alert(`Failed to delete: ${err.message}`);
-        } finally {
-            setDeleting(false);
-        }
-    };
-
-    const handleBanUser = async () => {
-        if (!banTarget) return;
-        setBanning(true);
-        try {
-            const token = await getToken();
-            const res = await fetch('/api/admin/ban-user', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: banTarget.id, ban: !banTarget.banned })
-            });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error);
-            setBanTarget(null);
+            setTarget(null);
             fetchData();
         } catch (err) {
             alert(`Failed: ${err.message}`);
         } finally {
-            setBanning(false);
+            setLoading(false);
         }
-    };
+    }, [fetchData]);
 
-    const handleTogglePro = async () => {
-        if (!proTarget) return;
-        setTogglingPro(true);
-        try {
-            const token = await getToken();
-            const res = await fetch('/api/admin/toggle-pro', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: proTarget.id, tier: selectedTier })
-            });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error);
-            setProTarget(null);
-            fetchData();
-        } catch (err) {
-            alert(`Failed: ${err.message}`);
-        } finally {
-            setTogglingPro(false);
-        }
-    };
+    const handleDeleteUser = () => deleteTarget && adminAction('/api/admin/delete-user', 'DELETE', { userId: deleteTarget.id }, setDeleteTarget, setDeleting);
+    const handleBanUser = () => banTarget && adminAction('/api/admin/ban-user', 'POST', { userId: banTarget.id, ban: !banTarget.banned }, setBanTarget, setBanning);
+    const handleTogglePro = () => proTarget && adminAction('/api/admin/toggle-pro', 'POST', { userId: proTarget.id, tier: selectedTier }, setProTarget, setTogglingPro);
 
     const handleExport = async (type) => {
         setExporting(type);
@@ -1280,136 +1271,78 @@ export default function AdminDashboard() {
                 </main>
 
                 {/* Delete Modal */}
-                {deleteTarget && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
-                        onClick={() => !deleting && setDeleteTarget(null)}>
-                        <div className="bg-app-bg-secondary border border-app-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
-                            onClick={e => e.stopPropagation()}>
-                            <div className="text-center mb-4">
-                                <div className="text-4xl mb-3">⚠️</div>
-                                <h3 className="text-lg font-bold text-app-text-primary">Delete User?</h3>
-                            </div>
-                            <p className="text-app-text-secondary text-sm text-center mb-1">
-                                Permanently delete <strong className="text-app-text-primary">{deleteTarget.email}</strong>
-                            </p>
-                            <p className="text-app-text-muted text-xs text-center mb-5">
-                                Including {deleteTarget.sites} sites, {deleteTarget.categories} categories, {deleteTarget.tags} tags. Cannot be undone.
-                            </p>
-                            <div className="flex gap-3">
-                                <button onClick={() => setDeleteTarget(null)} disabled={deleting}
-                                    className="flex-1 px-4 py-2 text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">
-                                    Cancel
-                                </button>
-                                <button onClick={handleDeleteUser} disabled={deleting}
-                                    className="flex-1 px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-500 rounded-lg transition-colors font-medium disabled:opacity-50">
-                                    {deleting ? 'Deleting...' : 'Delete'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <ConfirmModal target={deleteTarget} onClose={() => setDeleteTarget(null)} busy={deleting}
+                    icon={<div className="text-4xl mb-3">⚠️</div>} title="Delete User?"
+                    onConfirm={handleDeleteUser} confirmLabel={deleting ? 'Deleting...' : 'Delete'}
+                    confirmClass="bg-red-600 hover:bg-red-500">
+                    <p className="text-app-text-secondary text-sm text-center mb-1">
+                        Permanently delete <strong className="text-app-text-primary">{deleteTarget?.email}</strong>
+                    </p>
+                    <p className="text-app-text-muted text-xs text-center mb-5">
+                        Including {deleteTarget?.sites} sites, {deleteTarget?.categories} categories, {deleteTarget?.tags} tags. Cannot be undone.
+                    </p>
+                </ConfirmModal>
 
                 {/* Ban/Unban Modal */}
-                {banTarget && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
-                        onClick={() => !banning && setBanTarget(null)}>
-                        <div className="bg-app-bg-secondary border border-app-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
-                            onClick={e => e.stopPropagation()}>
-                            <div className="text-center mb-4">
-                                <div className="text-4xl mb-3">{banTarget.banned ? '✅' : '🚫'}</div>
-                                <h3 className="text-lg font-bold text-app-text-primary">
-                                    {banTarget.banned ? 'Unban' : 'Ban'} User?
-                                </h3>
-                            </div>
-                            <p className="text-app-text-secondary text-sm text-center mb-1">
-                                {banTarget.banned ? 'Restore access for' : 'Disable access for'}{' '}
-                                <strong className="text-app-text-primary">{banTarget.email}</strong>
-                            </p>
-                            <p className="text-app-text-muted text-xs text-center mb-5">
-                                {banTarget.banned
-                                    ? 'This user will be able to log in again.'
-                                    : 'This user will not be able to log in. Their data will remain intact.'}
-                            </p>
-                            <div className="flex gap-3">
-                                <button onClick={() => setBanTarget(null)} disabled={banning}
-                                    className="flex-1 px-4 py-2 text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">
-                                    Cancel
-                                </button>
-                                <button onClick={handleBanUser} disabled={banning}
-                                    className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors font-medium disabled:opacity-50 ${banTarget.banned ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500'
-                                        }`}>
-                                    {banning ? 'Processing...' : banTarget.banned ? 'Unban' : 'Ban'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <ConfirmModal target={banTarget} onClose={() => setBanTarget(null)} busy={banning}
+                    icon={<div className="text-4xl mb-3">{banTarget?.banned ? '✅' : '🚫'}</div>}
+                    title={`${banTarget?.banned ? 'Unban' : 'Ban'} User?`}
+                    onConfirm={handleBanUser}
+                    confirmLabel={banning ? 'Processing...' : banTarget?.banned ? 'Unban' : 'Ban'}
+                    confirmClass={banTarget?.banned ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500'}>
+                    <p className="text-app-text-secondary text-sm text-center mb-1">
+                        {banTarget?.banned ? 'Restore access for' : 'Disable access for'}{' '}
+                        <strong className="text-app-text-primary">{banTarget?.email}</strong>
+                    </p>
+                    <p className="text-app-text-muted text-xs text-center mb-5">
+                        {banTarget?.banned
+                            ? 'This user will be able to log in again.'
+                            : 'This user will not be able to log in. Their data will remain intact.'}
+                    </p>
+                </ConfirmModal>
 
                 {/* Tier Change Modal */}
-                {proTarget && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
-                        onClick={() => !togglingPro && setProTarget(null)}>
-                        <div className="bg-app-bg-secondary border border-app-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
-                            onClick={e => e.stopPropagation()}>
-                            <div className="text-center mb-4">
-                                <div className="mb-3 flex justify-center"><CrownIcon className="w-10 h-10 text-amber-400" gradient /></div>
-                                <h3 className="text-lg font-bold text-app-text-primary">Change Tier</h3>
-                            </div>
-                            <p className="text-app-text-secondary text-sm text-center mb-4">
-                                Set tier for <strong className="text-app-text-primary">{proTarget.email}</strong>
-                            </p>
-                            <div className="flex flex-col gap-2 mb-5">
-                                {[TIER_FREE, TIER_PRO, TIER_PROMAX].map(t => {
-                                    const colors = TIER_COLORS[t];
-                                    const isSelected = selectedTier === t;
-                                    const isCurrent = (proTarget.tier || TIER_FREE) === t;
-                                    return (
-                                        <button key={t} onClick={() => setSelectedTier(t)}
-                                            className={`flex items-center justify-between px-4 py-3 rounded-lg border-2 transition-all ${isSelected
-                                                    ? t === TIER_FREE
-                                                        ? 'border-gray-500 bg-gray-500/10'
-                                                        : t === TIER_PRO
-                                                            ? 'border-amber-500 bg-amber-500/10'
-                                                            : 'border-purple-500 bg-purple-500/10'
-                                                    : 'border-app-border hover:border-app-border-hover bg-app-bg-light'
-                                                }`}>
-                                            <div className="flex items-center gap-2">
-                                                {t !== TIER_FREE && <CrownIcon className={`w-4 h-4 ${t === TIER_PROMAX ? 'text-purple-400' : 'text-amber-400'}`} gradient={t === TIER_PRO} />}
-                                                <span className={`font-medium ${isSelected ? 'text-app-text-primary' : 'text-app-text-secondary'}`}>{TIER_LABELS[t]}</span>
-                                                {isCurrent && <span className="text-xs text-app-text-muted ml-1">(current)</span>}
-                                            </div>
-                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected
-                                                    ? t === TIER_FREE ? 'border-gray-500' : t === TIER_PRO ? 'border-amber-500' : 'border-purple-500'
-                                                    : 'border-app-border'
-                                                }`}>
-                                                {isSelected && <div className={`w-2 h-2 rounded-full ${t === TIER_FREE ? 'bg-gray-500' : t === TIER_PRO ? 'bg-amber-500' : 'bg-purple-500'
-                                                    }`} />}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            <p className="text-app-text-muted text-xs text-center mb-4">
-                                {selectedTier === TIER_FREE && 'Free: 500 sites, 50 categories, 200 tags.'}
-                                {selectedTier === TIER_PRO && 'Pro: 2000 sites, 200 categories, 500 tags + AI & Link Check.'}
-                                {selectedTier === TIER_PROMAX && 'Pro Max: Unlimited everything + all features.'}
-                            </p>
-                            <div className="flex gap-3">
-                                <button onClick={() => setProTarget(null)} disabled={togglingPro}
-                                    className="flex-1 px-4 py-2 text-sm bg-app-bg-light text-app-text-secondary hover:text-app-text-primary rounded-lg transition-colors border border-app-border">
-                                    Cancel
-                                </button>
-                                <button onClick={handleTogglePro} disabled={togglingPro || selectedTier === (proTarget.tier || TIER_FREE)}
-                                    className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors font-medium disabled:opacity-50 ${selectedTier === TIER_PROMAX ? 'bg-purple-600 hover:bg-purple-500'
-                                            : selectedTier === TIER_PRO ? 'bg-amber-600 hover:bg-amber-500'
-                                                : 'bg-gray-600 hover:bg-gray-500'
+                <ConfirmModal target={proTarget} onClose={() => setProTarget(null)} busy={togglingPro}
+                    icon={<div className="mb-3 flex justify-center"><CrownIcon className="w-10 h-10 text-amber-400" gradient /></div>}
+                    title="Change Tier"
+                    onConfirm={handleTogglePro}
+                    confirmLabel={togglingPro ? 'Processing...' : `Set ${TIER_LABELS[selectedTier]}`}
+                    confirmClass={selectedTier === TIER_PROMAX ? 'bg-purple-600 hover:bg-purple-500' : selectedTier === TIER_PRO ? 'bg-amber-600 hover:bg-amber-500' : 'bg-gray-600 hover:bg-gray-500'}
+                    confirmDisabled={selectedTier === (proTarget?.tier || TIER_FREE)}>
+                    <p className="text-app-text-secondary text-sm text-center mb-4">
+                        Set tier for <strong className="text-app-text-primary">{proTarget?.email}</strong>
+                    </p>
+                    <div className="flex flex-col gap-2 mb-5">
+                        {[TIER_FREE, TIER_PRO, TIER_PROMAX].map(t => {
+                            const isSelected = selectedTier === t;
+                            const isCurrent = (proTarget?.tier || TIER_FREE) === t;
+                            return (
+                                <button key={t} onClick={() => setSelectedTier(t)}
+                                    className={`flex items-center justify-between px-4 py-3 rounded-lg border-2 transition-all ${isSelected
+                                        ? t === TIER_FREE ? 'border-gray-500 bg-gray-500/10' : t === TIER_PRO ? 'border-amber-500 bg-amber-500/10' : 'border-purple-500 bg-purple-500/10'
+                                        : 'border-app-border hover:border-app-border-hover bg-app-bg-light'
                                         }`}>
-                                    {togglingPro ? 'Processing...' : `Set ${TIER_LABELS[selectedTier]}`}
+                                    <div className="flex items-center gap-2">
+                                        {t !== TIER_FREE && <CrownIcon className={`w-4 h-4 ${t === TIER_PROMAX ? 'text-purple-400' : 'text-amber-400'}`} gradient={t === TIER_PRO} />}
+                                        <span className={`font-medium ${isSelected ? 'text-app-text-primary' : 'text-app-text-secondary'}`}>{TIER_LABELS[t]}</span>
+                                        {isCurrent && <span className="text-xs text-app-text-muted ml-1">(current)</span>}
+                                    </div>
+                                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected
+                                        ? t === TIER_FREE ? 'border-gray-500' : t === TIER_PRO ? 'border-amber-500' : 'border-purple-500'
+                                        : 'border-app-border'
+                                        }`}>
+                                        {isSelected && <div className={`w-2 h-2 rounded-full ${t === TIER_FREE ? 'bg-gray-500' : t === TIER_PRO ? 'bg-amber-500' : 'bg-purple-500'}`} />}
+                                    </div>
                                 </button>
-                            </div>
-                        </div>
+                            );
+                        })}
                     </div>
-                )}
+                    <p className="text-app-text-muted text-xs text-center mb-4">
+                        {selectedTier === TIER_FREE && 'Free: 500 sites, 50 categories, 200 tags.'}
+                        {selectedTier === TIER_PRO && 'Pro: 2000 sites, 200 categories, 500 tags + AI & Link Check.'}
+                        {selectedTier === TIER_PROMAX && 'Pro Max: Unlimited everything + all features.'}
+                    </p>
+                </ConfirmModal>
             </div>
         </>
     );

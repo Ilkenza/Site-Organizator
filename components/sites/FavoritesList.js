@@ -1,7 +1,9 @@
+import { useCallback } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import SiteCard from './SiteCard';
 import Pagination from '../ui/Pagination';
 import { StarIcon, SearchIcon } from '../ui/Icons';
+import { fetchAPI } from '../../lib/supabase';
 
 export default function FavoritesList({ onEdit, onDelete }) {
     const {
@@ -17,6 +19,11 @@ export default function FavoritesList({ onEdit, onDelete }) {
     // Calculate display indices
     const startIndex = (currentPage - 1) * SITES_PAGE_SIZE;
     const endIndex = startIndex + filteredSites.length;
+
+    // Track site click for Rediscover (fire & forget)
+    const handleVisitSite = useCallback((siteId) => {
+        fetchAPI('/rediscover', { method: 'POST', body: JSON.stringify({ siteId }) }).catch(() => { });
+    }, []);
 
     // Handle page change — fetch new page from server
     const handlePageChange = (newPage) => {
@@ -83,6 +90,7 @@ export default function FavoritesList({ onEdit, onDelete }) {
                         site={site}
                         onEdit={onEdit}
                         onDelete={onDelete}
+                        onVisit={handleVisitSite}
                     />
                 ))}
             </div>

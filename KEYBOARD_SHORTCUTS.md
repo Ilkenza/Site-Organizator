@@ -147,30 +147,38 @@ Full list in `lib/categorySuggestions.js`
 
 #### Quick Add Site
 
-```
 1. Ctrl+K (or just press N in Sites tab)
 2. Paste URL
 3. Suggestions appear
 4. Click suggestion
 5. Done!
+
+```
+
+#### Quick Add Site
+
+1. Ctrl+K (or just press N in Sites tab)
+2. Paste URL
+3. Suggestions appear
+4. Click suggestion
+5. Done!
+
 ```
 
 #### Bulk Delete with Confidence
 
-```
 1. Enable multi-select
 2. Select items
 3. Delete
 4. Undo within 5s if needed
-```
+
+````
 
 #### Navigate Fast
 
-```
 1. Ctrl+K
 2. Type "fav"
 3. Enter (goes to favorites)
-```
 
 ---
 
@@ -262,7 +270,7 @@ Edit `components/ui/CommandMenu.js`:
     action: () => onAction('my-command'),
     category: 'Actions'
 }
-```
+````
 
 ### Custom Animations
 

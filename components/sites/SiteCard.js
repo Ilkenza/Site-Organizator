@@ -1,10 +1,23 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import Badge from '../ui/Badge';
 import InlineEditableName from '../categories/InlineEditableName';
 import { useDashboard } from '../../context/DashboardContext';
 import { CheckmarkIcon, GlobeIcon, ExternalLinkIcon, EditIcon, TrashIcon, BookmarkIcon, DocumentIcon, TextLinesIcon, PinIcon } from '../ui/Icons';
 
-export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
+const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('sr-RS', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const getFaviconUrl = (url) => {
+    try {
+        const u = new URL(url);
+        if (u.hostname === 'localhost' || !u.hostname.includes('.')) return null;
+        return `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=32`;
+    } catch { return null; }
+};
+
+export default memo(function SiteCard({ site, onEdit, onDelete, onVisit }) {
     const [imageError, setImageError] = useState(false);
     const [favoriteAnimating, setFavoriteAnimating] = useState(false);
     const [pinAnimating, setPinAnimating] = useState(false);
@@ -13,36 +26,9 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
     const [showAllTags, setShowAllTags] = useState(false);
     const { selectedSites, setSelectedSites, multiSelectMode, toggleFavorite, togglePinned, activeTab, updateSite } = useDashboard();
 
-    // Support multiple possible field names from API
-    const allCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
-    const allTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
-
-    // Import source from DB column (synced across devices)
+    const categories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
+    const tags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
     const importSource = site.import_source && site.import_source !== 'manual' ? site.import_source : null;
-    const categories = allCategories;
-    const tags = allTags;
-
-    const formatDate = (dateString) => {
-        if (!dateString) return '-';
-        return new Date(dateString).toLocaleDateString('sr-RS', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        });
-    };
-
-    const getFaviconUrl = (url) => {
-        try {
-            const urlObj = new URL(url);
-            // Skip localhost and invalid domains
-            if (urlObj.hostname === 'localhost' || !urlObj.hostname.includes('.')) {
-                return null;
-            }
-            return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=32`;
-        } catch {
-            return null;
-        }
-    };
 
     const handleVisit = () => {
         window.open(site.url, '_blank');
@@ -311,4 +297,4 @@ export default function SiteCard({ site, onEdit, onDelete, onVisit }) {
             </div>
         </div>
     );
-}
+});

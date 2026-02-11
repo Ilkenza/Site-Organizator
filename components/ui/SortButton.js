@@ -1,3 +1,4 @@
+/** @deprecated UNUSED — Sidebar.js has its own inline sort UI. Safe to delete. */
 import { useState, useEffect, useRef } from 'react';
 import { FilterIcon, ChevronDownIcon } from './Icons';
 

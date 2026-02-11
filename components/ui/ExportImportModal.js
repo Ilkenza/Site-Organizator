@@ -1,3 +1,4 @@
+/** @deprecated UNUSED — ImportExportSection in settings handles import/export. Safe to delete. */
 import { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';

@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import { fetchAPI } from '../../lib/supabase';
-import { TIER_LABELS, TIER_COLORS, TIER_FREE } from '../../lib/tierConfig';
+import { TIER_COLORS, TIER_FREE } from '../../lib/tierConfig';
 import Button from '../ui/Button';
 import {
     MenuIcon, SearchIcon, RefreshIcon, CloseIcon, ClipboardCheckIcon,
@@ -159,7 +159,6 @@ export default function Header({ onAddClick, onMenuClick }) {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const userMenuRef = useRef(null);
     // Mobile search state
-    const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
     // More options menu for mobile
     const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
     const moreOptionsRef = useRef(null);
@@ -172,6 +171,24 @@ export default function Header({ onAddClick, onMenuClick }) {
     const didBulkUndoRef = useRef(false);
     const [usageWarning, setUsageWarning] = useState(null);
     const [refreshing, setRefreshing] = useState(false);
+
+    // Computed selected count for bulk operations
+    const selectedCount = useMemo(() => {
+        switch (activeTab) {
+            case 'sites': return selectedSites.size;
+            case 'favorites': {
+                let count = 0;
+                for (const siteId of selectedSites) {
+                    const site = sites.find(s => s.id === siteId);
+                    if (site && site.is_favorite) count++;
+                }
+                return count;
+            }
+            case 'categories': return selectedCategories.size;
+            case 'tags': return selectedTags.size;
+            default: return 0;
+        }
+    }, [activeTab, selectedSites, selectedCategories, selectedTags, sites]);
 
     // Close user menu when clicking outside
     useEffect(() => {
@@ -276,23 +293,7 @@ export default function Header({ onAddClick, onMenuClick }) {
 
             // Delete or Backspace - Delete selected items
             if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput && multiSelectMode) {
-                const getSelectedCount = () => {
-                    switch (activeTab) {
-                        case 'sites': return selectedSites.size;
-                        case 'favorites': {
-                            let count = 0;
-                            for (const siteId of selectedSites) {
-                                const site = sites.find(s => s.id === siteId);
-                                if (site && site.is_favorite) count++;
-                            }
-                            return count;
-                        }
-                        case 'categories': return selectedCategories.size;
-                        case 'tags': return selectedTags.size;
-                        default: return 0;
-                    }
-                };
-                if (getSelectedCount() > 0) {
+                if (selectedCount > 0) {
                     e.preventDefault();
                     // Trigger delete via custom event (handleBulkDelete is defined later)
                     window.dispatchEvent(new CustomEvent('bulkDeleteTriggered'));
@@ -301,7 +302,7 @@ export default function Header({ onAddClick, onMenuClick }) {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [multiSelectMode, activeTab, setMultiSelectMode, setSelectedSites, setSelectedCategories, setSelectedTags, filteredSites, categories, tags, onAddClick, selectedSites, selectedCategories, selectedTags, sites]);
+    }, [multiSelectMode, activeTab, setMultiSelectMode, setSelectedSites, setSelectedCategories, setSelectedTags, filteredSites, categories, tags, onAddClick, selectedCount]);
 
     const getHeaderTitle = () => {
         switch (activeTab) {
@@ -555,23 +556,6 @@ export default function Header({ onAddClick, onMenuClick }) {
 
                             {/* Multi-Select Toggle - simplified for mobile */}
                             {activeTab !== 'settings' && (() => {
-                                const getSelectedCount = () => {
-                                    switch (activeTab) {
-                                        case 'sites': return selectedSites.size;
-                                        case 'favorites': {
-                                            let count = 0;
-                                            for (const siteId of selectedSites) {
-                                                const site = sites.find(s => s.id === siteId);
-                                                if (site && site.is_favorite) count++;
-                                            }
-                                            return count;
-                                        }
-                                        case 'categories': return selectedCategories.size;
-                                        case 'tags': return selectedTags.size;
-                                        default: return 0;
-                                    }
-                                };
-                                const selectedCount = getSelectedCount();
                                 const hasSelection = multiSelectMode && selectedCount > 0;
 
                                 return (

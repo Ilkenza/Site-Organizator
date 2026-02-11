@@ -1,336 +1,86 @@
-/**
- * @fileoverview API endpoint for tags collection management
- * Handles listing all tags and creating new tags
- */
+/** Tags collection — GET all, POST create */
 
-// HTTP Status Codes
-const HTTP_STATUS = {
-  OK: 200,
-  CREATED: 201,
-  UNAUTHORIZED: 401,
-  FORBIDDEN: 403,
-  INTERNAL_ERROR: 500,
-  BAD_GATEWAY: 502
-};
+import {
+  HTTP, configGuard, extractTokenFromReq, resolveTier, isDuplicate,
+  buildHeaders, restUrl, sendError, sendOk,
+} from './helpers/api-utils';
 
-// Error Messages
-const ERROR_MESSAGES = {
-  MISSING_ENV: 'SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment',
-  AUTH_REQUIRED: 'Authentication required to create tags',
-  UPSTREAM_ERROR: 'Upstream REST error'
-};
+const ALLOWED = ['name', 'color', 'user_id'];
+const pick = (body) => Object.fromEntries(ALLOWED.filter(k => body[k] !== undefined).map(k => [k, body[k]]));
 
-// Configuration
-const TAG_CONFIG = {
-  ALLOWED_FIELDS: ['name', 'color', 'user_id'],
-  DUPLICATE_REGEX: /duplicate|unique|violat|23505/i
-};
-
-/**
- * Extract JWT token from Authorization header
- * @param {Object} headers - Request headers
- * @returns {string|null} JWT token or null
- */
-const extractUserToken = (headers) => {
-  const authHeader = headers.authorization;
-  return authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-};
-
-/**
- * Build clean Supabase base URL
- * @param {string} url - Raw Supabase URL
- * @returns {string} Clean URL without trailing slash
- */
-const buildBaseUrl = (url) => url.replace(/\/$/, '');
-
-/**
- * Filter request body to only allowed fields
- * @param {Object} body - Request body
- * @returns {Object} Filtered body with only allowed fields
- */
-const filterAllowedFields = (body) => {
-  const filtered = {};
-  for (const key of TAG_CONFIG.ALLOWED_FIELDS) {
-    if (body[key] !== undefined) {
-      filtered[key] = body[key];
-    }
-  }
-  return filtered;
-};
-
-/**
- * Create a new tag
- * @param {string} baseUrl - Supabase base URL
- * @param {string} anonKey - Anon key
- * @param {string} userToken - User JWT token
- * @param {Object} tagData - Tag data to insert
- * @returns {Promise<Object>} Created tag
- */
-const createTag = async (baseUrl, anonKey, userToken, tagData) => {
-  const url = `${baseUrl}/rest/v1/tags`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${userToken}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation'
-    },
-    body: JSON.stringify(tagData)
-  });
-
-  const text = await response.text();
-
-  if (!response.ok) {
-    throw new Error(text);
-  }
-
-  const created = JSON.parse(text);
-  return Array.isArray(created) ? created[0] : created;
-};
-
-/**
- * Handle duplicate tag error by looking up existing tag
- * @param {string} baseUrl - Supabase base URL
- * @param {string} anonKey - Anon key
- * @param {string} serviceKey - Service role key
- * @param {string} tagName - Tag name to lookup
- * @param {string} errorText - Error text from failed insert
- * @returns {Promise<Object|null>} Existing tag or null
- */
-const handleDuplicateTag = async (baseUrl, anonKey, serviceKey, tagName, errorText) => {
-  if (!tagName || !TAG_CONFIG.DUPLICATE_REGEX.test(errorText)) {
-    return null;
-  }
-
+async function lookupByName(cfg, name, token) {
+  if (!name) return null;
   try {
-    const lookupUrl = `${baseUrl}/rest/v1/tags?select=*&name=eq.${encodeURIComponent(tagName)}`;
-    const lookupToken = serviceKey || anonKey;
+    const r = await fetch(`${restUrl(cfg, 'tags')}?select=*&name=eq.${encodeURIComponent(name)}`, { headers: buildHeaders(cfg.anonKey, token) });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return rows?.[0] || null;
+  } catch { return null; }
+}
 
-    const lookupRes = await fetch(lookupUrl, {
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${lookupToken}`,
-        Accept: 'application/json'
-      }
-    });
-
-    if (lookupRes.ok) {
-      const rows = await lookupRes.json();
-      if (rows && rows.length > 0) {
-        return rows[0];
+async function checkTierLimit(cfg, userToken, res) {
+  const LIMITS = { free: 300, pro: 1000, promax: Infinity };
+  const tier = resolveTier(userToken);
+  const limit = LIMITS[tier] ?? LIMITS.free;
+  if (limit === Infinity) return false;
+  try {
+    const r = await fetch(`${restUrl(cfg, 'tags')}?select=id&limit=${limit + 1}`, { headers: buildHeaders(cfg.anonKey, userToken) });
+    if (r.ok) {
+      const rows = await r.json();
+      if (rows.length >= limit) {
+        const label = tier === 'promax' ? 'Pro Max' : tier === 'pro' ? 'Pro' : 'Free';
+        const target = tier === 'free' ? 'Pro or Pro Max' : 'Pro Max';
+        sendError(res, HTTP.FORBIDDEN, `Tag limit reached (${rows.length}/${limit}). You are on the ${label} plan. Upgrade to ${target} for more.`);
+        return true;
       }
     }
-  } catch (err) {
-    console.warn('tag duplicate lookup failed', err);
-  }
+  } catch { /* allow on failure */ }
+  return false;
+}
 
-  return null;
-};
-
-/**
- * Fetch all tags
- * @param {string} baseUrl - Supabase base URL
- * @param {string} anonKey - Anon key
- * @param {string} readToken - Read token (service role or anon)
- * @returns {Promise<Array>} Tags array
- */
-const fetchAllTags = async (baseUrl, anonKey, readToken) => {
-  const url = `${baseUrl}/rest/v1/tags?select=*,site_tags(count)`;
-  const response = await fetch(url, {
-    headers: {
-      apikey: anonKey,
-      Authorization: `Bearer ${readToken}`,
-      Accept: 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text);
-  }
-
-  const raw = await response.json();
-  // Flatten count: [{ ..., site_tags: [{ count: 3 }] }] → { ..., site_count: 3 }
-  return raw.map(tag => {
-    const count = tag.site_tags?.[0]?.count ?? 0;
-    const { site_tags: _st, ...rest } = tag;
-    return { ...rest, site_count: count };
-  });
-};
-
-/**
- * Handle POST request - create new tag
- * @param {Object} req - Request object
- * @param {Object} res - Response object
- * @param {string} baseUrl - Supabase base URL
- * @param {string} anonKey - Anon key
- * @param {string} serviceKey - Service role key
- * @param {string|null} userToken - User JWT token
- * @returns {Promise<void>}
- */
-const handlePostRequest = async (req, res, baseUrl, anonKey, serviceKey, userToken) => {
-  if (!userToken) {
-    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-      success: false,
-      error: ERROR_MESSAGES.AUTH_REQUIRED
-    });
-  }
-
-  // ── Tier limit check ──────────────────────────────────────────────
-  const TIER_LIMITS = { free: 200, pro: 500, promax: Infinity };
-  let tier = 'free';
-  try {
-    const jwtPayload = JSON.parse(Buffer.from(userToken.split('.')[1], 'base64').toString('utf8'));
-    const meta = jwtPayload?.user_metadata || {};
-    tier = meta.tier || (meta.is_pro ? 'pro' : 'free');
-    const userEmail = jwtPayload?.email || '';
-    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-    if (adminEmails.includes(userEmail.toLowerCase())) tier = 'promax';
-  } catch { /* keep free */ }
-
-  const tagLimit = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
-  if (tagLimit !== Infinity) {
-    try {
-      const countUrl = `${baseUrl}/rest/v1/tags?select=id&limit=${tagLimit + 1}`;
-      const countRes = await fetch(countUrl, {
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${userToken}`,
-          Accept: 'application/json'
-        }
-      });
-      if (countRes.ok) {
-        const rows = await countRes.json();
-        if (rows.length >= tagLimit) {
-          const tierLabel = tier === 'promax' ? 'Pro Max' : tier === 'pro' ? 'Pro' : 'Free';
-          const upgradeTarget = tier === 'free' ? 'Pro or Pro Max' : 'Pro Max';
-          return res.status(HTTP_STATUS.FORBIDDEN).json({
-            success: false,
-            error: `Tag limit reached (${rows.length}/${tagLimit}). You are on the ${tierLabel} plan. Upgrade to ${upgradeTarget} for more.`
-          });
-        }
-      }
-    } catch { /* allow on count failure */ }
-  }
-  // ── End tier limit check ──────────────────────────────────────────
-
-  try {
-    const body = req.body || {};
-    const filteredBody = filterAllowedFields(body);
-
-    const newTag = await createTag(baseUrl, anonKey, userToken, filteredBody);
-
-    return res.status(HTTP_STATUS.CREATED).json({
-      success: true,
-      data: newTag
-    });
-  } catch (err) {
-    // Handle duplicate tag
-    const tagName = req.body?.name;
-    const duplicate = await handleDuplicateTag(
-      baseUrl,
-      anonKey,
-      serviceKey,
-      tagName,
-      err.message
-    );
-
-    if (duplicate) {
-      return res.status(HTTP_STATUS.OK).json({
-        success: true,
-        data: duplicate
-      });
-    }
-
-    return res.status(HTTP_STATUS.BAD_GATEWAY).json({
-      success: false,
-      error: ERROR_MESSAGES.UPSTREAM_ERROR,
-      details: err.message
-    });
-  }
-};
-
-/**
- * Handle GET request - list all tags
- * @param {Object} req - Request object
- * @param {Object} res - Response object
- * @param {string} baseUrl - Supabase base URL
- * @param {string} anonKey - Anon key
- * @param {string} userToken - User JWT token for RLS
- * @returns {Promise<void>}
- */
-const handleGetRequest = async (req, res, baseUrl, anonKey, userToken) => {
-  if (!userToken) {
-    return res.status(HTTP_STATUS.UNAUTHORIZED).json({
-      success: false,
-      error: 'Authentication required to fetch tags'
-    });
-  }
-
-  try {
-    const tags = await fetchAllTags(baseUrl, anonKey, userToken);
-
-    return res.status(HTTP_STATUS.OK).json({
-      success: true,
-      data: tags
-    });
-  } catch (err) {
-    return res.status(HTTP_STATUS.BAD_GATEWAY).json({
-      success: false,
-      error: ERROR_MESSAGES.UPSTREAM_ERROR,
-      details: err.message
-    });
-  }
-};
-
-/**
- * Main API handler for tags collection
- * @param {Object} req - Next.js request object
- * @param {Object} res - Next.js response object
- * @returns {Promise<void>}
- */
 export default async function handler(req, res) {
-  const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_ANON_KEY =
-    process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const SERVICE_ROLE_KEY =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  const cfg = configGuard(res);
+  if (!cfg) return;
+  const userToken = extractTokenFromReq(req);
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
-      success: false,
-      error: ERROR_MESSAGES.MISSING_ENV
-    });
-  }
+  if (req.method === 'POST') {
+    if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
+    if (await checkTierLimit(cfg, userToken, res)) return;
 
-  const userToken = extractUserToken(req.headers);
-  const baseUrl = buildBaseUrl(SUPABASE_URL);
-
-  try {
-    if (req.method === 'POST') {
-      return await handlePostRequest(
-        req,
-        res,
-        baseUrl,
-        SUPABASE_ANON_KEY,
-        SERVICE_ROLE_KEY,
-        userToken
-      );
-    } else if (req.method === 'GET') {
-      return await handleGetRequest(req, res, baseUrl, SUPABASE_ANON_KEY, userToken);
-    } else {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        error: 'Only GET and POST are allowed'
+    try {
+      const body = req.body || {};
+      const r = await fetch(restUrl(cfg, 'tags'), {
+        method: 'POST',
+        headers: buildHeaders(cfg.anonKey, userToken, { contentType: true, prefer: 'return=representation' }),
+        body: JSON.stringify(pick(body)),
       });
+      const text = await r.text();
+      if (!r.ok) {
+        if (body.name && isDuplicate(text)) {
+          const existing = await lookupByName(cfg, body.name, cfg.serviceKey);
+          if (existing) return sendOk(res, { data: existing });
+        }
+        return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: text });
+      }
+      const created = JSON.parse(text);
+      return res.status(HTTP.CREATED).json({ success: true, data: Array.isArray(created) ? created[0] : created });
+    } catch (err) {
+      return sendError(res, HTTP.INTERNAL_ERROR, err.message);
     }
-  } catch (err) {
-    console.error('Unhandled error in tags API:', err);
-    return res.status(HTTP_STATUS.INTERNAL_ERROR).json({
-      success: false,
-      error: String(err)
-    });
   }
+
+  if (req.method === 'GET') {
+    if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
+    try {
+      const r = await fetch(`${restUrl(cfg, 'tags')}?select=*,site_tags(count)`, { headers: buildHeaders(cfg.anonKey, userToken) });
+      if (!r.ok) return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: await r.text() });
+      const raw = await r.json();
+      const data = raw.map(({ site_tags: st, ...rest }) => ({ ...rest, site_count: st?.[0]?.count ?? 0 }));
+      return sendOk(res, { data });
+    } catch (err) {
+      return sendError(res, HTTP.INTERNAL_ERROR, err.message);
+    }
+  }
+
+  return sendError(res, HTTP.METHOD_NOT_ALLOWED, 'Only GET and POST are allowed');
 }
