@@ -5,7 +5,7 @@ import {
   buildHeaders, restUrl, sendError, sendOk,
 } from '../helpers/api-utils';
 
-const ALLOWED = ['name', 'url', 'pricing'];
+const ALLOWED = ['name', 'url', 'pricing', 'description'];
 const pick = (body) => {
   const f = {};
   for (const k of ALLOWED) if (Object.prototype.hasOwnProperty.call(body, k)) f[k] = body[k];
@@ -62,7 +62,8 @@ export default async function handler(req, res) {
   if (!cfg) return;
   const { id } = req.query;
   const token = extractTokenFromReq(req);
-  const authToken = token || cfg.anonKey;
+  if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
+  const authToken = token;
   const relKey = await determineRelKey(id, token, cfg);
 
   if (req.method === 'GET') {

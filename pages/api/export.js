@@ -1,7 +1,7 @@
 /** Export sites in JSON, CSV or HTML format */
 
 import { createClient } from '@supabase/supabase-js';
-import { HTTP, sendError, methodGuard } from './helpers/api-utils';
+import { HTTP, sendError, methodGuard, extractTokenFromReq, decodeJwt } from './helpers/api-utils';
 
 const URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -60,8 +60,11 @@ export default async function handler(req, res) {
     if (!methodGuard(req, res, 'GET')) return;
     if (!supabase) return sendError(res, HTTP.INTERNAL_ERROR, 'Supabase not configured');
 
-    const userId = req.query.userId || req.headers['x-user-id'];
-    if (!userId) return sendError(res, HTTP.UNAUTHORIZED, 'User ID required');
+    const token = extractTokenFromReq(req);
+    if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
+    const jwt = decodeJwt(token);
+    const userId = jwt?.sub;
+    if (!userId) return sendError(res, HTTP.UNAUTHORIZED, 'Invalid token');
 
     try {
         const fmt = (req.query.format || 'json').toLowerCase();

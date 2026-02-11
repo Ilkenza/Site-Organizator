@@ -5,7 +5,7 @@ import {
   buildHeaders, restUrl, sendError, sendOk,
 } from './helpers/api-utils';
 
-const POST_FIELDS = ['name', 'url', 'pricing', 'user_id', 'import_source'];
+const POST_FIELDS = ['name', 'url', 'pricing', 'description', 'user_id', 'import_source'];
 const DEFAULT_LIMIT = 100, MAX_LIMIT = 5000;
 const BATCH = 100;
 
@@ -266,7 +266,8 @@ export default async function handler(req, res) {
   if (!cfg) return;
 
   const userToken = extractTokenFromReq(req);
-  const authKey = userToken || cfg.anonKey;
+  if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
+  const authKey = userToken;
   const relKey = cfg.serviceKey || cfg.anonKey;
 
   try {
