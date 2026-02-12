@@ -1816,9 +1816,29 @@ function resetFormFields() {
     try {
         const siteNameInput = document.getElementById('siteName');
         const pricingSelect = document.getElementById('pricing');
+        const descriptionInput = document.getElementById('siteDescription');
+        const useCaseInput = document.getElementById('useCase');
 
         if (siteNameInput) siteNameInput.value = '';
         if (pricingSelect) pricingSelect.value = '';
+        if (descriptionInput) descriptionInput.value = '';
+        if (useCaseInput) useCaseInput.value = '';
+
+        // Reset Favorite toggle to "No"
+        const favoriteToggle = document.getElementById('favoriteToggle');
+        if (favoriteToggle) {
+            favoriteToggle.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.value === 'false');
+            });
+        }
+
+        // Reset Needed toggle to "Not needed"
+        const neededToggle = document.getElementById('neededToggle');
+        if (neededToggle) {
+            neededToggle.querySelectorAll('.toggle-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.value === 'false');
+            });
+        }
 
         // Uncheck all category checkboxes and reset visual styling
         const categoryCheckboxes = document.querySelectorAll('#categoriesCheckboxList input[type="checkbox"]');
@@ -2857,6 +2877,17 @@ if (cancelBtn) {
 }
 
 // Submit site form
+
+// Wire up toggle button groups (Favorite / Needed)
+document.querySelectorAll('.toggle-group').forEach(group => {
+    group.querySelectorAll('.toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+});
+
 const siteForm = document.getElementById('siteForm');
 if (siteForm) {
     siteForm.addEventListener('submit', async (e) => {
@@ -2867,6 +2898,10 @@ if (siteForm) {
         const pricingSelect = document.getElementById('pricing');
         const saveBtn = document.getElementById('saveBtn');
         const siteNameInput = document.getElementById('siteName');
+        const descriptionInput = document.getElementById('siteDescription');
+        const useCaseInput = document.getElementById('useCase');
+        const favoriteToggle = document.getElementById('favoriteToggle');
+        const neededToggle = document.getElementById('neededToggle');
 
         if (!urlInput || !pricingSelect || !saveBtn || !siteNameInput) {
             showMessage('Error: Some form fields are missing', 'error');
@@ -2875,6 +2910,10 @@ if (siteForm) {
 
         const url = urlInput.value.trim();
         const siteName = siteNameInput.value.trim();
+        const siteDescription = descriptionInput ? descriptionInput.value.trim() : '';
+        const useCase = useCaseInput ? useCaseInput.value.trim() : '';
+        const isFavorite = favoriteToggle ? favoriteToggle.querySelector('.toggle-btn.active')?.dataset.value === 'true' : false;
+        const isNeeded = neededToggle ? neededToggle.querySelector('.toggle-btn.active')?.dataset.value === 'true' : false;
 
         // Get only selected checkboxes for categories
         const selectedCategoryCheckboxes = Array.from(
@@ -2944,6 +2983,10 @@ if (siteForm) {
                 name: siteName,
                 title: siteName,
                 url: url,
+                description: siteDescription || null,
+                use_case: useCase || null,
+                is_favorite: isFavorite,
+                is_needed: isNeeded,
                 // If multiple categories selected, use the first as the site's main category
                 category: (categoryNames && categoryNames.length > 0) ? categoryNames[0] : null,
                 // send tag names as a text[] field
