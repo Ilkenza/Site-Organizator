@@ -13,6 +13,7 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
 
     const [name, setName] = useState('');
     const [color, setColor] = useState(TAG_COLORS[0].hex);
+    const [isNeeded, setIsNeeded] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -20,6 +21,7 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
         if (isOpen) {
             setName(tag?.name || '');
             setColor(tag?.color || TAG_COLORS[0].hex);
+            setIsNeeded(tag?.is_needed ?? false);
             setError(null);
         }
     }, [isOpen, tag]);
@@ -38,7 +40,7 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
                 throw new Error('You must be logged in to create tags');
             }
 
-            const payload = { name: name.trim(), color, user_id: user.id };
+            const payload = { name: name.trim(), color, is_needed: isNeeded, user_id: user.id };
 
             if (isEditing) {
                 await updateTag(tag.id, payload);
@@ -135,6 +137,33 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
                     >
                         #{name || 'tagname'}
                     </span>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-app-text-primary">Needed</label>
+                    <div className="grid grid-cols-2 gap-2 p-1 rounded-lg border border-app-border bg-app-bg-secondary/60">
+                        <button
+                            type="button"
+                            onClick={() => setIsNeeded(true)}
+                            className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors ${isNeeded
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'text-app-text-secondary hover:text-app-text-primary'
+                                }`}
+                        >
+                            Needed
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsNeeded(false)}
+                            className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors ${!isNeeded
+                                ? 'bg-app-bg-light text-app-text-primary border border-app-border'
+                                : 'text-app-text-secondary hover:text-app-text-primary'
+                                }`}
+                        >
+                            Not needed
+                        </button>
+                    </div>
+                    <p className="text-xs text-app-text-muted">Used for filtering and badges.</p>
                 </div>
             </form>
         </Modal>

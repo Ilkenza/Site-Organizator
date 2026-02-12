@@ -3,12 +3,12 @@ import { useDashboard } from '../../context/DashboardContext';
 import Modal, { ConfirmModal } from '../ui/Modal';
 import Pagination from '../ui/Pagination';
 import InlineEditableName from '../categories/InlineEditableName';
-import { TagIcon, SearchIcon, FilterIcon, EditIcon, TrashIcon, SpinnerIcon, LinkIcon, WarningIcon } from '../ui/Icons';
+import { TagIcon, SearchIcon, FilterIcon, EditIcon, TrashIcon, SpinnerIcon, LinkIcon, WarningIcon, CheckCircleFilledIcon, BanIcon } from '../ui/Icons';
 
 const ITEMS_PER_PAGE = 50;
 
 export default function TagsList({ onEdit, onDelete }) {
-    const { tags, sites, deleteTag, updateTag, loading, searchQuery, multiSelectMode, selectedTags, setSelectedTags, usageFilterTags } = useDashboard();
+    const { tags, sites, deleteTag, updateTag, loading, searchQuery, multiSelectMode, selectedTags, setSelectedTags, usageFilterTags, neededFilterTags } = useDashboard();
     const [deletingId, setDeletingId] = useState(null);
     const [tagToDelete, setTagToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
@@ -29,13 +29,18 @@ export default function TagsList({ onEdit, onDelete }) {
         } else if (usageFilterTags === 'unused') {
             list = list.filter(tag => (tag.site_count || 0) === 0);
         }
+        if (neededFilterTags === 'needed') {
+            list = list.filter(tag => tag.is_needed === true);
+        } else if (neededFilterTags === 'not_needed') {
+            list = list.filter(tag => tag.is_needed === false);
+        }
         return list;
-    }, [tags, searchQuery, usageFilterTags]);
+    }, [tags, searchQuery, usageFilterTags, neededFilterTags]);
 
     // Reset to page 1 when search or filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, usageFilterTags]);
+    }, [searchQuery, usageFilterTags, neededFilterTags]);
 
     const totalPages = Math.ceil(filteredTags.length / ITEMS_PER_PAGE);
     const paginatedTags = filteredTags.slice(
@@ -254,6 +259,19 @@ export default function TagsList({ onEdit, onDelete }) {
                                                     {tag.created_at ? new Date(tag.created_at).toLocaleDateString() : 'N/A'}
                                                 </p>
                                             </div>
+                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${tag.is_needed
+                                                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                                : 'bg-app-bg-secondary text-app-text-muted border-app-border'
+                                                }`}
+                                                title={tag.is_needed ? 'Needed' : 'Not needed'}
+                                            >
+                                                {tag.is_needed ? (
+                                                    <CheckCircleFilledIcon className="w-3 h-3" />
+                                                ) : (
+                                                    <BanIcon className="w-3 h-3" />
+                                                )}
+                                                {tag.is_needed ? 'Needed' : 'Not needed'}
+                                            </span>
                                             {/* Actions - visible on mobile, hover on tablet+ */}
                                             <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
                                                 <button

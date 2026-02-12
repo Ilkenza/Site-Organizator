@@ -5,7 +5,7 @@ import {
   buildHeaders, restUrl, sendError, sendOk,
 } from './helpers/api-utils';
 
-const ALLOWED = ['name', 'color', 'user_id'];
+const ALLOWED = ['name', 'color', 'user_id', 'is_needed'];
 const pick = (body) => Object.fromEntries(ALLOWED.filter(k => body[k] !== undefined).map(k => [k, body[k]]));
 
 async function lookupByName(cfg, name, token) {

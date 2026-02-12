@@ -161,8 +161,10 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
         name: '',
         url: '',
         description: '',
+        use_case: '',
         pricing: 'fully_free',
         is_favorite: false,
+        is_needed: false,
         categoryIds: [],
         tagIds: []
     });
@@ -292,7 +294,11 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
         if (isOpen) {
             // Restore form data if coming back from confirm modal
             if (restoreFormData) {
-                setFormData(restoreFormData);
+                setFormData({
+                    ...restoreFormData,
+                    use_case: restoreFormData.use_case || '',
+                    is_needed: restoreFormData.is_needed ?? false,
+                });
             } else if (site) {
                 const siteCategories = site.categories_array || site.categories || site.site_categories?.map(sc => sc.category) || [];
                 const siteTags = site.tags_array || site.tags || site.site_tags?.map(st => st.tag) || [];
@@ -301,8 +307,10 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                     name: site.name || '',
                     url: site.url || '',
                     description: site.description || '',
+                    use_case: site.use_case || '',
                     pricing: site.pricing || 'fully_free',
                     is_favorite: site.is_favorite || false,
+                    is_needed: site.is_needed ?? false,
                     categoryIds: extractRelationIds(siteCategories),
                     tagIds: extractRelationIds(siteTags)
                 });
@@ -311,8 +319,10 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                     name: prefill?.name || '',
                     url: prefill?.url || '',
                     description: '',
+                    use_case: '',
                     pricing: 'fully_free',
                     is_favorite: defaultFavorite,
+                    is_needed: false,
                     categoryIds: defaultCategoryId ? [defaultCategoryId] : [],
                     tagIds: defaultTagId ? [defaultTagId] : []
                 });
@@ -502,10 +512,12 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                 name: formData.name.trim(),
                 url,
                 description: formData.description?.trim() || '',
+                use_case: formData.use_case?.trim() || '',
                 pricing: formData.pricing,
                 category_ids: formData.categoryIds,
                 tag_ids: formData.tagIds,
-                is_favorite: formData.is_favorite
+                is_favorite: formData.is_favorite,
+                is_needed: formData.is_needed
             };
 
             if (isEditing) {
@@ -565,10 +577,12 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                 name: formData.name.trim(),
                 url,
                 description: formData.description?.trim() || '',
+                use_case: formData.use_case?.trim() || '',
                 pricing: formData.pricing,
                 category_ids: formData.categoryIds,
                 tag_ids: formData.tagIds,
-                is_favorite: formData.is_favorite
+                is_favorite: formData.is_favorite,
+                is_needed: formData.is_needed
             };
             onNeedsSaveConfirm(payload, missing, !!site, { ...formData });
             return;
@@ -652,6 +666,19 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                         rows={2}
                         className="w-full bg-app-bg-light border border-app-border rounded-lg px-3 py-2 text-sm text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-2 focus:ring-app-accent/50 focus:border-app-accent/50 resize-none transition-colors"
                     />
+                </div>
+
+                <div className="space-y-1">
+                    <label className="block text-sm font-medium text-app-text-secondary">How can this site help me?</label>
+                    <textarea
+                        name="use_case"
+                        value={formData.use_case}
+                        onChange={handleChange}
+                        placeholder="e.g., Free icons for my projects, Learn React hooks, Track expenses..."
+                        rows={2}
+                        className="w-full bg-app-bg-light border border-app-border rounded-lg px-3 py-2 text-sm text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 resize-none transition-colors"
+                    />
+                    <p className="text-xs text-app-text-muted">Helps you remember why you saved this site.</p>
                 </div>
 
                 <Input
@@ -898,6 +925,33 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                         </span>
                         <span>{formData.is_favorite ? 'Added to Favorites!' : 'Click to add to Favorites'}</span>
                     </button>
+                </div>
+
+                <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-app-text-primary">Needed</label>
+                    <div className="grid grid-cols-2 gap-2 p-1 rounded-lg border border-app-border bg-app-bg-secondary/60">
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, is_needed: true }))}
+                            className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors ${formData.is_needed
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'text-app-text-secondary hover:text-app-text-primary'
+                                }`}
+                        >
+                            Needed
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, is_needed: false }))}
+                            className={`px-3 py-2 text-xs font-semibold rounded-md transition-colors ${!formData.is_needed
+                                ? 'bg-app-bg-light text-app-text-primary border border-app-border'
+                                : 'text-app-text-secondary hover:text-app-text-primary'
+                                }`}
+                        >
+                            Not needed
+                        </button>
+                    </div>
+                    <p className="text-xs text-app-text-muted">Used for filtering and badges.</p>
                 </div>
 
                 {/* Categories */}
