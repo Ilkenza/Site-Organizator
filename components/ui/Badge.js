@@ -44,7 +44,7 @@ function Badge({
 
     return (
         <span
-            className={`inline-flex items-center gap-1 ${roundedClass} font-medium ${colorClass} ${SIZES[size]} ${className}`}
+            className={`inline-flex items-center gap-1 max-w-full whitespace-normal break-words ${roundedClass} font-medium ${colorClass} ${SIZES[size]} ${className}`}
             style={hexStyle}
         >
             {/* Category folder icon */}

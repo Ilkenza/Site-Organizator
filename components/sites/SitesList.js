@@ -11,7 +11,8 @@ const RENDER_DELAY_MS = 500;
 export default function SitesList({ onEdit, onDelete }) {
     const {
         filteredSites, loading, searchQuery, selectedCategory, selectedTag, categories,
-        currentPage, totalPages, totalSitesCount, fetchSitesPage, SITES_PAGE_SIZE
+        currentPage, totalPages, totalSitesCount, fetchSitesPage, SITES_PAGE_SIZE,
+        selectedImportSource, neededFilterSites
     } = useDashboard();
 
     // Delayed render: show skeleton briefly after sites data arrives
@@ -72,7 +73,7 @@ export default function SitesList({ onEdit, onDelete }) {
     }
 
     if (filteredSites.length === 0) {
-        const hasFilters = searchQuery || selectedCategory || selectedTag;
+        const hasFilters = searchQuery || selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all');
 
         return (
             <div className="flex flex-col items-center justify-center py-16 px-4">

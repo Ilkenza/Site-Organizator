@@ -29,6 +29,7 @@ export default async function handler(req, res) {
       const raw = req.body || {};
       if (raw.name !== undefined) body.name = raw.name;
       if (raw.color !== undefined) body.color = raw.color;
+      if (raw.is_needed !== undefined) body.is_needed = raw.is_needed;
       body.user_id = decodeJwt(token)?.sub;
       const r = await fetch(url, { method: 'PATCH', headers: buildHeaders(cfg.anonKey, token, { contentType: true, prefer: 'return=representation' }), body: JSON.stringify(body) });
       if (!r.ok) return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: await r.text() });

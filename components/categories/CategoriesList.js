@@ -3,7 +3,7 @@ import { useDashboard } from '../../context/DashboardContext';
 import { ConfirmModal } from '../ui/Modal';
 import Pagination from '../ui/Pagination';
 import InlineEditableName from './InlineEditableName';
-import { FolderIcon, FilterIcon, EditIcon, TrashIcon, SpinnerIcon, LinkIcon, WarningIcon } from '../ui/Icons';
+import { FolderIcon, FilterIcon, EditIcon, TrashIcon, SpinnerIcon, LinkIcon, WarningIcon, CheckCircleFilledIcon, BanIcon } from '../ui/Icons';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -19,6 +19,7 @@ export default function CategoriesList({ onEdit, onDelete }) {
         selectedCategories,
         setSelectedCategories,
         usageFilterCategories,
+        neededFilterCategories,
     } = useDashboard();
     const [deletingId, setDeletingId] = useState(null);
     const [categoryToDelete, setCategoryToDelete] = useState(null);
@@ -39,13 +40,18 @@ export default function CategoriesList({ onEdit, onDelete }) {
         } else if (usageFilterCategories === 'unused') {
             list = list.filter(cat => (cat.site_count || 0) === 0);
         }
+        if (neededFilterCategories === 'needed') {
+            list = list.filter(cat => cat.is_needed === true);
+        } else if (neededFilterCategories === 'not_needed') {
+            list = list.filter(cat => cat.is_needed === false);
+        }
         return list;
-    }, [categories, searchQuery, usageFilterCategories]);
+    }, [categories, searchQuery, usageFilterCategories, neededFilterCategories]);
 
     // Reset to page 1 when search or filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, usageFilterCategories]);
+    }, [searchQuery, usageFilterCategories, neededFilterCategories]);
 
     const totalPages = Math.ceil(filteredCategories.length / ITEMS_PER_PAGE);
     const paginatedCategories = filteredCategories.slice(
@@ -246,6 +252,19 @@ export default function CategoriesList({ onEdit, onDelete }) {
                                         </p>
                                     </div>
                                 </div>
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${category.is_needed
+                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                    : 'bg-app-bg-secondary text-app-text-muted border-app-border'
+                                    }`}
+                                    title={category.is_needed ? 'Needed' : 'Not needed'}
+                                >
+                                    {category.is_needed ? (
+                                        <CheckCircleFilledIcon className="w-3 h-3" />
+                                    ) : (
+                                        <BanIcon className="w-3 h-3" />
+                                    )}
+                                    {category.is_needed ? 'Needed' : 'Not needed'}
+                                </span>
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                     <button
                                         onClick={() => onEdit(category)}

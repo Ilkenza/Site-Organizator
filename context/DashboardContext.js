@@ -314,6 +314,9 @@ export function DashboardProvider({ children }) {
     const [selectedImportSource, setSelectedImportSource] = useState(null); // 'bookmarks' | 'notion' | 'file' | null
     const [usageFilterCategories, setUsageFilterCategories] = useState('all'); // 'all' | 'used' | 'unused'
     const [usageFilterTags, setUsageFilterTags] = useState('all'); // 'all' | 'used' | 'unused'
+    const [neededFilterSites, setNeededFilterSites] = useState('all'); // 'all' | 'needed' | 'not_needed'
+    const [neededFilterCategories, setNeededFilterCategories] = useState('all'); // 'all' | 'needed' | 'not_needed'
+    const [neededFilterTags, setNeededFilterTags] = useState('all'); // 'all' | 'needed' | 'not_needed'
     const [sortBy, setSortBy] = useState('created_at');
 
     // Import preview state (persists across tabs)
@@ -426,8 +429,9 @@ export function DashboardProvider({ children }) {
         if (sortOrder) params.set('sort_order', sortOrder);
         if (activeTab === 'favorites') params.set('favorites', 'true');
         if (selectedImportSource) params.set('import_source', selectedImportSource);
+        if (neededFilterSites && neededFilterSites !== 'all') params.set('needed', neededFilterSites);
         return params.toString();
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, neededFilterSites]);
 
     // Fetch a single page of sites from server (all filters are server-side now)
     const fetchSitesPage = useCallback(async (page = 1) => {
@@ -578,7 +582,7 @@ export function DashboardProvider({ children }) {
             fetchSitesPageRef.current(1);
         }, delay);
         return () => clearTimeout(timer);
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, selectedImportSource, activeTab]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, selectedImportSource, activeTab, neededFilterSites]);
 
     // Compute cross-filter counts when multiple filter dimensions are active
     // This lets ALL categories/tags in the sidebar show "intersection / ownTotal"
@@ -608,6 +612,7 @@ export function DashboardProvider({ children }) {
                 p.set('limit', '5000'); p.set('page', '1');
                 if (searchQuery) p.set('q', searchQuery);
                 if (activeTab === 'favorites') p.set('favorites', 'true');
+                if (neededFilterSites && neededFilterSites !== 'all') p.set('needed', neededFilterSites);
             };
 
             // Shared fetch helper — category and tag cross-counts can share the same fetch
@@ -687,7 +692,7 @@ export function DashboardProvider({ children }) {
             cancelled = true;
             if (crossFilterTimerRef.current) clearTimeout(crossFilterTimerRef.current);
         };
-    }, [selectedCategory, selectedTag, selectedImportSource, searchQuery, activeTab, user]);
+    }, [selectedCategory, selectedTag, selectedImportSource, searchQuery, activeTab, user, neededFilterSites]);
 
     useEffect(() => {
         if (!supabase || !user) return;
@@ -1009,6 +1014,12 @@ export function DashboardProvider({ children }) {
         setUsageFilterCategories,
         usageFilterTags,
         setUsageFilterTags,
+        neededFilterSites,
+        setNeededFilterSites,
+        neededFilterCategories,
+        setNeededFilterCategories,
+        neededFilterTags,
+        setNeededFilterTags,
         sortBy,
         setSortBy,
         sortOrder,

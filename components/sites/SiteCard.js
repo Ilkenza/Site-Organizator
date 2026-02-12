@@ -2,7 +2,7 @@ import { useState, memo } from 'react';
 import Badge from '../ui/Badge';
 import InlineEditableName from '../categories/InlineEditableName';
 import { useDashboard } from '../../context/DashboardContext';
-import { CheckmarkIcon, GlobeIcon, ExternalLinkIcon, EditIcon, TrashIcon, BookmarkIcon, DocumentIcon, TextLinesIcon, PinIcon } from '../ui/Icons';
+import { CheckmarkIcon, GlobeIcon, ExternalLinkIcon, EditIcon, TrashIcon, BookmarkIcon, DocumentIcon, TextLinesIcon, PinIcon, CheckCircleFilledIcon, BanIcon, LightbulbIcon } from '../ui/Icons';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -215,6 +215,14 @@ export default memo(function SiteCard({ site, onEdit, onDelete, onVisit }) {
                 </p>
             )}
 
+            {/* Use Case */}
+            {site.use_case && (
+                <div className="flex items-start gap-1.5 mb-2 sm:mb-3 px-2 py-1.5 rounded-md bg-cyan-500/5 border border-cyan-500/20">
+                    <LightbulbIcon className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-cyan-300/90 line-clamp-2">{site.use_case}</p>
+                </div>
+            )}
+
             {/* Categories and Tags */}
             <div className="flex flex-wrap content-start gap-1 sm:gap-1.5 mb-2 sm:mb-3 flex-1">
                 {(showAllCategories ? categories : categories.slice(0, 6)).map((cat, index) => (
@@ -256,19 +264,34 @@ export default memo(function SiteCard({ site, onEdit, onDelete, onVisit }) {
 
             {/* Footer: Pricing, Import Source and Date */}
             <div className="flex items-center justify-between text-[10px] sm:text-xs text-app-text-secondary pt-2 sm:pt-3 border-t border-app-border/50 mt-auto">
-                {/* Pricing */}
-                <span className={`px-2 py-0.5 rounded-full font-medium ${site.pricing === 'fully_free' ? 'bg-green-950 text-emerald-300' :
-                    site.pricing === 'freemium' ? 'bg-amber-900 text-amber-300' :
-                        site.pricing === 'free_trial' ? 'bg-blue-950 text-blue-300' :
-                            site.pricing === 'paid' ? 'bg-red-950 text-red-200' :
-                                'bg-app-bg-secondary text-app-text-secondary'
-                    }`}>
-                    {site.pricing === 'fully_free' ? '✓ Free' :
-                        site.pricing === 'freemium' ? '◐ Freemium' :
-                            site.pricing === 'free_trial' ? '⏱ Free Trial' :
-                                site.pricing === 'paid' ? '$ Paid' :
-                                    'Unknown'}
-                </span>
+                <div className="flex items-center gap-2">
+                    {/* Pricing */}
+                    <span className={`px-2 py-0.5 rounded-full font-medium ${site.pricing === 'fully_free' ? 'bg-green-950 text-emerald-300' :
+                        site.pricing === 'freemium' ? 'bg-amber-900 text-amber-300' :
+                            site.pricing === 'free_trial' ? 'bg-blue-950 text-blue-300' :
+                                site.pricing === 'paid' ? 'bg-red-950 text-red-200' :
+                                    'bg-app-bg-secondary text-app-text-secondary'
+                        }`}>
+                        {site.pricing === 'fully_free' ? '✓ Free' :
+                            site.pricing === 'freemium' ? '◐ Freemium' :
+                                site.pricing === 'free_trial' ? '⏱ Free Trial' :
+                                    site.pricing === 'paid' ? '$ Paid' :
+                                        'Unknown'}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border ${site.is_needed
+                        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                        : 'bg-app-bg-secondary text-app-text-muted border-app-border'
+                        }`}
+                        title={site.is_needed ? 'Needed' : 'Not needed'}
+                    >
+                        {site.is_needed ? (
+                            <CheckCircleFilledIcon className="w-3 h-3" />
+                        ) : (
+                            <BanIcon className="w-3 h-3" />
+                        )}
+                        {site.is_needed ? 'Needed' : 'Not needed'}
+                    </span>
+                </div>
 
                 <div className="flex items-center gap-2">
                     {/* Import source icon */}

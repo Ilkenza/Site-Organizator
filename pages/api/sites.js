@@ -5,7 +5,7 @@ import {
   buildHeaders, restUrl, sendError, sendOk,
 } from './helpers/api-utils';
 
-const POST_FIELDS = ['name', 'url', 'pricing', 'description', 'user_id', 'import_source'];
+const POST_FIELDS = ['name', 'url', 'pricing', 'description', 'use_case', 'user_id', 'import_source', 'is_needed'];
 const DEFAULT_LIMIT = 100, MAX_LIMIT = 5000;
 const BATCH = 100;
 
@@ -124,6 +124,8 @@ function buildListUrl(cfg, limit, offset, f) {
   qf.forEach(q => { url += `&${q}`; });
   if (f.searchQuery) { const e = encodeURIComponent(f.searchQuery); url += `&or=(name.ilike.*${e}*,url.ilike.*${e}*)`; }
   if (f.importSource) url += `&import_source=eq.${encodeURIComponent(f.importSource)}`;
+  if (f.needed === 'needed') url += '&is_needed=eq.true';
+  else if (f.needed === 'not_needed') url += '&is_needed=eq.false';
   return url;
 }
 
@@ -148,6 +150,7 @@ async function handleGet(req, res, cfg, authKey, relKey) {
     isUncategorized: q.category_id === 'uncategorized',
     isUntagged: q.tag_id === 'untagged',
     importSource: q.import_source || null,
+    needed: q.needed || 'all',
   };
 
   const url = buildListUrl(cfg, limit, offset, filters);
