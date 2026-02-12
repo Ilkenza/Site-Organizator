@@ -438,7 +438,7 @@ function DashboardContent() {
                 <MobileToolbar onAddClick={handleAddClick} />
 
                 {/* Content area */}
-                <main className="flex-1 overflow-y-auto">
+                <main className="flex-1 overflow-y-auto overflow-x-hidden">
                     {error && (
                         <div className="m-3 sm:m-6 p-3 sm:p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-300">
                             <p className="font-medium">Error loading data</p>
