@@ -47,7 +47,7 @@ export default memo(function SiteCard({ site, onEdit, onDelete, onVisit }) {
     };
 
     return (
-        <div className={`group h-full flex flex-col bg-app-bg-light/50 border-2 rounded-xl p-3 sm:p-4 transition-all duration-200 hover:shadow-lg hover:shadow-app-accent/5 ${selectedSites.has(site.id)
+        <div className={`group h-full flex flex-col bg-app-bg-light/50 border-2 rounded-xl p-3 sm:p-4 transition-all duration-200 hover:shadow-lg hover:shadow-app-accent/5 overflow-hidden min-w-0 ${selectedSites.has(site.id)
             ? activeTab === 'favorites'
                 ? 'border-[#D4B86A] bg-[#D4B86A]/10'
                 : 'border-[#A0D8FF] bg-[#A0D8FF]/10'
