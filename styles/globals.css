@@ -376,3 +376,12 @@ body {
   outline: var(--focus-outline-width) solid var(--color-focus-ring);
   outline-offset: var(--focus-outline-offset);
 }
+
+/* ========================================
+   Performance - Layout Containment
+   ======================================== */
+
+/* Isolate card repaints — browser skips layout recalc outside this box */
+.site-card-contain {
+  contain: layout style paint;
+}

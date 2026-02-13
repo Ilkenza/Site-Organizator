@@ -145,6 +145,17 @@ export default function App({ Component, pageProps }) {
     registerServiceWorker();
   }, []);
 
+  // Prefetch common dashboard routes for faster navigation
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const { default: Router } = require('next/router');
+      Router.prefetch('/dashboard/sites');
+      Router.prefetch('/dashboard/categories');
+      Router.prefetch('/dashboard/tags');
+      Router.prefetch('/dashboard/favorites');
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <Head>

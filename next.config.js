@@ -30,16 +30,19 @@ const nextConfig = {
         ignoreDuringBuilds: CONFIG.ESLINT_IGNORE_DURING_BUILDS,
     },
 
+    // SWC-based minification (faster than Terser)
+    swcMinify: true,
+
     // Image optimization configuration
     images: {
-        // Allow images from Supabase Storage (avatars)
-        domains: [CONFIG.SUPABASE_DOMAIN],
+        // Allow images from Supabase Storage (avatars) and Google favicons
+        domains: [CONFIG.SUPABASE_DOMAIN, 'www.google.com'],
 
         // Image formats to support
         formats: ['image/avif', 'image/webp'],
 
-        // Disable static image imports for better control
-        // disableStaticImages: false,
+        // Cache optimized images for 24h
+        minimumCacheTTL: 86400,
     },
 
     // Compression
