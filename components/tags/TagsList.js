@@ -32,7 +32,7 @@ export default function TagsList({ onEdit, onDelete }) {
         if (neededFilterTags === 'needed') {
             list = list.filter(tag => tag.is_needed === true);
         } else if (neededFilterTags === 'not_needed') {
-            list = list.filter(tag => tag.is_needed === false);
+            list = list.filter(tag => tag.is_needed !== true);
         }
         return list;
     }, [tags, searchQuery, usageFilterTags, neededFilterTags]);

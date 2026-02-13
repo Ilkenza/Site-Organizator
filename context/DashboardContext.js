@@ -568,9 +568,11 @@ export function DashboardProvider({ children }) {
 
     // Track whether initial data has been loaded
     const dataLoadedRef = useRef(false);
+    const [initialDataLoaded, setInitialDataLoaded] = useState(false);
     useEffect(() => {
         if (!loading && user && sites.length >= 0 && fetchedForUserRef.current === user.id) {
             dataLoadedRef.current = true;
+            setInitialDataLoaded(true);
         }
     }, [loading, user, sites.length]);
 
@@ -985,6 +987,7 @@ export function DashboardProvider({ children }) {
         setStats,
         loading,
         error,
+        initialDataLoaded,
         filteredSites,
         toast,
         showToast,

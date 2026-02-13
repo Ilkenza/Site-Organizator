@@ -1236,10 +1236,19 @@ function saveFormToCache() {
             document.querySelectorAll('#tagsCheckboxList input[type="checkbox"]:checked')
         );
 
+        const descriptionInput = document.getElementById('description');
+        const useCaseInput = document.getElementById('useCase');
+        const favoriteToggle = document.querySelector('#favoriteToggleGroup .toggle-btn.active');
+        const neededToggle = document.querySelector('#neededToggleGroup .toggle-btn.active');
+
         const formData = {
             siteName: siteNameInput?.value || '',
             url: urlInput?.value || '',
             pricing: pricingSelect?.value || '',
+            description: descriptionInput?.value || '',
+            useCase: useCaseInput?.value || '',
+            isFavorite: favoriteToggle?.dataset?.value === 'true',
+            isNeeded: neededToggle?.dataset?.value === 'true',
             selectedCategories: selectedCategoryCheckboxes.map(cb => cb.value),
             selectedTags: selectedTagCheckboxes.map(cb => cb.value),
             timestamp: Date.now()
@@ -1257,12 +1266,16 @@ function saveFormToCache() {
         const hasExistingData = existingParsed && (
             (existingParsed.siteName && existingParsed.siteName.trim()) ||
             (existingParsed.pricing && existingParsed.pricing.toString().trim()) ||
+            (existingParsed.description && existingParsed.description.trim()) ||
+            (existingParsed.useCase && existingParsed.useCase.trim()) ||
             (existingParsed.selectedCategories && existingParsed.selectedCategories.length > 0) ||
             (existingParsed.selectedTags && existingParsed.selectedTags.length > 0)
         );
 
         const hasNewNonUrl = (formData.siteName && formData.siteName.trim()) ||
             (formData.pricing && formData.pricing.toString().trim()) ||
+            (formData.description && formData.description.trim()) ||
+            (formData.useCase && formData.useCase.trim()) ||
             (formData.selectedCategories && formData.selectedCategories.length > 0) ||
             (formData.selectedTags && formData.selectedTags.length > 0);
 
@@ -1313,6 +1326,27 @@ function loadFormFromCache(attempt = 0) {
             // Don't overwrite URL from cache - URL should always come from the current active tab
             // if (urlInput) urlInput.value = formData.url || '';
             if (pricingSelect) pricingSelect.value = formData.pricing || '';
+
+            // Restore description, useCase, favorite, needed
+            const descInput = document.getElementById('description');
+            const ucInput = document.getElementById('useCase');
+            if (descInput) descInput.value = formData.description || '';
+            if (ucInput) ucInput.value = formData.useCase || '';
+
+            // Restore favorite toggle
+            if (formData.isFavorite !== undefined) {
+                const favBtns = document.querySelectorAll('#favoriteToggleGroup .toggle-btn');
+                favBtns.forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.value === String(formData.isFavorite));
+                });
+            }
+            // Restore needed toggle
+            if (formData.isNeeded !== undefined) {
+                const needBtns = document.querySelectorAll('#neededToggleGroup .toggle-btn');
+                needBtns.forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.value === String(formData.isNeeded));
+                });
+            }
 
             let missing = 0;
 

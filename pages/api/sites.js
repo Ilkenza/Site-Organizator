@@ -125,7 +125,7 @@ function buildListUrl(cfg, limit, offset, f) {
   if (f.searchQuery) { const e = encodeURIComponent(f.searchQuery); url += `&or=(name.ilike.*${e}*,url.ilike.*${e}*)`; }
   if (f.importSource) url += `&import_source=eq.${encodeURIComponent(f.importSource)}`;
   if (f.needed === 'needed') url += '&is_needed=eq.true';
-  else if (f.needed === 'not_needed') url += '&is_needed=eq.false';
+  else if (f.needed === 'not_needed') url += '&or=(is_needed.eq.false,is_needed.is.null)';
   return url;
 }
 

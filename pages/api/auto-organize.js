@@ -196,7 +196,7 @@ export default async function handler(req, res) {
         });
     }
 
-    const [uncategorized, untagged] = await Promise.all([
+    const [uncategorized, _untagged] = await Promise.all([
         fetchUncategorized(cfg, token),
         fetchUntagged(cfg, token),
     ]);

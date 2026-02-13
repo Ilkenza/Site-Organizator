@@ -40,15 +40,19 @@ function parseItems(row, arrKey, strKey, altKey) {
 }
 
 function normRow(row, idx) {
+  const parseBool = (v) => v === true || v === 'true' || v === 'Yes' || v === 1;
   return {
     _i: idx,
     name: trim(row.name || row.title || row.Name || ''),
     url: trim(row.url || row.URL || row.link || ''),
     pricing: normPricing(row.pricing || row.pricing_model || row.pricingModel || '') || 'freemium',
+    description: trim(row.description || row.Description || ''),
+    use_case: trim(row.use_case || row.useCase || row['Use Case'] || ''),
     categories: parseItems(row, 'categories_array', 'categories', 'category'),
     tags: parseItems(row, 'tags_array', 'tags', 'tag'),
-    is_favorite: row.is_favorite === true || row.is_favorite === 'true' || row.is_favorite === 1,
-    is_pinned: row.is_pinned === true || row.is_pinned === 'true' || row.is_pinned === 1,
+    is_favorite: parseBool(row.is_favorite),
+    is_pinned: parseBool(row.is_pinned),
+    is_needed: row.is_needed === true || row.is_needed === 'true' || row.is_needed === 'Yes' ? true : row.is_needed === false || row.is_needed === 'false' || row.is_needed === 'No' ? false : null,
     created_at: row.created_at || row.createdAt || null,
   };
 }
@@ -212,6 +216,9 @@ export default async function handler(req, res) {
       // Insert new sites
       const inserts = toCreate.map(x => {
         const r = { name: x.nr.name || x.nr.url || '', url: x.nr.url, pricing: x.nr.pricing || 'freemium', is_favorite: x.nr.is_favorite, is_pinned: x.nr.is_pinned, user_id: userId, import_source: importSource };
+        if (x.nr.description) r.description = x.nr.description;
+        if (x.nr.use_case) r.use_case = x.nr.use_case;
+        if (x.nr.is_needed !== null) r.is_needed = x.nr.is_needed;
         if (x.nr.created_at) r.created_at = x.nr.created_at;
         return r;
       });
@@ -227,7 +234,11 @@ export default async function handler(req, res) {
       const updatedSites = [];
       for (const { nr, existingSite, ...ctx } of toUpdate) {
         try {
-          const r = await fetch(rest(`sites?id=eq.${existingSite.id}&user_id=eq.${userId}`), { method: 'PATCH', headers: hdr(KEY, 'return=representation'), body: JSON.stringify({ name: nr.name || existingSite.name, pricing: nr.pricing || existingSite.pricing, is_favorite: nr.is_favorite, is_pinned: nr.is_pinned }) });
+          const patch = { name: nr.name || existingSite.name, pricing: nr.pricing || existingSite.pricing, is_favorite: nr.is_favorite, is_pinned: nr.is_pinned };
+          if (nr.description) patch.description = nr.description;
+          if (nr.use_case) patch.use_case = nr.use_case;
+          if (nr.is_needed !== null) patch.is_needed = nr.is_needed;
+          const r = await fetch(rest(`sites?id=eq.${existingSite.id}&user_id=eq.${userId}`), { method: 'PATCH', headers: hdr(KEY, 'return=representation'), body: JSON.stringify(patch) });
           if (!r.ok) { report.errors.push({ row: nr._i, error: `Update failed: ${await r.text()}` }); }
           else { const u = (await r.json())?.[0]; if (u) { updatedSites.push({ site: u, cats: ctx.cats, tags: ctx.tags }); report.updated = report.updated || []; report.updated.push({ row: nr._i, site: u }); } }
         } catch (e) { report.errors.push({ row: nr._i, error: e.message }); }

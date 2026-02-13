@@ -46,14 +46,14 @@ const escH = v => (v || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const names = arr => (arr || []).map(x => x?.name || '').join('; ');
 
 function toCSV(sites) {
-    const hdr = 'Name,URL,Category,Tags,Description,Favorite,Pinned';
-    const rows = sites.map(s => `"${esc(s.name)}","${esc(s.url)}","${esc(names(s.categories_array))}","${esc(names(s.tags_array))}","${esc(s.description)}","${s.is_favorite ? 'Yes' : 'No'}","${s.is_pinned ? 'Yes' : 'No'}"`);
+    const hdr = 'Name,URL,Category,Tags,Description,Pricing,Use Case,Favorite,Pinned,Needed';
+    const rows = sites.map(s => `"${esc(s.name)}","${esc(s.url)}","${esc(names(s.categories_array))}","${esc(names(s.tags_array))}","${esc(s.description)}","${esc(s.pricing || '')}","${esc(s.use_case || '')}","${s.is_favorite ? 'Yes' : 'No'}","${s.is_pinned ? 'Yes' : 'No'}","${s.is_needed === true ? 'Yes' : s.is_needed === false ? 'No' : ''}"`);
     return [hdr, ...rows].join('\n');
 }
 
 function toHTML(sites) {
-    const rows = sites.length ? sites.map(s => `<tr><td>${escH(s.name)}</td><td><a href="${s.url}">${escH(s.url)}</a></td><td>${names(s.categories_array)}</td><td>${names(s.tags_array)}</td><td>${escH(s.description)}</td><td>${s.is_favorite ? '⭐' : ''}</td><td>${s.is_pinned ? '📌' : ''}</td></tr>`).join('') : '<tr><td colspan="7">No sites</td></tr>';
-    return `<!DOCTYPE html><html><head><title>Sites Export</title><style>body{font-family:Arial,sans-serif;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#4CAF50;color:#fff}tr:nth-child(even){background:#f2f2f2}a{color:#0066cc}</style></head><body><h1>Sites Export</h1><p>Exported on: ${new Date().toLocaleString()}</p><table><thead><tr><th>Name</th><th>URL</th><th>Category</th><th>Tags</th><th>Description</th><th>Favorite</th><th>Pinned</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const rows = sites.length ? sites.map(s => `<tr><td>${escH(s.name)}</td><td><a href="${s.url}">${escH(s.url)}</a></td><td>${names(s.categories_array)}</td><td>${names(s.tags_array)}</td><td>${escH(s.description)}</td><td>${escH(s.pricing || '')}</td><td>${escH(s.use_case || '')}</td><td>${s.is_favorite ? '⭐' : ''}</td><td>${s.is_pinned ? '📌' : ''}</td><td>${s.is_needed === true ? '✅' : s.is_needed === false ? '❌' : ''}</td></tr>`).join('') : '<tr><td colspan="10">No sites</td></tr>';
+    return `<!DOCTYPE html><html><head><title>Sites Export</title><style>body{font-family:Arial,sans-serif;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#4CAF50;color:#fff}tr:nth-child(even){background:#f2f2f2}a{color:#0066cc}</style></head><body><h1>Sites Export</h1><p>Exported on: ${new Date().toLocaleString()}</p><table><thead><tr><th>Name</th><th>URL</th><th>Category</th><th>Tags</th><th>Description</th><th>Pricing</th><th>Use Case</th><th>Favorite</th><th>Pinned</th><th>Needed</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
 }
 
 export default async function handler(req, res) {

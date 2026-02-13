@@ -195,6 +195,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                         setActiveTab(tab.id);
                                         setSelectedCategory(null);
                                         setSelectedTag(null);
+                                        setNeededFilterSites('all');
+                                        setSelectedImportSource(null);
                                     }}
                                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors border
                 ${activeTab === tab.id
