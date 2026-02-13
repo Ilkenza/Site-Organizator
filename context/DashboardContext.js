@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { fetchAPI, supabase } from '../lib/supabase';
+import * as offlineQueue from '../lib/offlineQueue';
 import { useAuth } from './AuthContext';
 import { canAdd, getTierLimits, TIER_LABELS, TIER_FREE } from '../lib/tierConfig';
 
@@ -104,6 +105,17 @@ function countByField(data, field, noneLabel) {
     return counts;
 }
 
+// Offline helpers
+function isNetworkError(err) {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+    const msg = err?.message || '';
+    return msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed');
+}
+
+function generateTempId() {
+    return `_offline_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function DashboardProvider({ children }) {
     const { user } = useAuth();
     const [sites, setSites] = useState([]);
@@ -113,6 +125,11 @@ export function DashboardProvider({ children }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [failedRelationUpdates, setFailedRelationUpdates] = useState({}); // { [siteId]: { categoryIds, tagIds, warnings } }
+
+    // Offline-first state
+    const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+    const [pendingChanges, setPendingChanges] = useState(0);
+    const [syncing, setSyncing] = useState(false);
 
     // Toast notification
     const [toast, setToast] = useState(null);
@@ -384,7 +401,13 @@ export function DashboardProvider({ children }) {
                 showToast('Removed from favorites', 'info');
             }
         } catch (err) {
-            // Revert on error
+            if (isNetworkError(err)) {
+                await offlineQueue.enqueue({ action: 'toggle', entity: 'favorite', entityId: siteId, data: { site_id: siteId } });
+                setPendingChanges(await offlineQueue.count());
+                showToast(!site.is_favorite ? 'Added to favorites (offline)' : 'Removed from favorites (offline)', 'info');
+                return;
+            }
+            // Revert on server error
             setSites(prev => prev.map(s =>
                 s.id === siteId ? { ...s, is_favorite: !s.is_favorite } : s
             ));
@@ -415,7 +438,13 @@ export function DashboardProvider({ children }) {
                 showToast('Unpinned', 'info');
             }
         } catch (err) {
-            // Revert on error
+            if (isNetworkError(err)) {
+                await offlineQueue.enqueue({ action: 'toggle', entity: 'pinned', entityId: siteId, data: { site_id: siteId } });
+                setPendingChanges(await offlineQueue.count());
+                showToast(!site.is_pinned ? 'Pinned (offline)' : 'Unpinned (offline)', 'info');
+                return;
+            }
+            // Revert on server error
             setSites(prev => prev.map(s =>
                 s.id === siteId ? { ...s, is_pinned: !s.is_pinned } : s
             ));
@@ -732,6 +761,91 @@ export function DashboardProvider({ children }) {
         };
     }, [user]);
 
+    // ── Offline sync: flush queued mutations when back online ──
+    const syncOfflineChanges = useCallback(async () => {
+        if (syncing) return;
+        const mutations = await offlineQueue.getAll();
+        if (!mutations.length) { setPendingChanges(0); return; }
+
+        setSyncing(true);
+        const tempIdMap = {};
+        let syncedCount = 0, errorCount = 0;
+
+        const addCats = mutations.filter(m => m.entity === 'category' && m.action === 'add');
+        const addTags = mutations.filter(m => m.entity === 'tag' && m.action === 'add');
+        const addSitesQ = mutations.filter(m => m.entity === 'site' && m.action === 'add');
+        const updates = mutations.filter(m => m.action === 'update');
+        const toggles = mutations.filter(m => m.action === 'toggle');
+        const deletes = mutations.filter(m => m.action === 'delete');
+
+        for (const phase of [addCats, addTags, addSitesQ, updates, toggles, deletes]) {
+            for (const m of phase) {
+                try {
+                    const data = m.data ? { ...m.data } : {};
+                    let entityId = m.entityId;
+                    if (entityId && tempIdMap[entityId]) entityId = tempIdMap[entityId];
+                    if (data.category_ids) data.category_ids = data.category_ids.map(id => tempIdMap[id] || id);
+                    if (data.tag_ids) data.tag_ids = data.tag_ids.map(id => tempIdMap[id] || id);
+
+                    const ep = m.entity === 'site' ? '/sites' : m.entity === 'category' ? '/categories' : '/tags';
+
+                    if (m.action === 'add') {
+                        const res = await fetchAPI(ep, { method: 'POST', body: JSON.stringify(data) });
+                        const created = res?.data || res;
+                        if (m.tempId && created?.id) tempIdMap[m.tempId] = created.id;
+                    } else if (m.action === 'update') {
+                        await fetchAPI(`${ep}/${entityId}`, { method: 'PUT', body: JSON.stringify(data) });
+                    } else if (m.action === 'delete') {
+                        await fetchAPI(`${ep}/${entityId}`, { method: 'DELETE' });
+                    } else if (m.action === 'toggle') {
+                        const toggleEp = m.entity === 'favorite' ? '/favorites' : '/pinned';
+                        await fetchAPI(toggleEp, { method: 'POST', body: JSON.stringify(data) });
+                    }
+                    syncedCount++;
+                } catch (err) {
+                    console.warn('Offline sync failed:', m, err);
+                    errorCount++;
+                }
+            }
+        }
+
+        await offlineQueue.clear();
+        setPendingChanges(0);
+        setSyncing(false);
+        fetchData().catch(() => { });
+
+        if (syncedCount > 0) {
+            const msg = `Synced ${syncedCount} offline change${syncedCount > 1 ? 's' : ''}`;
+            showToast(errorCount > 0 ? `${msg} (${errorCount} failed)` : msg, errorCount > 0 ? 'warning' : 'success');
+        }
+    }, [syncing, fetchData, showToast]);
+
+    // Online/offline detection
+    useEffect(() => {
+        const goOnline = () => { setIsOnline(true); syncOfflineChanges(); };
+        const goOffline = () => setIsOnline(false);
+        window.addEventListener('online', goOnline);
+        window.addEventListener('offline', goOffline);
+        offlineQueue.count().then(c => setPendingChanges(c));
+        return () => {
+            window.removeEventListener('online', goOnline);
+            window.removeEventListener('offline', goOffline);
+        };
+    }, [syncOfflineChanges]);
+
+    // Listen for SW background sync completions
+    useEffect(() => {
+        if (typeof navigator === 'undefined' || !navigator.serviceWorker) return;
+        const handler = (event) => {
+            if (event.data?.type === 'SYNC_COMPLETE') {
+                fetchData().catch(() => { });
+                showToast(`${event.data.count} changes synced from background`, 'success');
+            }
+        };
+        navigator.serviceWorker.addEventListener('message', handler);
+        return () => navigator.serviceWorker.removeEventListener('message', handler);
+    }, [fetchData, showToast]);
+
     // Site operations
     const addSite = useCallback(async (siteData) => {
         if (!user) throw new Error('Must be logged in to add a site');
@@ -761,6 +875,28 @@ export function DashboardProvider({ children }) {
 
             return newSite;
         } catch (err) {
+            if (isNetworkError(err)) {
+                const tempId = generateTempId();
+                const tempSite = {
+                    id: tempId, ...siteData,
+                    name: siteData.name || siteData.url || 'New Site',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    user_id: user.id,
+                    is_favorite: siteData.is_favorite || false,
+                    is_pinned: siteData.is_pinned || false,
+                    is_needed: siteData.is_needed ?? null,
+                    categories_array: [], tags_array: [],
+                    _offline: true,
+                };
+                setSites(prev => [tempSite, ...prev]);
+                setStats(prev => ({ ...prev, sites: prev.sites + 1 }));
+                setTotalSitesCount(prev => prev + 1);
+                await offlineQueue.enqueue({ action: 'add', entity: 'site', tempId, data: { ...siteData, user_id: user.id } });
+                setPendingChanges(await offlineQueue.count());
+                showToast('Site saved offline — will sync when connected', 'info');
+                return tempSite;
+            }
             showToast(`Failed to add site: ${err.message}`, 'error');
             throw err;
         }
@@ -794,6 +930,13 @@ export function DashboardProvider({ children }) {
 
             return updated;
         } catch (err) {
+            if (isNetworkError(err)) {
+                setSites(prev => prev.map(s => s.id === id ? { ...s, ...siteData, _offline: true } : s));
+                await offlineQueue.enqueue({ action: 'update', entity: 'site', entityId: id, data: siteData });
+                setPendingChanges(await offlineQueue.count());
+                showToast('Changes saved offline — will sync when connected', 'info');
+                return { id, ...siteData };
+            }
             showToast(`Failed to update site: ${err.message}`, 'error');
             throw err;
         }
@@ -809,6 +952,15 @@ export function DashboardProvider({ children }) {
             // Re-fetch current page to fill the gap
             fetchSitesPage(currentPage).catch(() => { });
         } catch (err) {
+            if (isNetworkError(err)) {
+                setSites(prev => prev.filter(s => s.id !== id));
+                setStats(prev => ({ ...prev, sites: prev.sites - 1 }));
+                setTotalSitesCount(prev => Math.max(0, prev - 1));
+                await offlineQueue.enqueue({ action: 'delete', entity: 'site', entityId: id });
+                setPendingChanges(await offlineQueue.count());
+                showToast('Delete queued — will sync when connected', 'info');
+                return;
+            }
             showToast(`Failed to delete site: ${err.message}`, 'error');
             throw err;
         }
@@ -867,6 +1019,16 @@ export function DashboardProvider({ children }) {
             showToast(`Category "${newCategory.name}" created successfully`, 'success');
             return newCategory;
         } catch (err) {
+            if (isNetworkError(err)) {
+                const tempId = generateTempId();
+                const tempCat = { id: tempId, ...categoryData, _offline: true, created_at: new Date().toISOString() };
+                setCategories(prev => [...prev, tempCat]);
+                setStats(prev => ({ ...prev, categories: prev.categories + 1 }));
+                await offlineQueue.enqueue({ action: 'add', entity: 'category', tempId, data: categoryData });
+                setPendingChanges(await offlineQueue.count());
+                showToast('Category saved offline — will sync when connected', 'info');
+                return tempCat;
+            }
             showToast(`Failed to add category: ${err.message}`, 'error');
             throw err;
         }
@@ -888,6 +1050,13 @@ export function DashboardProvider({ children }) {
             showToast(`Category "${updated.name}" updated successfully`, 'success');
             return updated;
         } catch (err) {
+            if (isNetworkError(err)) {
+                setCategories(prev => prev.map(c => c.id === id ? { ...c, ...categoryData, _offline: true } : c));
+                await offlineQueue.enqueue({ action: 'update', entity: 'category', entityId: id, data: categoryData });
+                setPendingChanges(await offlineQueue.count());
+                showToast('Category changes saved offline', 'info');
+                return { id, ...categoryData };
+            }
             showToast(`Failed to update category: ${err.message}`, 'error');
             throw err;
         }
@@ -905,6 +1074,18 @@ export function DashboardProvider({ children }) {
             setStats(prev => ({ ...prev, categories: prev.categories - 1 }));
             showToast('Category deleted successfully', 'success');
         } catch (err) {
+            if (isNetworkError(err)) {
+                setCategories(prev => prev.filter(c => c.id !== id));
+                setSites(prev => prev.map(site => ({
+                    ...site,
+                    categories_array: site.categories_array?.filter(c => c?.id !== id) || []
+                })));
+                setStats(prev => ({ ...prev, categories: prev.categories - 1 }));
+                await offlineQueue.enqueue({ action: 'delete', entity: 'category', entityId: id });
+                setPendingChanges(await offlineQueue.count());
+                showToast('Category delete queued — will sync when connected', 'info');
+                return;
+            }
             showToast(`Failed to delete category: ${err.message}`, 'error');
             throw err;
         }
@@ -931,6 +1112,16 @@ export function DashboardProvider({ children }) {
             showToast(`Tag "${newTag.name}" created successfully`, 'success');
             return newTag;
         } catch (err) {
+            if (isNetworkError(err)) {
+                const tempId = generateTempId();
+                const tempTag = { id: tempId, ...tagData, _offline: true, created_at: new Date().toISOString() };
+                setTags(prev => [...prev, tempTag]);
+                setStats(prev => ({ ...prev, tags: prev.tags + 1 }));
+                await offlineQueue.enqueue({ action: 'add', entity: 'tag', tempId, data: tagData });
+                setPendingChanges(await offlineQueue.count());
+                showToast('Tag saved offline — will sync when connected', 'info');
+                return tempTag;
+            }
             showToast(`Failed to add tag: ${err.message}`, 'error');
             throw err;
         }
@@ -952,6 +1143,13 @@ export function DashboardProvider({ children }) {
             showToast(`Tag "${updated.name}" updated successfully`, 'success');
             return updated;
         } catch (err) {
+            if (isNetworkError(err)) {
+                setTags(prev => prev.map(t => t.id === id ? { ...t, ...tagData, _offline: true } : t));
+                await offlineQueue.enqueue({ action: 'update', entity: 'tag', entityId: id, data: tagData });
+                setPendingChanges(await offlineQueue.count());
+                showToast('Tag changes saved offline', 'info');
+                return { id, ...tagData };
+            }
             showToast(`Failed to update tag: ${err.message}`, 'error');
             throw err;
         }
@@ -969,6 +1167,18 @@ export function DashboardProvider({ children }) {
             setStats(prev => ({ ...prev, tags: prev.tags - 1 }));
             showToast('Tag deleted successfully', 'success');
         } catch (err) {
+            if (isNetworkError(err)) {
+                setTags(prev => prev.filter(t => t.id !== id));
+                setSites(prev => prev.map(site => ({
+                    ...site,
+                    tags_array: site.tags_array?.filter(t => t?.id !== id) || []
+                })));
+                setStats(prev => ({ ...prev, tags: prev.tags - 1 }));
+                await offlineQueue.enqueue({ action: 'delete', entity: 'tag', entityId: id });
+                setPendingChanges(await offlineQueue.count());
+                showToast('Tag delete queued — will sync when connected', 'info');
+                return;
+            }
             showToast(`Failed to delete tag: ${err.message}`, 'error');
             throw err;
         }
@@ -1105,7 +1315,13 @@ export function DashboardProvider({ children }) {
         importError,
         runImport,
         cancelImport,
-        clearImportResult
+        clearImportResult,
+
+        // Offline-first
+        isOnline,
+        pendingChanges,
+        syncing,
+        syncOfflineChanges
     };
 
     return (

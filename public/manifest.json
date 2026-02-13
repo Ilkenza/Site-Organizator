@@ -67,6 +67,32 @@
   "prefer_related_applications": false,
   "scope": "/",
   "id": "/dashboard/sites",
+  "shortcuts": [
+    {
+      "name": "My Sites",
+      "short_name": "Sites",
+      "url": "/dashboard/sites",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Categories",
+      "short_name": "Categories",
+      "url": "/dashboard/categories",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Tags",
+      "short_name": "Tags",
+      "url": "/dashboard/tags",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Favorites",
+      "short_name": "Favorites",
+      "url": "/dashboard/favorites",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    }
+  ],
   "share_target": {
     "action": "/share",
     "method": "GET",

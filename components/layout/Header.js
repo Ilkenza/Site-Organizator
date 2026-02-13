@@ -154,6 +154,10 @@ export default function Header({ onAddClick, onMenuClick }) {
         selectedTags,
         setSelectedTags,
         showToast,
+        isOnline,
+        pendingChanges,
+        syncing,
+        syncOfflineChanges,
     } = useDashboard();
 
     // User menu state and ref
@@ -490,6 +494,24 @@ export default function Header({ onAddClick, onMenuClick }) {
                                 {getHeaderTitle()}
                             </h2>
                         </div>
+
+                        {/* Offline / Sync Status */}
+                        {!isOnline && (
+                            <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                                Offline
+                            </span>
+                        )}
+                        {isOnline && pendingChanges > 0 && (
+                            <button
+                                onClick={syncOfflineChanges}
+                                disabled={syncing}
+                                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                            >
+                                {syncing && <RefreshIcon className="w-3 h-3 animate-spin" />}
+                                {syncing ? 'Syncing...' : `${pendingChanges} pending`}
+                            </button>
+                        )}
 
                         {/* Desktop Search - hidden on mobile and settings tab */}
                         {activeTab !== 'settings' && (
