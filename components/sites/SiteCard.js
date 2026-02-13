@@ -17,7 +17,7 @@ const getFaviconUrl = (url) => {
     } catch { return null; }
 };
 
-export default memo(function SiteCard({ site, onEdit, onDelete, onVisit }) {
+function SiteCard({ site, onEdit, onDelete, onVisit }) {
     const [imageError, setImageError] = useState(false);
     const [favoriteAnimating, setFavoriteAnimating] = useState(false);
     const [pinAnimating, setPinAnimating] = useState(false);
@@ -47,7 +47,7 @@ export default memo(function SiteCard({ site, onEdit, onDelete, onVisit }) {
     };
 
     return (
-        <div className={`group h-full flex flex-col bg-app-bg-light/50 border-2 rounded-xl p-3 sm:p-4 transition-all duration-200 hover:shadow-lg hover:shadow-app-accent/5 overflow-hidden min-w-0 ${selectedSites.has(site.id)
+        <div className={`site-card-contain group h-full flex flex-col bg-app-bg-light/50 border-2 rounded-xl p-3 sm:p-4 transition-all duration-200 hover:shadow-lg hover:shadow-app-accent/5 overflow-hidden min-w-0 ${selectedSites.has(site.id)
             ? activeTab === 'favorites'
                 ? 'border-[#D4B86A] bg-[#D4B86A]/10'
                 : 'border-[#A0D8FF] bg-[#A0D8FF]/10'
@@ -320,4 +320,20 @@ export default memo(function SiteCard({ site, onEdit, onDelete, onVisit }) {
             </div>
         </div>
     );
+}
+
+export default memo(SiteCard, (prev, next) => {
+    // Custom comparison — skip re-render if meaningful props haven't changed
+    if (prev.site?.id !== next.site?.id) return false;
+    if (prev.site?.name !== next.site?.name) return false;
+    if (prev.site?.url !== next.site?.url) return false;
+    if (prev.site?.is_favorite !== next.site?.is_favorite) return false;
+    if (prev.site?.is_pinned !== next.site?.is_pinned) return false;
+    if (prev.site?.is_needed !== next.site?.is_needed) return false;
+    if (prev.site?.use_case !== next.site?.use_case) return false;
+    if (prev.site?.description !== next.site?.description) return false;
+    if (prev.site?.updated_at !== next.site?.updated_at) return false;
+    if (prev.onEdit !== next.onEdit) return false;
+    if (prev.onDelete !== next.onDelete) return false;
+    return true;
 });

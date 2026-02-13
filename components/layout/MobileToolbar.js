@@ -3,7 +3,7 @@ import { SearchIcon, PlusIcon } from '../ui/Icons';
 
 
 export default function MobileToolbar({ onAddClick }) {
-    const { activeTab, searchQuery, setSearchQuery } = useDashboard();
+    const { activeTab, searchInput, handleSearchInput, clearSearch } = useDashboard();
 
     // Don't show on settings tab or desktop
     if (activeTab === 'settings') return null;
@@ -48,13 +48,13 @@ export default function MobileToolbar({ onAddClick }) {
                     <input
                         type="text"
                         placeholder={getPlaceholder()}
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        value={searchInput}
+                        onChange={(e) => handleSearchInput(e.target.value)}
                         className="w-full pl-10 pr-10 py-2 bg-app-bg-light border border-app-border rounded-lg text-app-text-primary text-sm placeholder-app-text-tertiary focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     />
-                    {searchQuery && (
+                    {searchInput && (
                         <button
-                            onClick={() => setSearchQuery('')}
+                            onClick={() => clearSearch()}
                             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-app-text-tertiary hover:text-app-text-primary transition-colors"
                             title="Clear search"
                         >

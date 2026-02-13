@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import dynamic from 'next/dynamic';
 import { DashboardProvider, useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/layout/Sidebar';
@@ -8,20 +9,22 @@ import Header from '../../components/layout/Header';
 import MobileToolbar from '../../components/layout/MobileToolbar';
 import SitesList from '../../components/sites/SitesList';
 import FavoritesList from '../../components/sites/FavoritesList';
-import RediscoverSection from '../../components/sites/RediscoverSection';
-import SiteModal from '../../components/sites/SiteModal';
-import CategoriesList from '../../components/categories/CategoriesList';
-import CategoryModal from '../../components/categories/CategoryModal';
-import TagsList from '../../components/tags/TagsList';
-import TagModal from '../../components/tags/TagModal';
-import SettingsPanel from '../../components/settings/SettingsPanel';
 import { ConfirmModal } from '../../components/ui/Modal';
 import Toast from '../../components/ui/Toast';
-import CommandMenu from '../../components/ui/CommandMenu';
 import UndoToast from '../../components/ui/UndoToast';
-import OnboardingTour from '../../components/ui/OnboardingTour';
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { fetchAPI } from '../../lib/supabase';
+
+// Dynamic imports — lazy-loaded until needed (reduces initial JS bundle)
+const RediscoverSection = dynamic(() => import('../../components/sites/RediscoverSection'), { ssr: false });
+const SiteModal = dynamic(() => import('../../components/sites/SiteModal'), { ssr: false });
+const CategoriesList = dynamic(() => import('../../components/categories/CategoriesList'));
+const CategoryModal = dynamic(() => import('../../components/categories/CategoryModal'), { ssr: false });
+const TagsList = dynamic(() => import('../../components/tags/TagsList'));
+const TagModal = dynamic(() => import('../../components/tags/TagModal'), { ssr: false });
+const SettingsPanel = dynamic(() => import('../../components/settings/SettingsPanel'));
+const CommandMenu = dynamic(() => import('../../components/ui/CommandMenu'), { ssr: false });
+const OnboardingTour = dynamic(() => import('../../components/ui/OnboardingTour'), { ssr: false });
 
 function DashboardContent() {
     const router = useRouter();

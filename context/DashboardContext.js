@@ -308,7 +308,22 @@ export function DashboardProvider({ children }) {
     }, []);
 
     // Filters
+    // Split search into input (immediate UI) and query (debounced, triggers API)
+    const [searchInput, setSearchInput] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
+    const searchDebounceRef = useRef(null);
+    const handleSearchInput = useCallback((value) => {
+        setSearchInput(value);
+        if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = setTimeout(() => setSearchQuery(value), 300);
+    }, []);
+    // Clear both on explicit reset
+    const clearSearch = useCallback(() => {
+        setSearchInput('');
+        setSearchQuery('');
+        if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    }, []);
+    useEffect(() => () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); }, []);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedTag, setSelectedTag] = useState(null);
     const [selectedImportSource, setSelectedImportSource] = useState(null); // 'bookmarks' | 'notion' | 'file' | null
@@ -576,14 +591,10 @@ export function DashboardProvider({ children }) {
         }
     }, [loading, user, sites.length]);
 
-    // Re-fetch page 1 when filters change (debounced for search)
+    // Re-fetch page 1 when filters change (search is already debounced at input level)
     useEffect(() => {
         if (!dataLoadedRef.current) return;
-        const delay = searchQuery ? 300 : 0;
-        const timer = setTimeout(() => {
-            fetchSitesPageRef.current(1);
-        }, delay);
-        return () => clearTimeout(timer);
+        fetchSitesPageRef.current(1);
     }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, selectedImportSource, activeTab, neededFilterSites]);
 
     // Compute cross-filter counts when multiple filter dimensions are active
@@ -1006,6 +1017,9 @@ export function DashboardProvider({ children }) {
 
         // Filters
         searchQuery,
+        searchInput,
+        handleSearchInput,
+        clearSearch,
         setSearchQuery,
         selectedCategory,
         setSelectedCategory,
