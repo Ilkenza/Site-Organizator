@@ -130,15 +130,6 @@ function DashboardContent() {
         };
     }, [router]);
 
-    // Fetch data on mount (DashboardContext handles re-fetches on filter changes)
-    const fetchDataOnMount = useRef(fetchData);
-    useEffect(() => {
-        fetchDataOnMount.current = fetchData;
-    }, [fetchData]);
-    useEffect(() => {
-        fetchDataOnMount.current();
-    }, []);
-
     // Keyboard shortcuts - Command menu (Ctrl+/)
     useEffect(() => {
         const handleKeyDown = (e) => {

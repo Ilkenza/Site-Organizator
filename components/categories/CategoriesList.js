@@ -43,7 +43,7 @@ export default function CategoriesList({ onEdit, onDelete }) {
         if (neededFilterCategories === 'needed') {
             list = list.filter(cat => cat.is_needed === true);
         } else if (neededFilterCategories === 'not_needed') {
-            list = list.filter(cat => cat.is_needed === false);
+            list = list.filter(cat => cat.is_needed !== true);
         }
         return list;
     }, [categories, searchQuery, usageFilterCategories, neededFilterCategories]);
