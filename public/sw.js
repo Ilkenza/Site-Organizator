@@ -83,13 +83,27 @@ const shouldCache = (request) => {
     return true;
 };
 
+/** Should this non-GET request be queued for background sync? */
+const isOfflineMutation = (request) => {
+    if (request.method === 'GET' || request.method === 'HEAD') return false;
+    return isAPI(request.url);
+};
+
 // ── Install ─────────────────────────────────────────────────────────────────
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(PRECACHE_URLS))
-            .then(() => self.skipWaiting())
+        caches.open(CACHE_NAME).then(async (cache) => {
+            // Cache each URL individually so one failure doesn't break everything
+            await Promise.allSettled(
+                PRECACHE_URLS.map(url =>
+                    cache.add(url).catch(err =>
+                        console.warn('[SW] Precache failed for', url, err?.message)
+                    )
+                )
+            );
+            return self.skipWaiting();
+        })
     );
 });
 
@@ -187,6 +201,21 @@ async function networkFirstAPI(request) {
 
 self.addEventListener('fetch', (event) => {
     const { request } = event;
+
+    // Non-GET API requests: try network, queue for sync if offline
+    if (isOfflineMutation(request)) {
+        event.respondWith(
+            fetch(request).catch(async () => {
+                await queueForSync(request);
+                return new Response(
+                    JSON.stringify({ success: true, offline: true, queued: true }),
+                    { status: 202, headers: { 'Content-Type': 'application/json' } }
+                );
+            })
+        );
+        return;
+    }
+
     if (!shouldCache(request)) return;
 
     const url = request.url;
