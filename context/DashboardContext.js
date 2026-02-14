@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, us
 import { fetchAPI, supabase } from '../lib/supabase';
 import * as offlineQueue from '../lib/offlineQueue';
 import { useAuth } from './AuthContext';
-import { canAdd, getTierLimits, TIER_LABELS, TIER_FREE } from '../lib/tierConfig';
+import { canAdd, getTierLimits, TIER_LABELS, TIER_FREE, resolveTier } from '../lib/tierConfig';
 
 const DashboardContext = createContext(null);
 
@@ -849,11 +849,11 @@ export function DashboardProvider({ children }) {
     // Site operations
     const addSite = useCallback(async (siteData) => {
         if (!user) throw new Error('Must be logged in to add a site');
-        // Tier limit check
-        const tier = user.tier || TIER_FREE;
+        // Tier limit check — resolve tier defensively (user.tier may be missing during auth recovery)
+        const tier = user.tier || resolveTier(user.user_metadata, user.isAdmin) || TIER_FREE;
         const check = canAdd(tier, 'sites', stats.sites);
         if (!check.allowed) {
-            const msg = `Site limit reached (${stats.sites}/${check.limit}). Upgrade to ${tier === TIER_FREE ? 'Pro or Pro Max' : 'Pro Max'} for more.`;
+            const msg = `Site limit reached (${stats.sites}/${check.limit}). You are on the ${TIER_LABELS[tier] || 'Free'} plan.`;
             showToast(msg, 'error');
             throw new Error(msg);
         }
@@ -1000,11 +1000,11 @@ export function DashboardProvider({ children }) {
 
     // Category operations
     const addCategory = useCallback(async (categoryData) => {
-        // Tier limit check
-        const tier = user?.tier || TIER_FREE;
+        // Tier limit check — resolve tier defensively
+        const tier = user?.tier || resolveTier(user?.user_metadata, user?.isAdmin) || TIER_FREE;
         const check = canAdd(tier, 'categories', stats.categories);
         if (!check.allowed) {
-            const msg = `Category limit reached (${stats.categories}/${check.limit}). Upgrade to ${tier === TIER_FREE ? 'Pro or Pro Max' : 'Pro Max'} for more.`;
+            const msg = `Category limit reached (${stats.categories}/${check.limit}). You are on the ${TIER_LABELS[tier] || 'Free'} plan.`;
             showToast(msg, 'error');
             throw new Error(msg);
         }
@@ -1093,11 +1093,11 @@ export function DashboardProvider({ children }) {
 
     // Tag operations
     const addTag = useCallback(async (tagData) => {
-        // Tier limit check
-        const tier = user?.tier || TIER_FREE;
+        // Tier limit check — resolve tier defensively
+        const tier = user?.tier || resolveTier(user?.user_metadata, user?.isAdmin) || TIER_FREE;
         const check = canAdd(tier, 'tags', stats.tags);
         if (!check.allowed) {
-            const msg = `Tag limit reached (${stats.tags}/${check.limit}). Upgrade to ${tier === TIER_FREE ? 'Pro or Pro Max' : 'Pro Max'} for more.`;
+            const msg = `Tag limit reached (${stats.tags}/${check.limit}). You are on the ${TIER_LABELS[tier] || 'Free'} plan.`;
             showToast(msg, 'error');
             throw new Error(msg);
         }
