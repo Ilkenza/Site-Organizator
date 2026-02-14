@@ -639,12 +639,12 @@ export default function Dashboard() {
                             if (isMounted) setAuthChecked(true);
                         } catch (e) {
                             console.warn('[Dashboard] Immediate setSession failed:', e?.message || e);
-                            // If it's a timeout, don't clear tokens - just let AuthContext handle it
-                            if (e?.message === 'setSession timeout') {
+                            // If it's a timeout or we're offline, don't clear tokens - trust localStorage
+                            if (e?.message === 'setSession timeout' || !navigator.onLine) {
                                 if (isMounted) setAuthChecked(true);
                                 return;
                             }
-                            // If setSession fails with an actual error, clear tokens and redirect to login for safety
+                            // If setSession fails with an actual error while ONLINE, clear tokens and redirect to login
                             try {
                                 localStorage.removeItem(storageKey);
                             } catch (remErr) { console.warn('[Dashboard] Failed to clear tokens:', remErr); }
@@ -765,6 +765,12 @@ export default function Dashboard() {
                     }
 
                     // No tokens in localStorage - do final SDK check before redirecting
+                    // But if offline, there's no point trying SDK calls
+                    if (!navigator.onLine) {
+                        if (isMounted) setAuthChecked(true);
+                        window.location.href = '/login';
+                        return;
+                    }
                     try {
                         const { data } = await supabase.auth.getSession();
                         if (!data?.session) {

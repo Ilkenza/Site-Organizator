@@ -69,6 +69,23 @@ const Logo = ({ size = 'md' }) => {
 export default function Home() {
   const [comingSoonModal, setComingSoonModal] = useState({ isOpen: false, browser: '', message: '' });
 
+  // If user has auth tokens (online or offline), redirect to dashboard
+  useEffect(() => {
+    try {
+      const supabaseUrlEnv = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const storageKey = `sb-${supabaseUrlEnv.replace(/^"|"$/g, '').split('//')[1]?.split('.')[0]}-auth-token`;
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const tokens = JSON.parse(stored);
+        if (tokens?.access_token && tokens?.user) {
+          window.location.replace(PAGE_CONFIG.DASHBOARD_URL);
+        }
+      }
+    } catch (e) {
+      // Ignore — not logged in
+    }
+  }, []);
+
   // Scroll animation observer
   useEffect(() => {
     if (typeof window === 'undefined') return;

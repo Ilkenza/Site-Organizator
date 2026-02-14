@@ -126,6 +126,21 @@ export function AuthProvider({ children }) {
 
         const initializeAuth = async () => {
             try {
+                // OFFLINE FAST-PATH: If we're offline, use localStorage tokens directly
+                // without wasting time on network calls that will fail
+                if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                    const offlineTokens = getStoredTokens();
+                    if (offlineTokens?.user) {
+                        userSetFromLocalStorageRef.current = true;
+                        const offlineUser = createUserWithProfile(offlineTokens.user, null);
+                        if (isMounted) {
+                            setUser(offlineUser);
+                            setLoading(false);
+                        }
+                        return;
+                    }
+                }
+
                 // Retry logic for session - sometimes needs a moment after redirect
                 let session = null;
                 let retryCount = 0;
@@ -235,10 +250,11 @@ export function AuthProvider({ children }) {
                                 // Profile fetch error (non-critical)
                             }
 
-                            setUser(profile ? createUserWithProfile(session.user, profile) : session.user);
+                            setUser(profile ? createUserWithProfile(session.user, profile) : createUserWithProfile(session.user, null));
                         } catch (err) {
                             if (!isMounted) return;
-                            setUser(session.user);
+                            // Offline or network error — still create user with tier/admin info
+                            setUser(createUserWithProfile(session.user, null));
                         }
                     }
                 } else {
@@ -253,7 +269,18 @@ export function AuthProvider({ children }) {
                     return;
                 }
                 console.error('Unexpected error during session check:', err);
-                setUser(null);
+                // If offline and tokens exist, use them instead of clearing user
+                if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                    const fallbackTokens = getStoredTokens();
+                    if (fallbackTokens?.user) {
+                        userSetFromLocalStorageRef.current = true;
+                        setUser(createUserWithProfile(fallbackTokens.user, null));
+                    } else {
+                        setUser(null);
+                    }
+                } else {
+                    setUser(null);
+                }
             } finally {
                 if (isMounted) {
                     setLoading(false);
