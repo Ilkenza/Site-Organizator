@@ -77,6 +77,14 @@ export default function CategoriesList({ onEdit, onDelete }) {
                 return;
             }
 
+            // Duplicate name check
+            const duplicate = categories.find(c => c.name?.toLowerCase() === newName.toLowerCase() && c.id !== categoryId);
+            if (duplicate) {
+                alert(`Category "${newName}" already exists`);
+                setEditingId(null);
+                return;
+            }
+
             await updateCategory(categoryId, { name: newName, color: category.color });
             setEditingId(null);
         } catch (err) {

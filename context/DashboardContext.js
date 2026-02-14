@@ -128,6 +128,16 @@ function generateTempId() {
     return `_offline_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// Deduplicate array by id (keeps first occurrence)
+function dedupeById(arr) {
+    const seen = new Set();
+    return arr.filter(item => {
+        if (!item?.id || seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+    });
+}
+
 export function DashboardProvider({ children }) {
     const { user } = useAuth();
     const [sites, setSites] = useState([]);
@@ -528,8 +538,8 @@ export function DashboardProvider({ children }) {
                     fetchAPI('/sites?import_source=file&limit=1&page=1').catch(() => null)
                 ]);
 
-            const categoriesData = Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []);
-            const tagsData = Array.isArray(tagsRes) ? tagsRes : (tagsRes?.data || []);
+            const categoriesData = dedupeById(Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []));
+            const tagsData = dedupeById(Array.isArray(tagsRes) ? tagsRes : (tagsRes?.data || []));
             setCategories(categoriesData);
             setTags(tagsData);
 
@@ -1012,6 +1022,13 @@ export function DashboardProvider({ children }) {
 
     // Category operations
     const addCategory = useCallback(async (categoryData) => {
+        // Duplicate name check
+        const nameExists = categories.some(c => c.name?.toLowerCase() === categoryData.name?.trim().toLowerCase());
+        if (nameExists) {
+            const msg = `Category "${categoryData.name.trim()}" already exists`;
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
         // Tier limit check — always re-resolve tier from source of truth
         const tier = getUserTier(user);
         const check = canAdd(tier, 'categories', stats.categories);
@@ -1026,7 +1043,7 @@ export function DashboardProvider({ children }) {
                 body: JSON.stringify(categoryData)
             });
             const newCategory = response?.data || response;
-            setCategories(prev => [...prev, newCategory]);
+            setCategories(prev => prev.some(c => c.id === newCategory.id) ? prev : [...prev, newCategory]);
             setStats(prev => ({ ...prev, categories: prev.categories + 1 }));
             showToast(`Category "${newCategory.name}" created successfully`, 'success');
             return newCategory;
@@ -1044,7 +1061,7 @@ export function DashboardProvider({ children }) {
             showToast(`Failed to add category: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast]);
+    }, [categories, showToast]);
 
     const updateCategory = useCallback(async (id, categoryData) => {
         try {
@@ -1105,6 +1122,13 @@ export function DashboardProvider({ children }) {
 
     // Tag operations
     const addTag = useCallback(async (tagData) => {
+        // Duplicate name check
+        const nameExists = tags.some(t => t.name?.toLowerCase() === tagData.name?.trim().toLowerCase());
+        if (nameExists) {
+            const msg = `Tag "${tagData.name.trim()}" already exists`;
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
         // Tier limit check — always re-resolve tier from source of truth
         const tier = getUserTier(user);
         const check = canAdd(tier, 'tags', stats.tags);
@@ -1119,7 +1143,7 @@ export function DashboardProvider({ children }) {
                 body: JSON.stringify(tagData)
             });
             const newTag = response?.data || response;
-            setTags(prev => [...prev, newTag]);
+            setTags(prev => prev.some(t => t.id === newTag.id) ? prev : [...prev, newTag]);
             setStats(prev => ({ ...prev, tags: prev.tags + 1 }));
             showToast(`Tag "${newTag.name}" created successfully`, 'success');
             return newTag;
@@ -1137,7 +1161,7 @@ export function DashboardProvider({ children }) {
             showToast(`Failed to add tag: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast]);
+    }, [tags, showToast]);
 
     const updateTag = useCallback(async (id, tagData) => {
         try {

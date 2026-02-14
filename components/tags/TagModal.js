@@ -7,7 +7,7 @@ import Input from '../ui/Input';
 import { TAG_COLORS } from '../../lib/sharedColors';
 
 export default function TagModal({ isOpen, onClose, tag = null }) {
-    const { addTag, updateTag } = useDashboard();
+    const { addTag, updateTag, tags } = useDashboard();
     const { user } = useAuth();
     const isEditing = !!tag;
 
@@ -34,6 +34,12 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
         try {
             if (!name.trim()) {
                 throw new Error('Tag name is required');
+            }
+
+            // Duplicate name check (skip when editing the same tag)
+            const duplicate = tags.find(t => t.name?.toLowerCase() === name.trim().toLowerCase() && t.id !== tag?.id);
+            if (duplicate) {
+                throw new Error(`Tag "${name.trim()}" already exists`);
             }
 
             if (!user?.id) {
