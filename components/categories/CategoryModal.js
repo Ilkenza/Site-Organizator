@@ -8,7 +8,7 @@ import Input from '../ui/Input';
 import { CATEGORY_COLORS as COLORS } from '../../lib/sharedColors';
 
 export default function CategoryModal({ isOpen, onClose, category = null }) {
-    const { addCategory, updateCategory } = useDashboard();
+    const { addCategory, updateCategory, categories } = useDashboard();
     const { user } = useAuth();
     const isEditing = !!category;
 
@@ -47,6 +47,12 @@ export default function CategoryModal({ isOpen, onClose, category = null }) {
         try {
             if (!formData.name.trim()) {
                 throw new Error('Category name is required');
+            }
+
+            // Duplicate name check (skip when editing the same category)
+            const duplicate = categories.find(c => c.name?.toLowerCase() === formData.name.trim().toLowerCase() && c.id !== category?.id);
+            if (duplicate) {
+                throw new Error(`Category "${formData.name.trim()}" already exists`);
             }
 
             if (!user?.id) {

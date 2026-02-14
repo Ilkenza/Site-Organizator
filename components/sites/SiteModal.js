@@ -177,6 +177,8 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
     const [suggestedTags, setSuggestedTags] = useState([]);
     const [newTagSuggestions, setNewTagSuggestions] = useState([]);
     const [retryingRelations, setRetryingRelations] = useState(false);
+    const [categoryDuplicateError, setCategoryDuplicateError] = useState(null);
+    const [tagDuplicateError, setTagDuplicateError] = useState(null);
 
     // Duplicate URL check state
     const [duplicateUrl, setDuplicateUrl] = useState(null);
@@ -256,8 +258,13 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
             if (match && !newTagIds.includes(match.id)) newTagIds.push(match.id);
         });
 
-        // Create and apply new categories
+        // Create and apply new categories (skip duplicates)
         for (const catName of (aiResult.newCategories || [])) {
+            const existingCat = categories.find(c => c.name?.toLowerCase() === capitalize(catName).toLowerCase());
+            if (existingCat) {
+                if (!newCatIds.includes(existingCat.id)) newCatIds.push(existingCat.id);
+                continue;
+            }
             try {
                 const catData = { name: capitalize(catName), color: getRandomColor(CATEGORY_COLORS) };
                 if (currentUser?.id) catData.user_id = currentUser.id;
@@ -266,8 +273,13 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
             } catch (e) { console.warn('Failed to create AI category:', e); }
         }
 
-        // Create and apply new tags
+        // Create and apply new tags (skip duplicates)
         for (const tagName of (aiResult.newTags || [])) {
+            const existingTag = tags.find(t => t.name?.toLowerCase() === capitalize(tagName).toLowerCase());
+            if (existingTag) {
+                if (!newTagIds.includes(existingTag.id)) newTagIds.push(existingTag.id);
+                continue;
+            }
             try {
                 const tagData = { name: capitalize(tagName), color: getRandomColor(TAG_COLORS).hex };
                 if (currentUser?.id) tagData.user_id = currentUser.id;
@@ -334,6 +346,8 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
             setAiResult(null);
             setAiError(null);
             setAiLoading(false);
+            setCategoryDuplicateError(null);
+            setTagDuplicateError(null);
         }
     }, [isOpen, site, prefill, defaultCategoryId, defaultFavorite, defaultTagId, restoreFormData]);
 
@@ -450,6 +464,19 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
     const handleCategoryToggle = createToggleHandler('categoryIds');
 
     const handleCreateAndAddCategory = async (categoryName) => {
+        const normalized = capitalize(categoryName);
+        const existing = categories.find(c => c.name?.toLowerCase() === normalized.toLowerCase());
+        if (existing) {
+            setCategoryDuplicateError(`Category "${normalized}" already exists`);
+            setTimeout(() => setCategoryDuplicateError(null), 4000);
+            // Auto-select the existing one if not already selected
+            if (!formData.categoryIds.includes(existing.id)) {
+                addToArrayField(setFormData, 'categoryIds', existing.id);
+            }
+            removeFromSuggestions(setNewCategorySuggestions, categoryName);
+            return;
+        }
+        setCategoryDuplicateError(null);
         try {
             const categoryData = {
                 name: capitalize(categoryName),
@@ -468,6 +495,19 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
     };
 
     const handleCreateAndAddTag = async (tagName) => {
+        const normalized = formatTagName(tagName);
+        const existing = tags.find(t => t.name?.toLowerCase() === normalized.toLowerCase());
+        if (existing) {
+            setTagDuplicateError(`Tag "${normalized}" already exists`);
+            setTimeout(() => setTagDuplicateError(null), 4000);
+            // Auto-select the existing one if not already selected
+            if (!formData.tagIds.includes(existing.id)) {
+                addToArrayField(setFormData, 'tagIds', existing.id);
+            }
+            removeFromSuggestions(setNewTagSuggestions, tagName);
+            return;
+        }
+        setTagDuplicateError(null);
         try {
             const tagData = {
                 name: formatTagName(tagName),
@@ -1044,6 +1084,11 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                                 />
                             </div>
                             <p className="text-[10px] text-app-text-muted pl-0.5">Broad groups — e.g. Development, Design, AI Tools</p>
+                            {categoryDuplicateError && (
+                                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-2 py-1 flex items-center gap-1.5">
+                                    <span>⚠️</span> {categoryDuplicateError}
+                                </p>
+                            )}
                         </div>
                         <div className={`bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 ${MAX_LIST_HEIGHT} overflow-y-auto`}>
                             {(() => {
@@ -1176,6 +1221,11 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                                 />
                             </div>
                             <p className="text-[10px] text-app-text-muted pl-0.5">Specific labels — e.g. React, Free, Tutorial, Color Picker</p>
+                            {tagDuplicateError && (
+                                <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-2 py-1 flex items-center gap-1.5">
+                                    <span>⚠️</span> {tagDuplicateError}
+                                </p>
+                            )}
                         </div>
                         <div className={`bg-app-bg-light border border-app-border rounded-lg p-2 flex flex-wrap gap-1.5 ${MAX_LIST_HEIGHT} overflow-y-auto`}>
                             {(() => {

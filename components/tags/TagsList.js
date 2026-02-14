@@ -64,6 +64,14 @@ export default function TagsList({ onEdit, onDelete }) {
             const tag = tags.find(t => t.id === tagId);
             if (!tag) return;
 
+            // Duplicate name check
+            const duplicate = tags.find(t => t.name?.toLowerCase() === newName.toLowerCase() && t.id !== tagId);
+            if (duplicate) {
+                alert(`Tag "${newName}" already exists`);
+                setEditingId(null);
+                return;
+            }
+
             await updateTag(tagId, { name: newName });
             setEditingId(null);
         } catch (err) {
