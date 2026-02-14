@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, us
 import { fetchAPI, supabase } from '../lib/supabase';
 import * as offlineQueue from '../lib/offlineQueue';
 import { useAuth } from './AuthContext';
-import { canAdd, getTierLimits, TIER_LABELS, TIER_FREE, resolveTier } from '../lib/tierConfig';
+import { canAdd, getTierLimits, TIER_LABELS, TIER_FREE, TIER_PROMAX, resolveTier } from '../lib/tierConfig';
 
 const DashboardContext = createContext(null);
 
@@ -10,6 +10,18 @@ const DashboardContext = createContext(null);
 const AUTH_CLEAR_DELAY = 500;
 const TOAST_DURATION = 3000;
 const SITES_PAGE_SIZE = 30; // Sites per page (matches UI display)
+
+// Resolve tier robustly — never trust a stale user.tier value
+function getUserTier(user) {
+    if (!user) return TIER_FREE;
+    // Admin always gets promax — check both the flag AND the env var directly
+    if (user.isAdmin === true) return TIER_PROMAX;
+    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+    if (user.email && adminEmails.includes(user.email.toLowerCase())) return TIER_PROMAX;
+    // Re-resolve from user_metadata (source of truth from Supabase JWT)
+    const resolved = resolveTier(user.user_metadata);
+    return resolved || TIER_FREE;
+}
 
 // Helper to check if valid tokens exist in localStorage
 function hasValidTokensInStorage() {
@@ -849,8 +861,8 @@ export function DashboardProvider({ children }) {
     // Site operations
     const addSite = useCallback(async (siteData) => {
         if (!user) throw new Error('Must be logged in to add a site');
-        // Tier limit check — resolve tier defensively (user.tier may be missing during auth recovery)
-        const tier = user.tier || resolveTier(user.user_metadata, user.isAdmin) || TIER_FREE;
+        // Tier limit check — always re-resolve tier from source of truth
+        const tier = getUserTier(user);
         const check = canAdd(tier, 'sites', stats.sites);
         if (!check.allowed) {
             const msg = `Site limit reached (${stats.sites}/${check.limit}). You are on the ${TIER_LABELS[tier] || 'Free'} plan.`;
@@ -1000,8 +1012,8 @@ export function DashboardProvider({ children }) {
 
     // Category operations
     const addCategory = useCallback(async (categoryData) => {
-        // Tier limit check — resolve tier defensively
-        const tier = user?.tier || resolveTier(user?.user_metadata, user?.isAdmin) || TIER_FREE;
+        // Tier limit check — always re-resolve tier from source of truth
+        const tier = getUserTier(user);
         const check = canAdd(tier, 'categories', stats.categories);
         if (!check.allowed) {
             const msg = `Category limit reached (${stats.categories}/${check.limit}). You are on the ${TIER_LABELS[tier] || 'Free'} plan.`;
@@ -1093,8 +1105,8 @@ export function DashboardProvider({ children }) {
 
     // Tag operations
     const addTag = useCallback(async (tagData) => {
-        // Tier limit check — resolve tier defensively
-        const tier = user?.tier || resolveTier(user?.user_metadata, user?.isAdmin) || TIER_FREE;
+        // Tier limit check — always re-resolve tier from source of truth
+        const tier = getUserTier(user);
         const check = canAdd(tier, 'tags', stats.tags);
         if (!check.allowed) {
             const msg = `Tag limit reached (${stats.tags}/${check.limit}). You are on the ${TIER_LABELS[tier] || 'Free'} plan.`;
