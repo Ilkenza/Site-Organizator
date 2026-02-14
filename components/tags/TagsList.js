@@ -17,7 +17,13 @@ export default function TagsList({ onEdit, onDelete }) {
 
     // Filter tags based on search query + usage filter
     const filteredTags = useMemo(() => {
-        let list = tags;
+        // Deduplicate by id to prevent React key warnings
+        const seen = new Set();
+        let list = tags.filter(t => {
+            if (!t?.id || seen.has(t.id)) return false;
+            seen.add(t.id);
+            return true;
+        });
         if (searchQuery.trim()) {
             list = list.filter(tag =>
                 tag?.name?.toLowerCase().includes(searchQuery.toLowerCase())

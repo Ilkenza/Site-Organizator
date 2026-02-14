@@ -28,7 +28,13 @@ export default function CategoriesList({ onEdit, onDelete }) {
     const [currentPage, setCurrentPage] = useState(1);
 
     const filteredCategories = useMemo(() => {
-        let list = categories;
+        // Deduplicate by id to prevent React key warnings
+        const seen = new Set();
+        let list = categories.filter(c => {
+            if (!c?.id || seen.has(c.id)) return false;
+            seen.add(c.id);
+            return true;
+        });
         if (searchQuery.trim()) {
             list = list.filter(cat =>
                 cat?.name?.toLowerCase().includes(searchQuery.toLowerCase())
