@@ -499,34 +499,27 @@ export function AuthProvider({ children }) {
             if (tokens?.user && tokens?.access_token) {
                 userSetFromLocalStorageRef.current = true;
 
-                // Set user from localStorage
+                // Always use createUserWithProfile so tier/admin are set immediately
+                const baseUser = createUserWithProfile(tokens.user, null);
+                setUser(baseUser);
+
+                // Then fetch profile and enrich in background
                 (async () => {
-                    const hasProfileData = !!tokens.user.avatarUrl || !!tokens.user.displayName;
+                    try {
+                        const { profile } = await fetchProfileViaAPI();
+                        if (profile) {
+                            const updatedUser = createUserWithProfile(tokens.user, profile);
+                            setUser(updatedUser);
 
-                    if (hasProfileData) {
-                        setUser(tokens.user);
-                    } else {
-                        // Set user immediately, then fetch profile
-                        setUser(tokens.user);
-
-                        (async () => {
-                            try {
-                                const { profile } = await fetchProfileViaAPI();
-                                if (profile) {
-                                    const updatedUser = createUserWithProfile(tokens.user, profile);
-                                    setUser(updatedUser);
-
-                                    // Update localStorage
-                                    const stored = getStoredTokens();
-                                    if (stored) {
-                                        stored.user = updatedUser;
-                                        saveTokensToStorage(stored);
-                                    }
-                                }
-                            } catch (err) {
-                                console.warn('[AuthContext] Emergency: Failed to fetch profile:', err);
+                            // Update localStorage
+                            const stored = getStoredTokens();
+                            if (stored) {
+                                stored.user = updatedUser;
+                                saveTokensToStorage(stored);
                             }
-                        })();
+                        }
+                    } catch (err) {
+                        console.warn('[AuthContext] Emergency: Failed to fetch profile:', err);
                     }
                 })();
             }
