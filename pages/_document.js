@@ -14,7 +14,7 @@ export default function Document() {
                     never see the landing page, even when offline */}
                 <script
                     dangerouslySetInnerHTML={{
-                        __html: `(function(){try{var p=location.pathname;if(p==="/"||p==="/login"){var s=localStorage.getItem("${AUTH_KEY}");if(s){var t=JSON.parse(s);if(t&&t.access_token&&t.user){location.replace("/dashboard/sites");return}}}}catch(e){}})();`,
+                        __html: `(function(){try{var p=location.pathname;if(p==="/"||p==="/login"){var mfa=sessionStorage.getItem("mfa_verification_in_progress")==="true"||localStorage.getItem("mfa_verification_in_progress")==="true";if(p==="/login"&&mfa)return;var s=localStorage.getItem("${AUTH_KEY}");if(s){var t=JSON.parse(s);if(t&&t.access_token&&t.user){location.replace("/dashboard/sites");return}}}}catch(e){}})();`,
                     }}
                 />
                 <Main />
