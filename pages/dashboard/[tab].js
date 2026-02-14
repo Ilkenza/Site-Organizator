@@ -295,11 +295,11 @@ function DashboardContent() {
                     case 'tag': await deleteTag(item.id); break;
                 }
             } catch (err) {
-                // Restore item to UI since API delete failed
+                // Restore item to UI since API delete failed (deduplicate)
                 switch (type) {
-                    case 'site': setSites(prev => [item, ...prev]); break;
-                    case 'category': setCategories(prev => [...prev, item]); break;
-                    case 'tag': setTags(prev => [...prev, item]); break;
+                    case 'site': setSites(prev => prev.some(s => s.id === item.id) ? prev : [item, ...prev]); break;
+                    case 'category': setCategories(prev => prev.some(c => c.id === item.id) ? prev : [...prev, item]); break;
+                    case 'tag': setTags(prev => prev.some(t => t.id === item.id) ? prev : [...prev, item]); break;
                 }
             }
         }, 5000);
@@ -311,11 +311,11 @@ function DashboardContent() {
                 pendingDelete.cancelled = true;
                 clearTimeout(pendingDelete.timer);
                 pendingDeleteRef.current = null;
-                // Restore item to UI
+                // Restore item to UI (deduplicate)
                 switch (type) {
-                    case 'site': setSites(prev => [item, ...prev]); break;
-                    case 'category': setCategories(prev => [...prev, item]); break;
-                    case 'tag': setTags(prev => [...prev, item]); break;
+                    case 'site': setSites(prev => prev.some(s => s.id === item.id) ? prev : [item, ...prev]); break;
+                    case 'category': setCategories(prev => prev.some(c => c.id === item.id) ? prev : [...prev, item]); break;
+                    case 'tag': setTags(prev => prev.some(t => t.id === item.id) ? prev : [...prev, item]); break;
                 }
                 setUndoToast(null);
                 showToast(`Restored "${itemName}"`, 'info');
