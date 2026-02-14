@@ -20,7 +20,7 @@ async function lookupByName(cfg, name, token) {
 
 async function checkTierLimit(cfg, userToken, res) {
   const LIMITS = { free: 100, pro: 500, promax: Infinity };
-  const tier = resolveTier(userToken);
+  const { tier } = resolveTier(userToken);
   const limit = LIMITS[tier] ?? LIMITS.free;
   if (limit === Infinity) return false;
   try {
@@ -49,6 +49,13 @@ export default async function handler(req, res) {
 
     try {
       const body = req.body || {};
+
+      // Duplicate name check — return existing if same name already exists for this user
+      if (body.name) {
+        const existing = await lookupByName(cfg, body.name, userToken);
+        if (existing) return sendOk(res, { data: existing });
+      }
+
       const r = await fetch(restUrl(cfg, 'categories'), {
         method: 'POST',
         headers: buildHeaders(cfg.anonKey, userToken, { contentType: true, prefer: 'return=representation' }),
