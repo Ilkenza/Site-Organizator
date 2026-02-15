@@ -515,6 +515,33 @@ export function DashboardProvider({ children }) {
         }
     }, [buildSitesQuery]);
 
+    // Fetch ALL sites (no pagination) — used when client-side exclusions need the full dataset
+    const fetchAllSites = useCallback(async () => {
+        try {
+            const params = new URLSearchParams();
+            params.set('limit', 9999);
+            params.set('page', 1);
+            if (searchQuery) params.set('q', searchQuery);
+            if (selectedCategory) params.set('category_id', selectedCategory);
+            if (selectedTag) params.set('tag_id', selectedTag);
+            if (sortBy) params.set('sort_by', sortBy);
+            if (sortOrder) params.set('sort_order', sortOrder);
+            if (activeTab === 'favorites') params.set('favorites', 'true');
+            if (selectedImportSource) params.set('import_source', selectedImportSource);
+            if (neededFilterSites && neededFilterSites !== 'all') params.set('needed', neededFilterSites);
+
+            const sitesRes = await fetchAPI(`/sites?${params.toString()}`);
+            const sitesData = Array.isArray(sitesRes) ? sitesRes : (sitesRes?.data || []);
+            const total = sitesRes?.totalCount ?? sitesData.length;
+
+            setSites(sitesData);
+            setTotalSitesCount(total);
+            setCurrentPage(1);
+        } catch (err) {
+            console.error('Failed to fetch all sites:', err);
+        }
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, neededFilterSites]);
+
     // Fetch initial data (categories, tags, first page of sites, sidebar counts)
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -1256,6 +1283,7 @@ export function DashboardProvider({ children }) {
         setTotalSitesCount,
         totalPages,
         fetchSitesPage,
+        fetchAllSites,
         SITES_PAGE_SIZE,
 
         // Cross-filter counts for sidebar stacked display

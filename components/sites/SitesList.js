@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import SiteCard from './SiteCard';
 import CategoryColorIndicator from '../layout/CategoryColorIndicator';
@@ -8,12 +8,61 @@ import { fetchAPI } from '../../lib/supabase';
 
 const RENDER_DELAY_MS = 500;
 
-export default function SitesList({ onEdit, onDelete }) {
+export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new Set(), excludedTagIds = new Set(), excludedImportSources = new Set() }) {
     const {
-        filteredSites, loading, searchQuery, selectedCategory, selectedTag, categories,
-        currentPage, totalPages, totalSitesCount, fetchSitesPage, SITES_PAGE_SIZE,
+        filteredSites: rawFilteredSites, loading, searchQuery, selectedCategory, selectedTag, categories,
+        currentPage, totalPages, totalSitesCount, fetchSitesPage, fetchAllSites, SITES_PAGE_SIZE,
         selectedImportSource, neededFilterSites, initialDataLoaded
     } = useDashboard();
+
+    // Client-side exclusion filter — sites use categories_array/tags_array (objects with .id)
+    const hasExclusions = excludedCategoryIds.size > 0 || excludedTagIds.size > 0 || excludedImportSources.size > 0;
+
+    // When exclusions become active, fetch ALL sites so client-side filtering works on the full dataset
+    const prevHadExclusions = useRef(false);
+    useEffect(() => {
+        if (hasExclusions && !prevHadExclusions.current) {
+            fetchAllSites();
+        } else if (!hasExclusions && prevHadExclusions.current) {
+            // Exclusions cleared — go back to paginated mode
+            fetchSitesPage(1);
+        }
+        prevHadExclusions.current = hasExclusions;
+    }, [hasExclusions, fetchAllSites, fetchSitesPage]);
+
+    const allFilteredSites = useMemo(() => {
+        if (!hasExclusions) return rawFilteredSites;
+        return rawFilteredSites.filter(site => {
+            if (excludedCategoryIds.size > 0) {
+                if (excludedCategoryIds.has('all')) return false;
+                const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
+                if (excludedCategoryIds.has('uncategorized') && catIds.length === 0) return false;
+                if (catIds.some(id => excludedCategoryIds.has(id))) return false;
+            }
+            if (excludedTagIds.size > 0) {
+                if (excludedTagIds.has('all')) return false;
+                const tIds = (site.tags_array || []).map(t => t?.id).filter(Boolean);
+                if (excludedTagIds.has('untagged') && tIds.length === 0) return false;
+                if (tIds.some(id => excludedTagIds.has(id))) return false;
+            }
+            if (excludedImportSources.size > 0) {
+                if (excludedImportSources.has('all')) return false;
+                const src = site.import_source || 'manual';
+                if (excludedImportSources.has(src)) return false;
+            }
+            return true;
+        });
+    }, [rawFilteredSites, excludedCategoryIds, excludedTagIds, excludedImportSources, hasExclusions]);
+
+    // Client-side pagination when exclusions are active
+    const [excludePage, setExcludePage] = useState(1);
+    // Reset client page when exclusions change
+    useEffect(() => { setExcludePage(1); }, [excludedCategoryIds, excludedTagIds, excludedImportSources]);
+
+    const excludeTotalPages = Math.ceil(allFilteredSites.length / SITES_PAGE_SIZE) || 1;
+    const filteredSites = hasExclusions
+        ? allFilteredSites.slice((excludePage - 1) * SITES_PAGE_SIZE, excludePage * SITES_PAGE_SIZE)
+        : allFilteredSites;
 
     // Delayed render: show skeleton briefly after sites data arrives
     const [showSites, setShowSites] = useState(false);
@@ -36,7 +85,9 @@ export default function SitesList({ onEdit, onDelete }) {
     }, [loading, filteredSites, currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Calculate display indices
-    const startIndex = (currentPage - 1) * SITES_PAGE_SIZE;
+    const startIndex = hasExclusions
+        ? (excludePage - 1) * SITES_PAGE_SIZE
+        : (currentPage - 1) * SITES_PAGE_SIZE;
     const endIndex = startIndex + filteredSites.length;
 
     // Track site click for Rediscover (fire & forget)
@@ -44,11 +95,18 @@ export default function SitesList({ onEdit, onDelete }) {
         fetchAPI('/rediscover', { method: 'POST', body: JSON.stringify({ siteId }) }).catch(() => { });
     }, []);
 
-    // Handle page change — fetch new page from server
+    // Handle page change — server-side or client-side depending on exclusions
     const handlePageChange = (newPage) => {
-        if (newPage >= 1 && newPage <= totalPages) {
-            fetchSitesPage(newPage);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (hasExclusions) {
+            if (newPage >= 1 && newPage <= excludeTotalPages) {
+                setExcludePage(newPage);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        } else {
+            if (newPage >= 1 && newPage <= totalPages) {
+                fetchSitesPage(newPage);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
         }
     };
 
@@ -73,7 +131,7 @@ export default function SitesList({ onEdit, onDelete }) {
     }
 
     if (filteredSites.length === 0) {
-        const hasFilters = searchQuery || selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all');
+        const hasFilters = searchQuery || selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all') || hasExclusions;
 
         return (
             <div className="flex flex-col items-center justify-center py-16 px-4">
@@ -96,12 +154,19 @@ export default function SitesList({ onEdit, onDelete }) {
         );
     }
 
+    const displayTotal = hasExclusions ? allFilteredSites.length : totalSitesCount;
+    const displayTotalPages = hasExclusions ? excludeTotalPages : totalPages;
+    const displayCurrentPage = hasExclusions ? excludePage : currentPage;
+
     return (
         <div>
             {/* Results count */}
-            {totalSitesCount > 0 && (
+            {displayTotal > 0 && (
                 <div className="px-3 sm:px-6 pt-3 sm:pt-4 flex items-center gap-3 text-sm text-app-text-secondary">
-                    <span>Showing {startIndex + 1}-{Math.min(endIndex, totalSitesCount)} of {totalSitesCount} sites</span>
+                    {hasExclusions
+                        ? <span>Showing {startIndex + 1}-{Math.min(endIndex, displayTotal)} of {displayTotal} sites ({rawFilteredSites.length - allFilteredSites.length} excluded)</span>
+                        : <span>Showing {startIndex + 1}-{Math.min(endIndex, displayTotal)} of {displayTotal} sites</span>
+                    }
                 </div>
             )}
 
@@ -118,10 +183,10 @@ export default function SitesList({ onEdit, onDelete }) {
                 ))}
             </div>
 
-            {/* Pagination */}
+            {/* Pagination — client-side when exclusions active, server-side otherwise */}
             <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
+                currentPage={displayCurrentPage}
+                totalPages={displayTotalPages}
                 onPageChange={handlePageChange}
             />
 
