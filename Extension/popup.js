@@ -1041,6 +1041,35 @@ function scheduleUrlCheck(url) {
     urlCheckTimeout = setTimeout(() => checkUrlExistsInDatabase(url), 300);
 }
 
+// Reorder a checkbox list so selected (checked) items appear first, rest alphabetically
+function reorderCheckboxList(listId) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    // Save scroll positions before reordering
+    const scrollY = window.scrollY;
+    const bodyScrollTop = document.body.scrollTop;
+    const container = document.querySelector('.container');
+    const containerScroll = container ? container.scrollTop : 0;
+
+    const items = Array.from(list.children).filter(el => el.querySelector('input[type="checkbox"]'));
+    items.sort((a, b) => {
+        const aCb = a.querySelector('input[type="checkbox"]');
+        const bCb = b.querySelector('input[type="checkbox"]');
+        const aChecked = aCb && aCb.checked ? 0 : 1;
+        const bChecked = bCb && bCb.checked ? 0 : 1;
+        if (aChecked !== bChecked) return aChecked - bChecked;
+        const aName = (a.querySelector('label')?.textContent || '').toLowerCase();
+        const bName = (b.querySelector('label')?.textContent || '').toLowerCase();
+        return aName.localeCompare(bName);
+    });
+    items.forEach(el => list.appendChild(el));
+
+    // Restore scroll positions after DOM reorder
+    window.scrollTo(0, scrollY);
+    document.body.scrollTop = bodyScrollTop;
+    if (container) container.scrollTop = containerScroll;
+}
+
 // Auto-focus helper - focus first empty required field
 function autoFocusFirstEmptyField() {
     try {
@@ -1049,19 +1078,19 @@ function autoFocusFirstEmptyField() {
         const pricingSelect = document.getElementById('pricing');
 
         if (siteNameInput && !siteNameInput.value.trim()) {
-            siteNameInput.focus();
+            siteNameInput.focus({ preventScroll: true });
             return;
         }
         if (urlInput && !urlInput.value.trim()) {
-            urlInput.focus();
+            urlInput.focus({ preventScroll: true });
             return;
         }
         if (pricingSelect && !pricingSelect.value) {
-            pricingSelect.focus();
+            pricingSelect.focus({ preventScroll: true });
             return;
         }
         // Default to site name
-        if (siteNameInput) siteNameInput.focus();
+        if (siteNameInput) siteNameInput.focus({ preventScroll: true });
     } catch (e) {
         debug('autoFocusFirstEmptyField error:', e);
     }
@@ -1194,6 +1223,10 @@ function restoreFormState(state) {
 
     // Update selection counts
     try { updateSelectionCounts(); } catch (e) { /* ignore */ }
+
+    // Reorder so selected items appear first
+    reorderCheckboxList('categoriesCheckboxList');
+    reorderCheckboxList('tagsCheckboxList');
 }
 
 // Normalize URL for cache key (remove hash, trailing slash, etc.)
@@ -1552,17 +1585,64 @@ async function loadCategoriesAndTags() {
             } catch (e) { debug('local API tags fetch failed', e); }
         }
 
-        // Render categories (sorted alphabetically A-Z)
+        // Helper: reorder a checkbox list so selected items appear first, rest alphabetically
+        // (uses top-level reorderCheckboxList defined above)
+
+        // Read cached selections so selected items render first
+        let cachedSelectedCategories = new Set();
+        let cachedSelectedTags = new Set();
+        try {
+            // Build cache key — ensure currentTabUrl is available
+            let cacheUrl = currentTabUrl;
+            if (!cacheUrl) {
+                try {
+                    const tabs = await new Promise(resolve => chrome.tabs.query({ active: true, currentWindow: true }, resolve));
+                    if (tabs && tabs[0] && tabs[0].url) {
+                        cacheUrl = tabs[0].url;
+                        currentTabUrl = cacheUrl;
+                    }
+                } catch (e) { debug('cache: tabs.query failed', e); }
+            }
+            const cacheKey = getFormCacheKey();
+            debug('loadCategoriesAndTags: reading cache for sort-first, key=', cacheKey);
+
+            // Try chrome.storage.local first (where saveFormToCache writes)
+            let cached = null;
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                try {
+                    cached = await new Promise(resolve => chrome.storage.local.get([cacheKey], res => resolve(res && res[cacheKey])));
+                } catch (e) { debug('chrome.storage cache read failed', e); }
+            }
+            // Fallback to localStorage
+            if (!cached) {
+                try {
+                    const raw = localStorage.getItem(cacheKey);
+                    cached = raw ? JSON.parse(raw) : null;
+                } catch { /* ignore */ }
+            }
+            if (cached) {
+                if (Array.isArray(cached.selectedCategories)) cachedSelectedCategories = new Set(cached.selectedCategories);
+                if (Array.isArray(cached.selectedTags)) cachedSelectedTags = new Set(cached.selectedTags);
+                debug('loadCategoriesAndTags: cached selections — cats:', cachedSelectedCategories.size, 'tags:', cachedSelectedTags.size);
+            } else {
+                debug('loadCategoriesAndTags: no cached form data found for key', cacheKey);
+            }
+        } catch (e) { debug('loadCategoriesAndTags: reading cache for sort-first failed', e); }
+
+        // Render categories (selected first, then alphabetically A-Z)
         const categoriesCheckboxList = document.getElementById('categoriesCheckboxList');
         if (categoriesCheckboxList) {
             categoriesCheckboxList.innerHTML = '';
             if (categoriesAccessDenied) {
                 categoriesCheckboxList.innerHTML = '<div class="no-results-message">Sign in to view categories (permission denied)</div>';
             } else if (categoriesList && categoriesList.length > 0) {
-                // Sort categories alphabetically by name
-                const sortedCategories = [...categoriesList].sort((a, b) =>
-                    (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
-                );
+                // Sort: selected first, then alphabetically by name
+                const sortedCategories = [...categoriesList].sort((a, b) => {
+                    const aSelected = cachedSelectedCategories.has(a.id) ? 0 : 1;
+                    const bSelected = cachedSelectedCategories.has(b.id) ? 0 : 1;
+                    if (aSelected !== bSelected) return aSelected - bSelected;
+                    return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+                });
                 sortedCategories.forEach(cat => {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'category-checkbox';
@@ -1616,6 +1696,8 @@ async function loadCategoriesAndTags() {
                             itemDiv.classList.remove('selected');
                             itemDiv.style.border = itemDiv.dataset.defaultBorder || '1px solid transparent';
                         }
+                        // Re-order: selected categories first
+                        reorderCheckboxList('categoriesCheckboxList');
                         saveFormToCache();
                     });
 
@@ -1628,14 +1710,17 @@ async function loadCategoriesAndTags() {
                 try { if (document.getElementById('categoriesSearchInput')?.value) filterCheckboxList('categoriesCheckboxList', document.getElementById('categoriesSearchInput').value); } catch (e) { }
             }
 
-            // Render tags (sorted alphabetically A-Z)
+            // Render tags (selected first, then alphabetically A-Z)
             const tagsCheckboxList = document.getElementById('tagsCheckboxList');
             if (tagsCheckboxList && tagsList && tagsList.length > 0) {
                 tagsCheckboxList.innerHTML = '';
-                // Sort tags alphabetically by name
-                const sortedTags = [...tagsList].sort((a, b) =>
-                    (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
-                );
+                // Sort: selected first, then alphabetically by name
+                const sortedTags = [...tagsList].sort((a, b) => {
+                    const aSelected = cachedSelectedTags.has(a.id) ? 0 : 1;
+                    const bSelected = cachedSelectedTags.has(b.id) ? 0 : 1;
+                    if (aSelected !== bSelected) return aSelected - bSelected;
+                    return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+                });
                 sortedTags.forEach(tag => {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'tag-checkbox';
@@ -1689,6 +1774,8 @@ async function loadCategoriesAndTags() {
                             itemDiv.classList.remove('selected');
                             itemDiv.style.border = itemDiv.dataset.defaultBorder || '1px solid transparent';
                         }
+                        // Re-order: selected tags first
+                        reorderCheckboxList('tagsCheckboxList');
                         saveFormToCache();
                     });
 
@@ -1703,6 +1790,14 @@ async function loadCategoriesAndTags() {
 
             // Success - hide loading spinner
             hideLoading();
+
+            // Scroll to top after rendering so the popup doesn't open at the bottom
+            try {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+                const container = document.querySelector('.container');
+                if (container) container.scrollTop = 0;
+            } catch (e) { debug('scroll-to-top failed', e); }
         }
     } catch (err) {
         console.error('❌ Error loading data:', err);
@@ -1983,6 +2078,9 @@ function checkDomAndInit() {
 
     // All critical elements present — proceed
     try {
+        // Scroll to top immediately so popup opens at the start
+        try { window.scrollTo(0, 0); document.body.scrollTop = 0; } catch (e) { }
+
         // Populate URL asap (even if site form is hidden) so it's available when the form shows
         tryPopulateUrlInput();
 
@@ -2079,6 +2177,11 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
                 setTimeout(() => {
                     loadFormFromCache();
                     addFormCacheListeners();
+                    // Reorder so checked items appear first after cache restore
+                    setTimeout(() => {
+                        reorderCheckboxList('categoriesCheckboxList');
+                        reorderCheckboxList('tagsCheckboxList');
+                    }, 200);
                 }, 50);
             }).catch(e => debug('Error loading categories/tags on tab change', e));
         });
@@ -2421,6 +2524,12 @@ function showSiteForm() {
                     loadFormFromCache();
                     addFormCacheListeners();
 
+                    // Reorder lists so checked items appear first after cache restore
+                    setTimeout(() => {
+                        reorderCheckboxList('categoriesCheckboxList');
+                        reorderCheckboxList('tagsCheckboxList');
+                    }, 200);
+
                     // Attach inline filter listeners (debounced) for tags & categories
                     const tagsFilter = document.getElementById('tagsSearchInput');
                     const tagsClear = document.getElementById('tagsSearchClear');
@@ -2667,8 +2776,26 @@ function showSiteForm() {
                     try { updateSelectionCounts(); } catch (e) { }
                     hideLoading();
 
+                    // Scroll popup to top after everything is loaded and rendered
+                    try {
+                        window.scrollTo(0, 0);
+                        document.body.scrollTop = 0;
+                        const container = document.querySelector('.container');
+                        if (container) container.scrollTop = 0;
+                    } catch (e) { }
+
                     // Auto-focus first empty field
                     setTimeout(autoFocusFirstEmptyField, 100);
+
+                    // Final scroll-to-top after all delayed operations (reorder at 200ms, focus at 100ms)
+                    setTimeout(() => {
+                        try {
+                            window.scrollTo(0, 0);
+                            document.body.scrollTop = 0;
+                            const c = document.querySelector('.container');
+                            if (c) c.scrollTop = 0;
+                        } catch (e) { }
+                    }, 350);
 
                     // Auto-save form data every 500ms while form is visible
                     setInterval(() => {

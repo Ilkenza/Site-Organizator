@@ -383,6 +383,11 @@ function DashboardContent() {
         setDangerZonePending(null);
     };
 
+    // Excluded filters for Sidebar (stateful)
+    const [excludedCategoryIds, setExcludedCategoryIds] = useState(new Set());
+    const [excludedTagIds, setExcludedTagIds] = useState(new Set());
+    const [excludedImportSources, setExcludedImportSources] = useState(new Set());
+
     // Render content based on active tab
     const renderContent = () => {
         switch (activeTab) {
@@ -390,7 +395,13 @@ function DashboardContent() {
                 return (
                     <>
                         <RediscoverSection />
-                        <SitesList onEdit={handleEditSite} onDelete={handleDeleteSite} />
+                        <SitesList
+                            onEdit={handleEditSite}
+                            onDelete={handleDeleteSite}
+                            excludedCategoryIds={excludedCategoryIds}
+                            excludedTagIds={excludedTagIds}
+                            excludedImportSources={excludedImportSources}
+                        />
                     </>
                 );
             case 'favorites':
@@ -421,7 +432,16 @@ function DashboardContent() {
                 />
             )}
             {/* Sidebar */}
-            <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+            <Sidebar
+                isOpen={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
+                excludedCategoryIds={excludedCategoryIds}
+                setExcludedCategoryIds={setExcludedCategoryIds}
+                excludedTagIds={excludedTagIds}
+                setExcludedTagIds={setExcludedTagIds}
+                excludedImportSources={excludedImportSources}
+                setExcludedImportSources={setExcludedImportSources}
+            />
 
             {/* Main content */}
             <div className="flex-1 flex flex-col overflow-hidden">

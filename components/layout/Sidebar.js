@@ -4,7 +4,20 @@ import Link from 'next/link';
 import { useDashboard } from '../../context/DashboardContext';
 import { CollectionIcon, CloseIcon, GlobeIcon, FolderIcon, TagIcon, StarIcon, SettingsIcon, PinSimpleIcon, UploadIcon, ChevronDownIcon, PlusIcon, BookmarkIcon, TextLinesIcon, DocumentIcon, FilterIcon, ListBulletIcon, CheckCircleIcon, BanIcon } from '../ui/Icons';
 
-export default function Sidebar({ isOpen = false, onClose }) {
+export default function Sidebar({
+    isOpen = false,
+    onClose,
+    excludedCategoryIds,
+    setExcludedCategoryIds,
+    excludedTagIds,
+    setExcludedTagIds,
+    excludedImportSources,
+    setExcludedImportSources
+}) {
+    // Ensure all excluded sets are Set instances (memoized to avoid re-creating on every render)
+    const catSet = useMemo(() => excludedCategoryIds instanceof Set ? excludedCategoryIds : new Set(excludedCategoryIds || []), [excludedCategoryIds]);
+    const tagSet = useMemo(() => excludedTagIds instanceof Set ? excludedTagIds : new Set(excludedTagIds || []), [excludedTagIds]);
+    const srcSet = useMemo(() => excludedImportSources instanceof Set ? excludedImportSources : new Set(excludedImportSources || []), [excludedImportSources]);
     const router = useRouter();
     const {
         stats,
@@ -50,19 +63,69 @@ export default function Sidebar({ isOpen = false, onClose }) {
     const [categoriesSearchQuery, setCategoriesSearchQuery] = useState('');
     const [tagsSearchQuery, setTagsSearchQuery] = useState('');
     const [isImportSourceOpen, setIsImportSourceOpen] = useState(false);
+    // Exclude mode (local only) — single toggle for all filter types
+    const [excludeMode, setExcludeMode] = useState(false);
 
     // Counts from API (loaded with categories/tags)
     const favoriteCount = stats.favorites || 0;
     const uncategorizedCount = stats.uncategorized || 0;
     const untaggedCount = stats.untagged || 0;
 
-    // Whether any site filter is active
-    const hasActiveFilter = selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all');
+    // Whether any site filter is active (including exclusions)
+    const hasExclusions = catSet.size > 0 || tagSet.size > 0 || srcSet.size > 0;
+    const totalExcluded = catSet.size + tagSet.size + srcSet.size;
+    const hasServerFilter = selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all');
+    // Compute visible sites after exclusions (all sites loaded via fetchAllSites when exclusions active)
+    const visibleSites = useMemo(() => {
+        if (!hasExclusions) return sites;
+        return sites.filter(site => {
+            if (catSet.size > 0) {
+                if (catSet.has('all')) return false;
+                const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
+                if (catSet.has('uncategorized') && catIds.length === 0) return false;
+                if (catIds.some(id => catSet.has(id))) return false;
+            }
+            if (tagSet.size > 0) {
+                if (tagSet.has('all')) return false;
+                const tIds = (site.tags_array || []).map(t => t?.id).filter(Boolean);
+                if (tagSet.has('untagged') && tIds.length === 0) return false;
+                if (tIds.some(id => tagSet.has(id))) return false;
+            }
+            if (srcSet.size > 0) {
+                if (srcSet.has('all')) return false;
+                const src = site.import_source || 'manual';
+                if (srcSet.has(src)) return false;
+            }
+            return true;
+        });
+    }, [sites, catSet, tagSet, srcSet, hasExclusions]);
 
-    // Sites tab count: show "filtered / total" when a filter is active
-    const sitesTabCount = hasActiveFilter
-        ? `${totalSitesCount} / ${stats.sites}`
-        : stats.sites;
+    // Per-filter counts from visible sites (after exclusions)
+    const visibleCounts = useMemo(() => {
+        if (!hasExclusions) return null;
+        const cats = {}, tgs = {};
+        const srcs = { manual: 0, bookmarks: 0, notion: 0, file: 0 };
+        let uncategorized = 0, untagged = 0, needed = 0, notNeeded = 0;
+        visibleSites.forEach(site => {
+            const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
+            if (catIds.length === 0) uncategorized++;
+            catIds.forEach(id => { cats[id] = (cats[id] || 0) + 1; });
+            const tagIds = (site.tags_array || []).map(t => t?.id).filter(Boolean);
+            if (tagIds.length === 0) untagged++;
+            tagIds.forEach(id => { tgs[id] = (tgs[id] || 0) + 1; });
+            const src = site.import_source || 'manual';
+            if (srcs[src] !== undefined) srcs[src]++;
+            if (site.is_needed) needed++; else notNeeded++;
+        });
+        return { categories: cats, tags: tgs, importSources: srcs, uncategorized, untagged, needed, notNeeded, total: visibleSites.length };
+    }, [visibleSites, hasExclusions]);
+
+    // Sites tab count: show "visible / total" when any filter is active
+    const sitesTabCount = hasExclusions
+        ? `${visibleSites.length} / ${stats.sites}`
+        : hasServerFilter
+            ? `${totalSitesCount} / ${stats.sites}`
+            : stats.sites;
 
     // Logo always goes to Sites page
     const buildDashboardUrl = () => {
@@ -82,12 +145,20 @@ export default function Sidebar({ isOpen = false, onClose }) {
     const hasOtherTagFilter = selectedCategory || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all');
 
     const getCategoryCount = (catId, ownCount) => {
+        if (hasExclusions && visibleCounts) {
+            const vc = catId === 'uncategorized' ? visibleCounts.uncategorized : (visibleCounts.categories[catId] || 0);
+            return `${vc} / ${ownCount}`;
+        }
         if (!hasOtherCategoryFilter) return ownCount;
         const crossCount = crossFilterCounts.categories[catId] ?? 0;
         return `${crossCount} / ${ownCount}`;
     };
 
     const getTagCount = (tagId, ownCount) => {
+        if (hasExclusions && visibleCounts) {
+            const vc = tagId === 'untagged' ? visibleCounts.untagged : (visibleCounts.tags[tagId] || 0);
+            return `${vc} / ${ownCount}`;
+        }
         if (!hasOtherTagFilter) return ownCount;
         const crossCount = crossFilterCounts.tags[tagId] ?? 0;
         return `${crossCount} / ${ownCount}`;
@@ -96,6 +167,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
     const hasOtherImportSourceFilter = selectedCategory || selectedTag || (neededFilterSites && neededFilterSites !== 'all');
 
     const getImportSourceCount = (sourceKey, ownCount) => {
+        if (hasExclusions && visibleCounts) {
+            const vc = visibleCounts.importSources[sourceKey] || 0;
+            return `${vc} / ${ownCount}`;
+        }
         if (!hasOtherImportSourceFilter) return ownCount;
         const crossCount = crossFilterCounts.importSources?.[sourceKey] ?? 0;
         return `${crossCount} / ${ownCount}`;
@@ -338,13 +413,17 @@ export default function Sidebar({ isOpen = false, onClose }) {
                 {(activeTab === 'sites' || activeTab === 'favorites') && (
                     <div className="p-3 sm:p-4 flex-1 overflow-y-auto  sm:max-h-none" data-tour="filters">
                         {/* Reset All Filters Button */}
-                        {(selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all')) && (
+                        {(selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all') || hasExclusions) && (
                             <button
                                 onClick={() => {
                                     setSelectedCategory(null);
                                     setSelectedTag(null);
                                     setSelectedImportSource(null);
                                     setNeededFilterSites('all');
+                                    setExcludedCategoryIds(new Set());
+                                    setExcludedTagIds(new Set());
+                                    setExcludedImportSources(new Set());
+                                    setExcludeMode(false);
                                 }}
                                 className="w-full mb-4 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20"
                             >
@@ -353,11 +432,37 @@ export default function Sidebar({ isOpen = false, onClose }) {
                             </button>
                         )}
 
+                        {/* Single Exclude Mode Toggle */}
+                        <div className="mb-4">
+                            <button
+                                type="button"
+                                className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border ${excludeMode
+                                        ? 'bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30'
+                                        : 'bg-app-bg-light border-app-border text-app-text-secondary hover:bg-app-bg-lighter hover:text-app-text-primary'
+                                    }`}
+                                onClick={() => {
+                                    if (excludeMode) {
+                                        setExcludedCategoryIds(new Set());
+                                        setExcludedTagIds(new Set());
+                                        setExcludedImportSources(new Set());
+                                    }
+                                    setExcludeMode(m => !m);
+                                }}
+                                title={excludeMode ? 'Exit Exclude Mode — click items to hide them from the list' : 'Enable Exclude Mode — click items to hide them from the list'}
+                            >
+                                <BanIcon className="w-3.5 h-3.5" />
+                                {excludeMode
+                                    ? `Exclude Mode ON${totalExcluded > 0 ? ` (${totalExcluded} hidden)` : ''}`
+                                    : 'Exclude Mode'
+                                }
+                            </button>
+                        </div>
+
                         {/* Categories */}
-                        <h3 className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <div className="flex items-center gap-2 mb-3">
                             <FolderIcon className="w-3.5 h-3.5" />
-                            Filter by Category
-                        </h3>
+                            <span className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider">Filter by Category</span>
+                        </div>
                         <div className="mb-3 relative">
                             <input
                                 type="text"
@@ -369,22 +474,40 @@ export default function Sidebar({ isOpen = false, onClose }) {
                         </div>
                         <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
                             <button
-                                onClick={() => setSelectedCategory(null)}
+                                onClick={() => excludeMode
+                                    ? setExcludedCategoryIds(prev => {
+                                        const next = prev instanceof Set ? new Set(prev) : new Set(prev || []);
+                                        if (next.has('all')) next.delete('all'); else next.add('all');
+                                        return next;
+                                    })
+                                    : setSelectedCategory(null)
+                                }
                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all font-medium
-                ${!selectedCategory
+                                    ${catSet.has('all') && excludeMode ? 'opacity-40 line-through bg-red-500/10 border border-red-500/30 text-red-400' : !selectedCategory
                                         ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
                                         : 'text-app-text-secondary hover:bg-app-bg-light/50 hover:text-app-text-primary border border-transparent'
                                     }`}
+                                aria-pressed={catSet.has('all') && excludeMode}
+                                title={excludeMode ? (catSet.has('all') ? 'Click to include' : 'Click to exclude') : undefined}
                             >
-                                All Categories
+                                All Categories {excludeMode && catSet.has('all') && <span className="ml-2 text-xs">✖</span>}
                             </button>
                             <button
-                                onClick={() => setSelectedCategory('uncategorized')}
+                                onClick={() => excludeMode
+                                    ? setExcludedCategoryIds(prev => {
+                                        const next = prev instanceof Set ? new Set(prev) : new Set(prev || []);
+                                        if (next.has('uncategorized')) next.delete('uncategorized'); else next.add('uncategorized');
+                                        return next;
+                                    })
+                                    : setSelectedCategory('uncategorized')
+                                }
                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
-                      ${selectedCategory === 'uncategorized'
+                                    ${catSet.has('uncategorized') && excludeMode ? 'opacity-40 line-through bg-red-500/10 border border-red-500/30 text-red-400' : selectedCategory === 'uncategorized'
                                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
                                         : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
                                     }`}
+                                aria-pressed={catSet.has('uncategorized') && excludeMode}
+                                title={excludeMode ? (catSet.has('uncategorized') ? 'Click to include' : 'Click to exclude') : undefined}
                             >
                                 <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
                                 <span className="truncate flex-1">Uncategorized</span>
@@ -394,6 +517,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     }`}>
                                     {getCategoryCount('uncategorized', uncategorizedCount)}
                                 </span>
+                                {excludeMode && catSet.has('uncategorized') && <span className="ml-2 text-xs">✖</span>}
                             </button>
                             {categories
                                 .filter(cat => cat?.name?.toLowerCase().includes(categoriesSearchQuery.toLowerCase()))
@@ -401,16 +525,25 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                 .map(cat => {
                                     // Use site_count from API
                                     const siteCount = cat.site_count || 0;
-
+                                    const isExcluded = catSet.has(cat.id);
                                     return (
                                         <button
                                             key={cat.id}
-                                            onClick={() => setSelectedCategory(cat.id)}
+                                            onClick={() => excludeMode
+                                                ? setExcludedCategoryIds(prev => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(cat.id)) next.delete(cat.id); else next.add(cat.id);
+                                                    return next;
+                                                })
+                                                : setSelectedCategory(cat.id)
+                                            }
                                             className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
-                      ${selectedCategory === cat.id
+                                                ${isExcluded && excludeMode ? 'opacity-40 line-through bg-red-500/10 border border-red-500/30 text-red-400' : selectedCategory === cat.id
                                                     ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm backdrop-blur-sm'
                                                     : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
                                                 }`}
+                                            aria-pressed={isExcluded}
+                                            title={excludeMode ? (isExcluded ? 'Click to include' : 'Click to exclude') : undefined}
                                         >
                                             <span
                                                 className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0"
@@ -423,16 +556,19 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 }`}>
                                                 {getCategoryCount(cat.id, siteCount)}
                                             </span>
+                                            {excludeMode && isExcluded && (
+                                                <span className="ml-2 text-xs">✖</span>
+                                            )}
                                         </button>
                                     );
                                 })}
                         </div>
 
                         {/* Tags Filter */}
-                        <h3 className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 mt-6 flex items-center gap-2">
+                        <div className="flex items-center gap-2 mb-3 mt-6">
                             <TagIcon className="w-3.5 h-3.5" />
-                            Filter by Tag
-                        </h3>
+                            <span className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider">Filter by Tag</span>
+                        </div>
                         <div className="mb-3 relative">
                             <input
                                 type="text"
@@ -444,22 +580,40 @@ export default function Sidebar({ isOpen = false, onClose }) {
                         </div>
                         <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
                             <button
-                                onClick={() => setSelectedTag(null)}
+                                onClick={() => excludeMode
+                                    ? setExcludedTagIds(prev => {
+                                        const next = prev instanceof Set ? new Set(prev) : new Set(prev || []);
+                                        if (next.has('all')) next.delete('all'); else next.add('all');
+                                        return next;
+                                    })
+                                    : setSelectedTag(null)
+                                }
                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all font-medium
-                      ${!selectedTag
+                                    ${tagSet.has('all') && excludeMode ? 'opacity-40 line-through bg-red-500/10 border border-red-500/30 text-red-400' : !selectedTag
                                         ? 'bg-app-accent/20 text-app-accent border border-app-accent/30'
                                         : 'text-app-text-secondary hover:bg-app-bg-light/50 hover:text-app-text-primary border border-transparent'
                                     }`}
+                                aria-pressed={tagSet.has('all') && excludeMode}
+                                title={excludeMode ? (tagSet.has('all') ? 'Click to include' : 'Click to exclude') : undefined}
                             >
-                                All Tags
+                                All Tags {excludeMode && tagSet.has('all') && <span className="ml-2 text-xs">✖</span>}
                             </button>
                             <button
-                                onClick={() => setSelectedTag('untagged')}
+                                onClick={() => excludeMode
+                                    ? setExcludedTagIds(prev => {
+                                        const next = prev instanceof Set ? new Set(prev) : new Set(prev || []);
+                                        if (next.has('untagged')) next.delete('untagged'); else next.add('untagged');
+                                        return next;
+                                    })
+                                    : setSelectedTag('untagged')
+                                }
                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
-                      ${selectedTag === 'untagged'
+                                    ${tagSet.has('untagged') && excludeMode ? 'opacity-40 line-through bg-red-500/10 border border-red-500/30 text-red-400' : selectedTag === 'untagged'
                                         ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
                                         : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
                                     }`}
+                                aria-pressed={tagSet.has('untagged') && excludeMode}
+                                title={excludeMode ? (tagSet.has('untagged') ? 'Click to include' : 'Click to exclude') : undefined}
                             >
                                 <span className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 bg-gray-500" />
                                 <span className="truncate flex-1">Untagged</span>
@@ -469,6 +623,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                     }`}>
                                     {getTagCount('untagged', untaggedCount)}
                                 </span>
+                                {excludeMode && tagSet.has('untagged') && <span className="ml-2 text-xs">✖</span>}
                             </button>
                             {tags
                                 .filter(tag => tag?.name?.toLowerCase().includes(tagsSearchQuery.toLowerCase()))
@@ -476,16 +631,25 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                 .map(tag => {
                                     // Use site_count from API
                                     const siteCount = tag.site_count || 0;
-
+                                    const isExcluded = tagSet.has(tag.id);
                                     return (
                                         <button
                                             key={tag.id}
-                                            onClick={() => setSelectedTag(selectedTag === tag.id ? null : tag.id)}
+                                            onClick={() => excludeMode
+                                                ? setExcludedTagIds(prev => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(tag.id)) next.delete(tag.id); else next.add(tag.id);
+                                                    return next;
+                                                })
+                                                : setSelectedTag(selectedTag === tag.id ? null : tag.id)
+                                            }
                                             className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2 group hover:scale-[1.01]
-                      ${selectedTag === tag.id
+                                                ${isExcluded && excludeMode ? 'opacity-40 line-through bg-red-500/10 border border-red-500/30 text-red-400' : selectedTag === tag.id
                                                     ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm backdrop-blur-sm'
                                                     : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
                                                 }`}
+                                            aria-pressed={isExcluded}
+                                            title={excludeMode ? (isExcluded ? 'Click to include' : 'Click to exclude') : undefined}
                                         >
                                             <span
                                                 className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0 transition-transform group-hover:scale-110"
@@ -498,6 +662,9 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 }`}>
                                                 {getTagCount(tag.id, siteCount)}
                                             </span>
+                                            {excludeMode && isExcluded && (
+                                                <span className="ml-2 text-xs">✖</span>
+                                            )}
                                         </button>
                                     );
                                 })}
@@ -529,6 +696,14 @@ export default function Sidebar({ isOpen = false, onClose }) {
                                                 <Icon className="w-3.5 h-3.5" />
                                                 {item.label}
                                             </span>
+                                            {hasExclusions && visibleCounts && (
+                                                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${neededFilterSites === item.key
+                                                    ? 'bg-app-accent/30 text-app-accent'
+                                                    : 'bg-app-bg-light text-app-text-muted'
+                                                    }`}>
+                                                    {item.key === 'all' ? visibleCounts.total : item.key === 'needed' ? visibleCounts.needed : visibleCounts.notNeeded}
+                                                </span>
+                                            )}
                                         </button>
                                     );
                                 })}
@@ -543,105 +718,61 @@ export default function Sidebar({ isOpen = false, onClose }) {
                         </div>
 
                         {/* Import Source Filter */}
-                        <button
-                            onClick={() => setIsImportSourceOpen(!isImportSourceOpen)}
-                            className="w-full text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 mt-6 flex items-center justify-between gap-2 hover:text-app-text-secondary transition-colors"
-                        >
-                            <span className="flex items-center gap-2">
-                                <UploadIcon className="w-3.5 h-3.5" />
-                                Import Source
-                            </span>
-                            <ChevronDownIcon
-                                className={`w-4 h-4 transition-transform ${isImportSourceOpen ? 'rotate-180' : ''}`}
-                            />
-                        </button>
+                        <div className="flex items-center gap-2 mb-3 mt-6">
+                            <UploadIcon className="w-3.5 h-3.5" />
+                            <span className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider">Import Source</span>
+                            <button
+                                onClick={() => setIsImportSourceOpen(!isImportSourceOpen)}
+                                className="ml-auto text-xs text-app-text-secondary hover:text-app-text-primary"
+                                title={isImportSourceOpen ? 'Hide sources' : 'Show sources'}
+                            >
+                                <ChevronDownIcon className={`w-4 h-4 transition-transform ${isImportSourceOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                        </div>
                         {isImportSourceOpen && (<>
                             <div className="space-y-1 max-h-64 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
-                                <button
-                                    onClick={() => setSelectedImportSource(null)}
-                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${!selectedImportSource
-                                        ? 'bg-app-accent/10 text-app-accent border border-app-accent/30'
-                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
-                                        }`}
-                                >
-                                    <span>All Sources</span>
-                                </button>
-                                <button
-                                    onClick={() => setSelectedImportSource('manual')}
-                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${selectedImportSource === 'manual'
-                                        ? 'bg-green-500/10 text-green-400 border border-green-500/30'
-                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
-                                        }`}
-                                >
-                                    <span className="flex items-center gap-2">
-                                        <PlusIcon className="w-3.5 h-3.5" />
-                                        <span>Manual</span>
-                                    </span>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedImportSource === 'manual'
-                                        ? 'bg-green-500/30 text-green-400'
-                                        : 'bg-app-bg-light text-app-text-muted'
-                                        }`}>
-                                        {getImportSourceCount('manual', importSourceCounts.manual)}
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() => setSelectedImportSource('bookmarks')}
-                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${selectedImportSource === 'bookmarks'
-                                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
-                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
-                                        }`}
-                                >
-                                    <span className="flex items-center gap-2">
-                                        <BookmarkIcon className="w-3.5 h-3.5" />
-                                        <span>Bookmarks</span>
-                                    </span>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedImportSource === 'bookmarks'
-                                        ? 'bg-amber-500/30 text-amber-400'
-                                        : 'bg-app-bg-light text-app-text-muted'
-                                        }`}>
-                                        {getImportSourceCount('bookmarks', importSourceCounts.bookmarks)}
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() => setSelectedImportSource('notion')}
-                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${selectedImportSource === 'notion'
-                                        ? 'bg-app-accent/10 text-app-accent border border-app-accent/30'
-                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
-                                        }`}
-                                >
-                                    <span className="flex items-center gap-2">
-                                        <TextLinesIcon className="w-3.5 h-3.5" />
-                                        <span>Notion</span>
-                                    </span>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedImportSource === 'notion'
-                                        ? 'bg-app-accent/30 text-app-accent'
-                                        : 'bg-app-bg-light text-app-text-muted'
-                                        }`}>
-                                        {getImportSourceCount('notion', importSourceCounts.notion)}
-                                    </span>
-                                </button>
-                                <button
-                                    onClick={() => setSelectedImportSource('file')}
-                                    className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between ${selectedImportSource === 'file'
-                                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
-                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
-                                        }`}
-                                >
-                                    <span className="flex items-center gap-2">
-                                        <DocumentIcon className="w-3.5 h-3.5" />
-                                        <span>File</span>
-                                    </span>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedImportSource === 'file'
-                                        ? 'bg-purple-500/30 text-purple-400'
-                                        : 'bg-app-bg-light text-app-text-muted'
-                                        }`}>
-                                        {getImportSourceCount('file', importSourceCounts.file)}
-                                    </span>
-                                </button>
+                                {['manual', 'bookmarks', 'notion', 'file'].map(source => {
+                                    const isExcluded = srcSet.has(source);
+                                    const labelMap = { manual: 'Manual', bookmarks: 'Bookmarks', notion: 'Notion', file: 'File' };
+                                    const iconMap = { manual: PlusIcon, bookmarks: BookmarkIcon, notion: TextLinesIcon, file: DocumentIcon };
+                                    const Icon = iconMap[source];
+                                    return (
+                                        <button
+                                            key={source}
+                                            onClick={() => excludeMode
+                                                ? setExcludedImportSources(prev => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(source)) next.delete(source); else next.add(source);
+                                                    return next;
+                                                })
+                                                : setSelectedImportSource(selectedImportSource === source ? null : source)
+                                            }
+                                            className={`w-full px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-between
+                                                ${isExcluded && excludeMode ? 'opacity-40 line-through bg-red-500/10 border border-red-500/30 text-red-400' : selectedImportSource === source
+                                                    ? 'bg-app-accent/20 text-app-accent border border-app-accent/30 shadow-sm backdrop-blur-sm'
+                                                    : 'text-app-text-secondary hover:bg-app-bg-light hover:text-app-text-primary border border-transparent hover:shadow-md'
+                                                }`}
+                                            aria-pressed={isExcluded}
+                                            title={excludeMode ? (isExcluded ? 'Click to include' : 'Click to exclude') : undefined}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <Icon className="w-3.5 h-3.5" />
+                                                <span>{labelMap[source]}</span>
+                                            </span>
+                                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${selectedImportSource === source
+                                                ? 'bg-app-accent/30 text-app-accent'
+                                                : 'bg-app-bg-light text-app-text-muted'
+                                                }`}>
+                                                {getImportSourceCount(source, importSourceCounts[source])}
+                                            </span>
+                                            {excludeMode && isExcluded && (
+                                                <span className="ml-2 text-xs">✖</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
                             </div>
-
-                        </>
-                        )}
+                        </>)}
                     </div>
                 )}
 
