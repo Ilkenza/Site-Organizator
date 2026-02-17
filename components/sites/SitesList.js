@@ -8,7 +8,7 @@ import { fetchAPI } from '../../lib/supabase';
 
 const RENDER_DELAY_MS = 500;
 
-export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new Set(), excludedTagIds = new Set(), excludedImportSources = new Set() }) {
+export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new Set(), excludedTagIds = new Set(), excludedImportSources = new Set(), excludedPricingValues = new Set(), excludedNeededValues = new Set(), groupCategoryIds = null }) {
     const {
         filteredSites: rawFilteredSites, loading, searchQuery, selectedCategory, selectedTag, categories,
         currentPage, totalPages, totalSitesCount, fetchSitesPage, fetchAllSites, SITES_PAGE_SIZE,
@@ -16,23 +16,30 @@ export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new 
     } = useDashboard();
 
     // Client-side exclusion filter — sites use categories_array/tags_array (objects with .id)
-    const hasExclusions = excludedCategoryIds.size > 0 || excludedTagIds.size > 0 || excludedImportSources.size > 0;
+    const hasExclusions = excludedCategoryIds.size > 0 || excludedTagIds.size > 0 || excludedImportSources.size > 0 || excludedPricingValues.size > 0 || excludedNeededValues.size > 0;
+    const hasGroupFilter = groupCategoryIds instanceof Set && groupCategoryIds.size > 0;
+    const needsClientFilter = hasExclusions || hasGroupFilter;
 
-    // When exclusions become active, fetch ALL sites so client-side filtering works on the full dataset
-    const prevHadExclusions = useRef(false);
+    // When exclusions or group filter become active, fetch ALL sites so client-side filtering works on the full dataset
+    const prevNeededClient = useRef(false);
     useEffect(() => {
-        if (hasExclusions && !prevHadExclusions.current) {
+        if (needsClientFilter && !prevNeededClient.current) {
             fetchAllSites();
-        } else if (!hasExclusions && prevHadExclusions.current) {
-            // Exclusions cleared — go back to paginated mode
+        } else if (!needsClientFilter && prevNeededClient.current) {
+            // Filters cleared — go back to paginated mode
             fetchSitesPage(1);
         }
-        prevHadExclusions.current = hasExclusions;
-    }, [hasExclusions, fetchAllSites, fetchSitesPage]);
+        prevNeededClient.current = needsClientFilter;
+    }, [needsClientFilter, fetchAllSites, fetchSitesPage]);
 
     const allFilteredSites = useMemo(() => {
-        if (!hasExclusions) return rawFilteredSites;
+        if (!needsClientFilter) return rawFilteredSites;
         return rawFilteredSites.filter(site => {
+            // Group filter: site must have at least one category belonging to the group
+            if (hasGroupFilter) {
+                const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
+                if (!catIds.some(id => groupCategoryIds.has(id))) return false;
+            }
             if (excludedCategoryIds.size > 0) {
                 if (excludedCategoryIds.has('all')) return false;
                 const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
@@ -50,17 +57,25 @@ export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new 
                 const src = site.import_source || 'manual';
                 if (excludedImportSources.has(src)) return false;
             }
+            if (excludedPricingValues.size > 0) {
+                const pr = site.pricing || '';
+                if (excludedPricingValues.has(pr)) return false;
+            }
+            if (excludedNeededValues.size > 0) {
+                const needed = site.is_needed ? 'needed' : 'not_needed';
+                if (excludedNeededValues.has(needed)) return false;
+            }
             return true;
         });
-    }, [rawFilteredSites, excludedCategoryIds, excludedTagIds, excludedImportSources, hasExclusions]);
+    }, [rawFilteredSites, excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, needsClientFilter, groupCategoryIds, hasGroupFilter]);
 
-    // Client-side pagination when exclusions are active
+    // Client-side pagination when client-side filtering is active
     const [excludePage, setExcludePage] = useState(1);
-    // Reset client page when exclusions change
-    useEffect(() => { setExcludePage(1); }, [excludedCategoryIds, excludedTagIds, excludedImportSources]);
+    // Reset client page when filters change
+    useEffect(() => { setExcludePage(1); }, [excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, groupCategoryIds]);
 
     const excludeTotalPages = Math.ceil(allFilteredSites.length / SITES_PAGE_SIZE) || 1;
-    const filteredSites = hasExclusions
+    const filteredSites = needsClientFilter
         ? allFilteredSites.slice((excludePage - 1) * SITES_PAGE_SIZE, excludePage * SITES_PAGE_SIZE)
         : allFilteredSites;
 
@@ -85,7 +100,7 @@ export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new 
     }, [loading, filteredSites, currentPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Calculate display indices
-    const startIndex = hasExclusions
+    const startIndex = needsClientFilter
         ? (excludePage - 1) * SITES_PAGE_SIZE
         : (currentPage - 1) * SITES_PAGE_SIZE;
     const endIndex = startIndex + filteredSites.length;
@@ -95,9 +110,9 @@ export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new 
         fetchAPI('/rediscover', { method: 'POST', body: JSON.stringify({ siteId }) }).catch(() => { });
     }, []);
 
-    // Handle page change — server-side or client-side depending on exclusions
+    // Handle page change — server-side or client-side depending on filters
     const handlePageChange = (newPage) => {
-        if (hasExclusions) {
+        if (needsClientFilter) {
             if (newPage >= 1 && newPage <= excludeTotalPages) {
                 setExcludePage(newPage);
                 window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -131,7 +146,7 @@ export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new 
     }
 
     if (filteredSites.length === 0) {
-        const hasFilters = searchQuery || selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all') || hasExclusions;
+        const hasFilters = searchQuery || selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all') || needsClientFilter;
 
         return (
             <div className="flex flex-col items-center justify-center py-16 px-4">
@@ -154,17 +169,17 @@ export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new 
         );
     }
 
-    const displayTotal = hasExclusions ? allFilteredSites.length : totalSitesCount;
-    const displayTotalPages = hasExclusions ? excludeTotalPages : totalPages;
-    const displayCurrentPage = hasExclusions ? excludePage : currentPage;
+    const displayTotal = needsClientFilter ? allFilteredSites.length : totalSitesCount;
+    const displayTotalPages = needsClientFilter ? excludeTotalPages : totalPages;
+    const displayCurrentPage = needsClientFilter ? excludePage : currentPage;
 
     return (
         <div>
             {/* Results count */}
             {displayTotal > 0 && (
                 <div className="px-3 sm:px-6 pt-3 sm:pt-4 flex items-center gap-3 text-sm text-app-text-secondary">
-                    {hasExclusions
-                        ? <span>Showing {startIndex + 1}-{Math.min(endIndex, displayTotal)} of {displayTotal} sites ({rawFilteredSites.length - allFilteredSites.length} excluded)</span>
+                    {needsClientFilter
+                        ? <span>Showing {startIndex + 1}-{Math.min(endIndex, displayTotal)} of {displayTotal} sites{hasExclusions ? ` (${rawFilteredSites.length - allFilteredSites.length} excluded)` : ''}</span>
                         : <span>Showing {startIndex + 1}-{Math.min(endIndex, displayTotal)} of {displayTotal} sites</span>
                     }
                 </div>

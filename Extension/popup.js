@@ -966,6 +966,27 @@ function isValidUrl(urlString) {
 
 // Check if URL exists in database and update indicator
 let urlCheckTimeout = null;
+
+// Normalize URL and return variants for duplicate checking (www/no-www, trailing slash)
+function getUrlVariants(rawUrl) {
+    try {
+        const u = new URL(rawUrl.startsWith('http') ? rawUrl : 'https://' + rawUrl);
+        const hostNoWww = u.hostname.replace(/^www\./, '').toLowerCase();
+        const hostWithWww = hostNoWww.startsWith('www.') ? hostNoWww : 'www.' + hostNoWww;
+        const path = u.pathname.replace(/\/+$/, '') || '';
+        const search = u.search || '';
+        const set = new Set([
+            u.protocol + '//' + hostNoWww + path + search,
+            u.protocol + '//' + hostWithWww + path + search,
+            u.protocol + '//' + hostNoWww + path + '/' + search,
+            u.protocol + '//' + hostWithWww + path + '/' + search,
+        ]);
+        return Array.from(set);
+    } catch (e) {
+        return [rawUrl];
+    }
+}
+
 async function checkUrlExistsInDatabase(url) {
     const indicator = document.getElementById('urlExistsIndicator');
     if (!indicator) return;
@@ -1007,7 +1028,7 @@ async function checkUrlExistsInDatabase(url) {
         const { data, error } = await supabaseClient
             .from('sites')
             .select('id')
-            .eq('url', url)
+            .in('url', getUrlVariants(url))
             .eq('user_id', session.user.id)
             .limit(1);
 
@@ -3107,18 +3128,54 @@ if (siteForm) {
             showMessage('Please enter a valid URL (http:// or https://)', 'error');
             return;
         }
-        if (categoryIds.length === 0) {
-            showMessage('Please select at least one category!', 'error');
-            return;
-        }
-        if (tagIds.length === 0) {
-            showMessage('You must select at least one tag!', 'error');
-            return;
-        }
         if (!pricing) {
             showMessage('Please select a pricing model!', 'error');
             return;
         }
+
+        // Check if categories or tags are missing — ask for confirmation instead of blocking
+        const missingCats = categoryIds.length === 0;
+        const missingTags = tagIds.length === 0;
+
+        if ((missingCats || missingTags) && !siteForm.dataset.confirmBypass) {
+            const missingParts = [];
+            if (missingCats) missingParts.push('categories');
+            if (missingTags) missingParts.push('tags');
+            const missingStr = missingParts.join(' and ');
+
+            const overlay = document.getElementById('confirmSaveOverlay');
+            const titleEl = document.getElementById('confirmTitle');
+            const textEl = document.getElementById('confirmText');
+            const confirmBtn = document.getElementById('confirmSaveBtn');
+            const cancelBtn = document.getElementById('confirmCancelBtn');
+
+            if (overlay && titleEl && textEl) {
+                titleEl.textContent = `Save without ${missingStr}?`;
+                textEl.textContent = `You haven't selected any ${missingStr}. The site will be saved without ${missingStr}. Are you sure?`;
+                overlay.classList.add('show');
+
+                // Clean up old listeners
+                const newConfirm = confirmBtn.cloneNode(true);
+                const newCancel = cancelBtn.cloneNode(true);
+                confirmBtn.parentNode.replaceChild(newConfirm, confirmBtn);
+                cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+
+                newCancel.addEventListener('click', () => overlay.classList.remove('show'));
+                newConfirm.addEventListener('click', () => {
+                    overlay.classList.remove('show');
+                    // Set bypass flag and re-submit
+                    siteForm.dataset.confirmBypass = 'true';
+                    siteForm.dataset.missingStr = missingStr;
+                    siteForm.requestSubmit();
+                });
+            }
+            return;
+        }
+
+        // Capture and clear bypass for next submission
+        const savedWithoutStr = siteForm.dataset.missingStr || '';
+        delete siteForm.dataset.confirmBypass;
+        delete siteForm.dataset.missingStr;
 
         saveBtn.disabled = true;
         saveBtn.classList.add('saving');
@@ -3187,7 +3244,7 @@ if (siteForm) {
                 try {
                     // First, check whether a site with the same url+user already exists to avoid duplicate-key errors
                     try {
-                        const { data: existing, error: checkErr } = await supabaseClient.from('sites').select('id').eq('url', url).eq('user_id', userId).limit(1);
+                        const { data: existing, error: checkErr } = await supabaseClient.from('sites').select('id').in('url', getUrlVariants(url)).eq('user_id', userId).limit(1);
                         if (checkErr) {
                             console.error('Error checking existing site', checkErr);
                             showMessage('Error checking existing sites', 'error');
@@ -3400,7 +3457,10 @@ if (siteForm) {
                     showMessage('Error saving: ' + errMsg, 'error');
                 }
             } else {
-                showMessage('Site saved successfully!', 'success');
+                const successMsg = savedWithoutStr
+                    ? `Site saved without ${savedWithoutStr}!`
+                    : 'Site saved successfully!';
+                showMessage(successMsg, 'success');
 
                 // Update site count in header badge
                 updateSiteCount();

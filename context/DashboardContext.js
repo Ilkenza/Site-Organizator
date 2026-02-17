@@ -366,6 +366,7 @@ export function DashboardProvider({ children }) {
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedTag, setSelectedTag] = useState(null);
     const [selectedImportSource, setSelectedImportSource] = useState(null); // 'bookmarks' | 'notion' | 'file' | null
+    const [selectedPricing, setSelectedPricing] = useState(null); // 'fully_free' | 'freemium' | 'free_trial' | 'paid' | null
     const [usageFilterCategories, setUsageFilterCategories] = useState('all'); // 'all' | 'used' | 'unused'
     const [usageFilterTags, setUsageFilterTags] = useState('all'); // 'all' | 'used' | 'unused'
     const [neededFilterSites, setNeededFilterSites] = useState('all'); // 'all' | 'needed' | 'not_needed'
@@ -495,9 +496,10 @@ export function DashboardProvider({ children }) {
         if (sortOrder) params.set('sort_order', sortOrder);
         if (activeTab === 'favorites') params.set('favorites', 'true');
         if (selectedImportSource) params.set('import_source', selectedImportSource);
+        if (selectedPricing) params.set('pricing', selectedPricing);
         if (neededFilterSites && neededFilterSites !== 'all') params.set('needed', neededFilterSites);
         return params.toString();
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, neededFilterSites]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, neededFilterSites]);
 
     // Fetch a single page of sites from server (all filters are server-side now)
     const fetchSitesPage = useCallback(async (page = 1) => {
@@ -528,6 +530,7 @@ export function DashboardProvider({ children }) {
             if (sortOrder) params.set('sort_order', sortOrder);
             if (activeTab === 'favorites') params.set('favorites', 'true');
             if (selectedImportSource) params.set('import_source', selectedImportSource);
+            if (selectedPricing) params.set('pricing', selectedPricing);
             if (neededFilterSites && neededFilterSites !== 'all') params.set('needed', neededFilterSites);
 
             const sitesRes = await fetchAPI(`/sites?${params.toString()}`);
@@ -540,7 +543,7 @@ export function DashboardProvider({ children }) {
         } catch (err) {
             console.error('Failed to fetch all sites:', err);
         }
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, neededFilterSites]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, neededFilterSites]);
 
     // Fetch initial data (categories, tags, first page of sites, sidebar counts)
     const fetchData = useCallback(async () => {
@@ -548,7 +551,9 @@ export function DashboardProvider({ children }) {
         setError(null);
         try {
             const [sitesRes, categoriesRes, tagsRes, favRes, uncatRes, untagRes, totalRes,
-                manualRes, bookmarksRes, notionRes, fileRes] = await Promise.all([
+                manualRes, bookmarksRes, notionRes, fileRes,
+                pFullyFreeRes, pFreemiumRes, pFreeTrialRes, pPaidRes,
+                neededRes, notNeededRes] = await Promise.all([
                     fetchAPI(`/sites?${buildSitesQuery(1)}`),
                     fetchAPI('/categories'),
                     fetchAPI('/tags'),
@@ -562,7 +567,15 @@ export function DashboardProvider({ children }) {
                     fetchAPI('/sites?import_source=manual&limit=1&page=1').catch(() => null),
                     fetchAPI('/sites?import_source=bookmarks&limit=1&page=1').catch(() => null),
                     fetchAPI('/sites?import_source=notion&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?import_source=file&limit=1&page=1').catch(() => null)
+                    fetchAPI('/sites?import_source=file&limit=1&page=1').catch(() => null),
+                    // Pricing counts
+                    fetchAPI('/sites?pricing=fully_free&limit=1&page=1').catch(() => null),
+                    fetchAPI('/sites?pricing=freemium&limit=1&page=1').catch(() => null),
+                    fetchAPI('/sites?pricing=free_trial&limit=1&page=1').catch(() => null),
+                    fetchAPI('/sites?pricing=paid&limit=1&page=1').catch(() => null),
+                    // Needed counts
+                    fetchAPI('/sites?needed=needed&limit=1&page=1').catch(() => null),
+                    fetchAPI('/sites?needed=not_needed&limit=1&page=1').catch(() => null)
                 ]);
 
             const categoriesData = dedupeById(Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []));
@@ -595,6 +608,16 @@ export function DashboardProvider({ children }) {
                     bookmarks: bookmarksRes?.totalCount ?? 0,
                     notion: notionRes?.totalCount ?? 0,
                     file: fileRes?.totalCount ?? 0
+                },
+                pricingCounts: {
+                    fully_free: pFullyFreeRes?.totalCount ?? 0,
+                    freemium: pFreemiumRes?.totalCount ?? 0,
+                    free_trial: pFreeTrialRes?.totalCount ?? 0,
+                    paid: pPaidRes?.totalCount ?? 0
+                },
+                neededCounts: {
+                    needed: neededRes?.totalCount ?? 0,
+                    not_needed: notNeededRes?.totalCount ?? 0
                 }
             });
         } catch (err) {
@@ -673,7 +696,7 @@ export function DashboardProvider({ children }) {
     useEffect(() => {
         if (!dataLoadedRef.current) return;
         fetchSitesPageRef.current(1);
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, selectedImportSource, activeTab, neededFilterSites]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, selectedImportSource, selectedPricing, activeTab, neededFilterSites]);
 
     // Compute cross-filter counts when multiple filter dimensions are active
     // This lets ALL categories/tags in the sidebar show "intersection / ownTotal"
@@ -682,12 +705,14 @@ export function DashboardProvider({ children }) {
     useEffect(() => {
         if (!dataLoadedRef.current || !user) return;
 
-        const hasOtherForCategories = selectedTag || selectedImportSource;
-        const hasOtherForTags = selectedCategory || selectedImportSource;
-        const hasOtherForImportSources = selectedCategory || selectedTag;
+        const hasOtherForCategories = selectedTag || selectedImportSource || selectedPricing || (neededFilterSites && neededFilterSites !== 'all');
+        const hasOtherForTags = selectedCategory || selectedImportSource || selectedPricing || (neededFilterSites && neededFilterSites !== 'all');
+        const hasOtherForImportSources = selectedCategory || selectedTag || selectedPricing || (neededFilterSites && neededFilterSites !== 'all');
+        const hasOtherForPricing = selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all');
+        const hasOtherForNeeded = selectedCategory || selectedTag || selectedImportSource || selectedPricing;
 
-        if (!hasOtherForCategories && !hasOtherForTags && !hasOtherForImportSources) {
-            setCrossFilterCounts({ categories: {}, tags: {}, importSources: {} });
+        if (!hasOtherForCategories && !hasOtherForTags && !hasOtherForImportSources && !hasOtherForPricing && !hasOtherForNeeded) {
+            setCrossFilterCounts({ categories: {}, tags: {}, importSources: {}, pricing: {}, needed: {} });
             return;
         }
 
@@ -696,7 +721,7 @@ export function DashboardProvider({ children }) {
         // Debounce to prevent hammering API on rapid filter clicks
         if (crossFilterTimerRef.current) clearTimeout(crossFilterTimerRef.current);
         crossFilterTimerRef.current = setTimeout(async () => {
-            const newCounts = { categories: {}, tags: {}, importSources: {} };
+            const newCounts = { categories: {}, tags: {}, importSources: {}, pricing: {}, needed: {} };
 
             // Helper: build cross-filter params
             const addBaseParams = (p) => {
@@ -707,24 +732,25 @@ export function DashboardProvider({ children }) {
             };
 
             // Shared fetch helper — category and tag cross-counts can share the same fetch
-            // when both need "no category + no tag" base (only import source active)
+            // when both need "no category + no tag" base (only import source / pricing active)
             const needBothFromSameBase = hasOtherForCategories && hasOtherForTags
-                && !selectedCategory && !selectedTag && selectedImportSource;
+                && !selectedCategory && !selectedTag && (selectedImportSource || selectedPricing);
 
             if (needBothFromSameBase) {
-                // Single fetch: get all sites filtered by import source, count per category AND per tag
+                // Single fetch: get all sites filtered by import source + pricing, count per category AND per tag
                 try {
                     const p = new URLSearchParams();
                     p.set('fields', 'ids');
                     addBaseParams(p);
                     if (selectedImportSource) p.set('import_source', selectedImportSource);
+                    if (selectedPricing) p.set('pricing', selectedPricing);
                     const res = await fetchAPI(`/sites?${p.toString()}`);
                     const data = Array.isArray(res) ? res : (res?.data || []);
                     newCounts.categories = countByField(data, 'category_ids', 'uncategorized');
                     newCounts.tags = countByField(data, 'tag_ids', 'untagged');
                 } catch (e) { console.warn('Cross-filter shared counts failed:', e); }
             } else {
-                // 1. Category cross-counts: fetch sites matching tag + import source (WITHOUT category filter)
+                // 1. Category cross-counts: fetch sites matching tag + import source + pricing (WITHOUT category filter)
                 if (hasOtherForCategories) {
                     try {
                         const p = new URLSearchParams();
@@ -732,13 +758,14 @@ export function DashboardProvider({ children }) {
                         addBaseParams(p);
                         if (selectedTag) p.set('tag_id', selectedTag);
                         if (selectedImportSource) p.set('import_source', selectedImportSource);
+                        if (selectedPricing) p.set('pricing', selectedPricing);
                         const res = await fetchAPI(`/sites?${p.toString()}`);
                         const data = Array.isArray(res) ? res : (res?.data || []);
                         newCounts.categories = countByField(data, 'category_ids', 'uncategorized');
                     } catch (e) { console.warn('Cross-filter category counts failed:', e); }
                 }
 
-                // 2. Tag cross-counts: fetch sites matching category + import source (WITHOUT tag filter)
+                // 2. Tag cross-counts: fetch sites matching category + import source + pricing (WITHOUT tag filter)
                 if (hasOtherForTags) {
                     try {
                         const p = new URLSearchParams();
@@ -746,6 +773,7 @@ export function DashboardProvider({ children }) {
                         addBaseParams(p);
                         if (selectedCategory) p.set('category_id', selectedCategory);
                         if (selectedImportSource) p.set('import_source', selectedImportSource);
+                        if (selectedPricing) p.set('pricing', selectedPricing);
                         const res = await fetchAPI(`/sites?${p.toString()}`);
                         const data = Array.isArray(res) ? res : (res?.data || []);
                         newCounts.tags = countByField(data, 'tag_ids', 'untagged');
@@ -753,7 +781,7 @@ export function DashboardProvider({ children }) {
                 }
             }
 
-            // 3. Import source cross-counts: fetch sites matching category + tag (WITHOUT import source filter)
+            // 3. Import source cross-counts: fetch sites matching category + tag + pricing (WITHOUT import source filter)
             if (hasOtherForImportSources) {
                 try {
                     const p = new URLSearchParams();
@@ -761,6 +789,7 @@ export function DashboardProvider({ children }) {
                     addBaseParams(p);
                     if (selectedCategory) p.set('category_id', selectedCategory);
                     if (selectedTag) p.set('tag_id', selectedTag);
+                    if (selectedPricing) p.set('pricing', selectedPricing);
                     const res = await fetchAPI(`/sites?${p.toString()}`);
                     const data = Array.isArray(res) ? res : (res?.data || []);
                     const srcCounts = { manual: 0, bookmarks: 0, notion: 0, file: 0 };
@@ -776,6 +805,50 @@ export function DashboardProvider({ children }) {
                 } catch (e) { console.warn('Cross-filter import source counts failed:', e); }
             }
 
+            // 4. Pricing cross-counts: fetch sites matching category + tag + import source (WITHOUT pricing filter)
+            if (hasOtherForPricing) {
+                try {
+                    const p = new URLSearchParams();
+                    p.set('fields', 'minimal');
+                    addBaseParams(p);
+                    if (selectedCategory) p.set('category_id', selectedCategory);
+                    if (selectedTag) p.set('tag_id', selectedTag);
+                    if (selectedImportSource) p.set('import_source', selectedImportSource);
+                    const res = await fetchAPI(`/sites?${p.toString()}`);
+                    const data = Array.isArray(res) ? res : (res?.data || []);
+                    const pCounts = { fully_free: 0, freemium: 0, free_trial: 0, paid: 0 };
+                    data.forEach(site => {
+                        const pr = site.pricing || '';
+                        if (Object.prototype.hasOwnProperty.call(pCounts, pr)) {
+                            pCounts[pr]++;
+                        }
+                    });
+                    newCounts.pricing = pCounts;
+                } catch (e) { console.warn('Cross-filter pricing counts failed:', e); }
+            }
+
+            // 5. Needed cross-counts: fetch sites matching category + tag + import source + pricing (WITHOUT needed filter)
+            if (hasOtherForNeeded) {
+                try {
+                    const p = new URLSearchParams();
+                    p.set('fields', 'minimal');
+                    p.set('limit', '5000'); p.set('page', '1');
+                    if (searchQuery) p.set('q', searchQuery);
+                    if (activeTab === 'favorites') p.set('favorites', 'true');
+                    if (selectedCategory) p.set('category_id', selectedCategory);
+                    if (selectedTag) p.set('tag_id', selectedTag);
+                    if (selectedImportSource) p.set('import_source', selectedImportSource);
+                    if (selectedPricing) p.set('pricing', selectedPricing);
+                    const res = await fetchAPI(`/sites?${p.toString()}`);
+                    const data = Array.isArray(res) ? res : (res?.data || []);
+                    const nCounts = { all: data.length, needed: 0, not_needed: 0 };
+                    data.forEach(site => {
+                        if (site.is_needed) nCounts.needed++; else nCounts.not_needed++;
+                    });
+                    newCounts.needed = nCounts;
+                } catch (e) { console.warn('Cross-filter needed counts failed:', e); }
+            }
+
             if (!cancelled) setCrossFilterCounts(newCounts);
         }, 400);
 
@@ -783,7 +856,7 @@ export function DashboardProvider({ children }) {
             cancelled = true;
             if (crossFilterTimerRef.current) clearTimeout(crossFilterTimerRef.current);
         };
-    }, [selectedCategory, selectedTag, selectedImportSource, searchQuery, activeTab, user, neededFilterSites]);
+    }, [selectedCategory, selectedTag, selectedImportSource, selectedPricing, searchQuery, activeTab, user, neededFilterSites]);
 
     useEffect(() => {
         if (!supabase || !user) return;
@@ -1301,6 +1374,8 @@ export function DashboardProvider({ children }) {
         setSelectedTag,
         selectedImportSource,
         setSelectedImportSource,
+        selectedPricing,
+        setSelectedPricing,
         usageFilterCategories,
         setUsageFilterCategories,
         usageFilterTags,

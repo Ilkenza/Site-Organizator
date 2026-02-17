@@ -39,7 +39,7 @@ export default function UndoToast({ message, onUndo, onClose, duration = 5000 })
             <div className="bg-app-bg-primary border border-app-border rounded-lg shadow-2xl px-4 py-3 flex items-center gap-4 min-w-[320px] backdrop-blur-lg">
                 {/* Icon */}
                 <div className="flex-shrink-0">
-                    <WarningIcon className="w-5 h-5 text-app-accent" />
+                    <WarningIcon className="w-5 h-5 text-yellow-400" />
                 </div>
 
                 {/* Message */}
@@ -48,7 +48,7 @@ export default function UndoToast({ message, onUndo, onClose, duration = 5000 })
                 {/* Undo Button */}
                 <button
                     onClick={handleUndo}
-                    className="px-3 py-1.5 text-sm font-medium text-app-accent hover:text-app-accentLight bg-app-accent/10 hover:bg-app-accent/20 rounded-md transition-colors"
+                    className="px-3 py-1.5 text-sm font-medium text-yellow-400 hover:text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 rounded-md transition-colors"
                 >
                     Undo
                 </button>
@@ -65,7 +65,7 @@ export default function UndoToast({ message, onUndo, onClose, duration = 5000 })
                 {/* Progress Bar */}
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-app-bg-secondary rounded-b-lg overflow-hidden">
                     <div
-                        className="h-full bg-app-accent transition-all duration-100 ease-linear"
+                        className="h-full bg-yellow-500 transition-all duration-100 ease-linear"
                         style={{ width: `${progress}%` }}
                     />
                 </div>
