@@ -387,6 +387,10 @@ function DashboardContent() {
     const [excludedCategoryIds, setExcludedCategoryIds] = useState(new Set());
     const [excludedTagIds, setExcludedTagIds] = useState(new Set());
     const [excludedImportSources, setExcludedImportSources] = useState(new Set());
+    const [excludedPricingValues, setExcludedPricingValues] = useState(new Set());
+    const [excludedNeededValues, setExcludedNeededValues] = useState(new Set());
+    // Group-based category filter (set of category IDs when a group is selected)
+    const [groupCategoryIds, setGroupCategoryIds] = useState(null);
 
     // Render content based on active tab
     const renderContent = () => {
@@ -401,6 +405,9 @@ function DashboardContent() {
                             excludedCategoryIds={excludedCategoryIds}
                             excludedTagIds={excludedTagIds}
                             excludedImportSources={excludedImportSources}
+                            excludedPricingValues={excludedPricingValues}
+                            excludedNeededValues={excludedNeededValues}
+                            groupCategoryIds={groupCategoryIds}
                         />
                     </>
                 );
@@ -441,6 +448,11 @@ function DashboardContent() {
                 setExcludedTagIds={setExcludedTagIds}
                 excludedImportSources={excludedImportSources}
                 setExcludedImportSources={setExcludedImportSources}
+                excludedPricingValues={excludedPricingValues}
+                setExcludedPricingValues={setExcludedPricingValues}
+                excludedNeededValues={excludedNeededValues}
+                setExcludedNeededValues={setExcludedNeededValues}
+                onGroupFilter={setGroupCategoryIds}
             />
 
             {/* Main content */}

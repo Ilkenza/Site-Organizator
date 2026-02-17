@@ -938,6 +938,91 @@
             animation: slideIn 0.3s ease;
         }
 
+        /* Save-without confirmation overlay */
+        .confirm-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(5, 10, 48, 0.85);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .confirm-overlay.show {
+            display: flex;
+        }
+
+        .confirm-box {
+            background: #162b46;
+            border: 2px solid #1A2E52;
+            border-radius: 14px;
+            padding: 24px;
+            width: 380px;
+            max-width: 90%;
+            text-align: center;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+            animation: slideIn 0.25s ease;
+        }
+
+        .confirm-box .confirm-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+            color: #fbbf24;
+        }
+
+        .confirm-box .confirm-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #E0E8F7;
+            margin-bottom: 8px;
+        }
+
+        .confirm-box .confirm-text {
+            font-size: 13px;
+            color: #8BA4C4;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .confirm-box .confirm-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .confirm-box .confirm-actions button {
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .confirm-box .btn-confirm-cancel {
+            background: rgba(139, 164, 196, 0.15);
+            color: #8BA4C4;
+            border: 1px solid #2a4060;
+        }
+
+        .confirm-box .btn-confirm-cancel:hover {
+            background: rgba(139, 164, 196, 0.25);
+        }
+
+        .confirm-box .btn-confirm-save {
+            background: linear-gradient(135deg, #6CBBFB 0%, #4A90D9 100%);
+            color: #fff;
+        }
+
+        .confirm-box .btn-confirm-save:hover {
+            background: linear-gradient(135deg, #85C8FC 0%, #5A9FE5 100%);
+        }
+
         @keyframes slideIn {
             from {
                 opacity: 0;
@@ -1528,6 +1613,19 @@
                     <button type="submit" class="btn-save" id="saveBtn">Save Site</button>
                 </div>
             </form>
+
+            <!-- Save-without confirmation overlay -->
+            <div class="confirm-overlay" id="confirmSaveOverlay">
+                <div class="confirm-box">
+                    <div class="confirm-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="confirm-title" id="confirmTitle">Save without selection?</div>
+                    <div class="confirm-text" id="confirmText"></div>
+                    <div class="confirm-actions">
+                        <button class="btn-confirm-cancel" id="confirmCancelBtn">Cancel</button>
+                        <button class="btn-confirm-save" id="confirmSaveBtn">Save Anyway</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -8,6 +8,7 @@ import Input from '../ui/Input';
 import { LightbulbIcon, PlusIcon, FolderIcon, TagIcon, SparklesIcon, CloseIcon, SpinnerIcon, StarIcon } from '../ui/Icons';
 import { suggestCategories } from '../../lib/categorySuggestions';
 import { suggestTags } from '../../lib/tagSuggestions';
+import { normalizeUrlForDuplicateCheck } from '../../lib/urlPatternUtils';
 
 // Constants
 const REFETCH_DELAY = 500;
@@ -413,10 +414,11 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
 
         const timer = setTimeout(async () => {
             try {
+                const { variants } = normalizeUrlForDuplicateCheck(normalized);
                 let query = supabase
                     .from('sites')
                     .select('id')
-                    .eq('url', normalized)
+                    .in('url', variants)
                     .limit(1);
 
                 // Only check current user's sites

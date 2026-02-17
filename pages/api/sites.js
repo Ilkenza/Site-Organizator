@@ -6,6 +6,24 @@ import {
 } from './helpers/api-utils';
 
 const POST_FIELDS = ['name', 'url', 'pricing', 'description', 'use_case', 'user_id', 'import_source', 'is_needed'];
+
+// Build URL variants for duplicate detection (www / no-www / trailing slash)
+function buildUrlVariants(rawUrl) {
+  try {
+    const u = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`);
+    const hostNoWww = u.hostname.replace(/^www\./, '').toLowerCase();
+    const hostWithWww = hostNoWww.startsWith('www.') ? hostNoWww : `www.${hostNoWww}`;
+    const path = u.pathname.replace(/\/+$/, '') || '';
+    const search = u.search || '';
+    const variants = new Set([
+      `${u.protocol}//${hostNoWww}${path}${search}`,
+      `${u.protocol}//${hostWithWww}${path}${search}`,
+      `${u.protocol}//${hostNoWww}${path}/${search}`,
+      `${u.protocol}//${hostWithWww}${path}/${search}`,
+    ]);
+    return [...variants];
+  } catch { return [rawUrl]; }
+}
 const DEFAULT_LIMIT = 100, MAX_LIMIT = 5000;
 const BATCH = 100;
 
@@ -124,6 +142,7 @@ function buildListUrl(cfg, limit, offset, f) {
   qf.forEach(q => { url += `&${q}`; });
   if (f.searchQuery) { const e = encodeURIComponent(f.searchQuery); url += `&or=(name.ilike.*${e}*,url.ilike.*${e}*)`; }
   if (f.importSource) url += `&import_source=eq.${encodeURIComponent(f.importSource)}`;
+  if (f.pricing) url += `&pricing=eq.${encodeURIComponent(f.pricing)}`;
   if (f.needed === 'needed') url += '&is_needed=eq.true';
   else if (f.needed === 'not_needed') url += '&or=(is_needed.eq.false,is_needed.is.null)';
   return url;
@@ -151,6 +170,7 @@ async function handleGet(req, res, cfg, authKey, relKey) {
     isUntagged: q.tag_id === 'untagged',
     importSource: q.import_source || null,
     needed: q.needed || 'all',
+    pricing: q.pricing || null,
   };
 
   const url = buildListUrl(cfg, limit, offset, filters);
@@ -232,7 +252,10 @@ async function handlePost(req, res, cfg, authKey, relKey) {
     const text = await r.text();
     if (!r.ok) {
       if (body.url && /duplicate|unique|violat|already exists/i.test(text)) {
-        const lr = await fetch(`${restUrl(cfg, 'sites')}?select=*&url=eq.${encodeURIComponent(body.url)}`, { headers: h(cfg, authKey) });
+        // Check with URL variants (www / no-www / trailing slash)
+        const variants = buildUrlVariants(body.url);
+        const orFilter = variants.map(v => `url.eq.${encodeURIComponent(v)}`).join(',');
+        const lr = await fetch(`${restUrl(cfg, 'sites')}?select=*&or=(${orFilter})`, { headers: h(cfg, authKey) });
         if (lr.ok) { const rows = await lr.json(); if (rows?.[0]) return res.status(HTTP.CONFLICT).json({ success: false, error: 'Site already exists', data: rows[0] }); }
       }
       return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: text });
