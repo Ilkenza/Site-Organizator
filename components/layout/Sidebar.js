@@ -102,7 +102,9 @@ export default function Sidebar({
         neededFilterCategories,
         setNeededFilterCategories,
         neededFilterTags,
-        setNeededFilterTags
+        setNeededFilterTags,
+        fetchAllSites,
+        fetchSitesPage
     } = useDashboard();
 
     const [categoriesSearchQuery, setCategoriesSearchQuery] = useState('');
@@ -234,6 +236,8 @@ export default function Sidebar({
         setSelectedSuperCategory(nextKey);
         if (!nextKey) {
             onGroupFilter?.(null);
+            // Go back to paginated mode
+            fetchSitesPage(1);
             return;
         }
         // Collect all category IDs belonging to this group
@@ -244,7 +248,9 @@ export default function Sidebar({
             ids = (categories || []).filter(cat => categoryGroupMap[cat.id] === nextKey).map(cat => cat.id);
         }
         onGroupFilter?.(ids.length > 0 ? new Set(ids) : null);
-    }, [selectedSuperCategory, categories, categoryGroupMap, onGroupFilter]);
+        // Fetch all sites so both Sidebar count and SitesList have the full dataset
+        if (ids.length > 0) fetchAllSites();
+    }, [selectedSuperCategory, categories, categoryGroupMap, onGroupFilter, fetchAllSites, fetchSitesPage]);
 
     // Visible auto groups = not hidden, not overridden by a custom group with the same key
     const visibleAutoGroups = useMemo(() => {
@@ -259,6 +265,18 @@ export default function Sidebar({
         return [...autoItems, ...customItems];
     }, [visibleAutoGroups, customGroups]);
 
+    // Compute the set of category IDs for the currently selected group (used for site filtering & count)
+    const groupCatIds = useMemo(() => {
+        if (!selectedSuperCategory) return null;
+        let ids;
+        if (selectedSuperCategory === '_other') {
+            ids = (categories || []).filter(cat => !categoryGroupMap[cat.id]).map(cat => cat.id);
+        } else {
+            ids = (categories || []).filter(cat => categoryGroupMap[cat.id] === selectedSuperCategory).map(cat => cat.id);
+        }
+        return ids.length > 0 ? new Set(ids) : null;
+    }, [selectedSuperCategory, categories, categoryGroupMap]);
+
     // Counts from API (loaded with categories/tags)
     const favoriteCount = stats.favorites || 0;
     const uncategorizedCount = stats.uncategorized || 0;
@@ -266,12 +284,18 @@ export default function Sidebar({
 
     // Whether any site filter is active (including exclusions)
     const hasExclusions = catSet.size > 0 || tagSet.size > 0 || srcSet.size > 0 || prcSet.size > 0 || nddSet.size > 0;
+    const hasGroupFilter = groupCatIds instanceof Set && groupCatIds.size > 0;
     const totalExcluded = catSet.size + tagSet.size + srcSet.size + prcSet.size + nddSet.size;
     const hasServerFilter = selectedCategory || selectedTag || selectedImportSource || selectedPricing || (neededFilterSites && neededFilterSites !== 'all');
-    // Compute visible sites after exclusions (all sites loaded via fetchAllSites when exclusions active)
+    // Compute visible sites after exclusions and group filter (all sites loaded via fetchAllSites when active)
     const visibleSites = useMemo(() => {
-        if (!hasExclusions) return sites;
+        if (!hasExclusions && !hasGroupFilter) return sites;
         return sites.filter(site => {
+            // Group filter: site must have at least one category belonging to the group
+            if (hasGroupFilter) {
+                const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
+                if (!catIds.some(id => groupCatIds.has(id))) return false;
+            }
             if (catSet.size > 0) {
                 if (catSet.has('all')) return false;
                 const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
@@ -299,11 +323,11 @@ export default function Sidebar({
             }
             return true;
         });
-    }, [sites, catSet, tagSet, srcSet, prcSet, nddSet, hasExclusions]);
+    }, [sites, catSet, tagSet, srcSet, prcSet, nddSet, hasExclusions, hasGroupFilter, groupCatIds]);
 
-    // Per-filter counts from visible sites (after exclusions)
+    // Per-filter counts from visible sites (after exclusions + group filter)
     const visibleCounts = useMemo(() => {
-        if (!hasExclusions) return null;
+        if (!hasExclusions && !hasGroupFilter) return null;
         const cats = {}, tgs = {};
         const srcs = { manual: 0, bookmarks: 0, notion: 0, file: 0 };
         const prc = { fully_free: 0, freemium: 0, free_trial: 0, paid: 0 };
@@ -322,10 +346,10 @@ export default function Sidebar({
             if (site.is_needed) needed++; else notNeeded++;
         });
         return { categories: cats, tags: tgs, importSources: srcs, pricing: prc, uncategorized, untagged, needed, notNeeded, total: visibleSites.length };
-    }, [visibleSites, hasExclusions]);
+    }, [visibleSites, hasExclusions, hasGroupFilter]);
 
     // Sites tab count: show "visible / total" when any filter is active
-    const sitesTabCount = hasExclusions
+    const sitesTabCount = (hasExclusions || hasGroupFilter)
         ? `${visibleSites.length} / ${stats.sites}`
         : hasServerFilter
             ? `${totalSitesCount} / ${stats.sites}`
