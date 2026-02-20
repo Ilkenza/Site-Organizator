@@ -33,6 +33,15 @@ export default async function handler(req, res) {
   if (req.method === 'DELETE') {
     if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
     try {
+      // Check if category is used on any site
+      const checkUrl = `${restUrl(cfg, 'site_categories')}?category_id=eq.${id}&select=site_id`;
+      const checkRes = await fetch(checkUrl, { headers: buildHeaders(cfg.anonKey, token) });
+      if (!checkRes.ok) return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: await checkRes.text() });
+      const usedRows = await checkRes.json();
+      if (usedRows && usedRows.length > 0) {
+        return sendError(res, HTTP.FORBIDDEN, 'Cannot delete: category is used on one or more sites');
+      }
+      // Safe to delete
       const dh = buildHeaders(cfg.anonKey, token);
       await fetch(`${restUrl(cfg, 'site_categories')}?category_id=eq.${id}`, { method: 'DELETE', headers: dh });
       const r = await fetch(url, { method: 'DELETE', headers: dh });

@@ -728,32 +728,32 @@ export default function Sidebar({
                             {PRICING_OPTIONS.map(opt => {
                                 const isExcluded = prcSet.has(opt.value);
                                 return (
-                                <button
-                                    key={opt.value}
-                                    onClick={() => excludeMode
-                                        ? setExcludedPricingValues(prev => {
-                                            const next = new Set(prev);
-                                            if (next.has(opt.value)) next.delete(opt.value); else next.add(opt.value);
-                                            return next;
-                                        })
-                                        : setSelectedPricing(selectedPricing === opt.value ? null : opt.value)
-                                    }
-                                    className={`px-1.5 py-1.5 rounded-lg text-[10px] font-medium transition-all flex flex-col items-center gap-0.5 border ${isExcluded ? 'opacity-40 line-through' : ''} ${selectedPricing === opt.value
-                                        ? 'shadow-sm'
-                                        : 'hover:shadow-md'
-                                        }`}
-                                    style={{
-                                        backgroundColor: isExcluded ? 'rgba(239,68,68,0.1)' : selectedPricing === opt.value ? `${opt.color}20` : '#1A2E4A',
-                                        color: isExcluded ? '#ef4444' : selectedPricing === opt.value ? opt.color : '#8BA4C4',
-                                        borderColor: isExcluded ? 'rgba(239,68,68,0.3)' : selectedPricing === opt.value ? `${opt.color}50` : '#243654'
-                                    }}
-                                >
-                                    <span className="text-sm leading-none">{isExcluded ? '✖' : opt.icon}</span>
-                                    <span className="truncate w-full text-center leading-tight">{opt.label}</span>
-                                    <span className={`text-xs font-bold leading-none ${selectedPricing === opt.value ? '' : 'text-app-text-muted'}`}>
-                                        {getPricingCount(opt.value, pricingCounts[opt.value])}
-                                    </span>
-                                </button>
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => excludeMode
+                                            ? setExcludedPricingValues(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(opt.value)) next.delete(opt.value); else next.add(opt.value);
+                                                return next;
+                                            })
+                                            : setSelectedPricing(selectedPricing === opt.value ? null : opt.value)
+                                        }
+                                        className={`px-1.5 py-1.5 rounded-lg text-[10px] font-medium transition-all flex flex-col items-center gap-0.5 border ${isExcluded ? 'opacity-40 line-through' : ''} ${selectedPricing === opt.value
+                                            ? 'shadow-sm'
+                                            : 'hover:shadow-md'
+                                            }`}
+                                        style={{
+                                            backgroundColor: isExcluded ? 'rgba(239,68,68,0.1)' : selectedPricing === opt.value ? `${opt.color}20` : '#1A2E4A',
+                                            color: isExcluded ? '#ef4444' : selectedPricing === opt.value ? opt.color : '#8BA4C4',
+                                            borderColor: isExcluded ? 'rgba(239,68,68,0.3)' : selectedPricing === opt.value ? `${opt.color}50` : '#243654'
+                                        }}
+                                    >
+                                        <span className="text-sm leading-none">{isExcluded ? '✖' : opt.icon}</span>
+                                        <span className="truncate w-full text-center leading-tight">{opt.label}</span>
+                                        <span className={`text-xs font-bold leading-none ${selectedPricing === opt.value ? '' : 'text-app-text-muted'}`}>
+                                            {getPricingCount(opt.value, pricingCounts[opt.value])}
+                                        </span>
+                                    </button>
                                 );
                             })}
                         </div>
