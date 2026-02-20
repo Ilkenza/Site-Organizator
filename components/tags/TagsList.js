@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
+import { fetchAPI } from '../../lib/supabase';
 import Modal, { ConfirmModal } from '../ui/Modal';
 import Pagination from '../ui/Pagination';
 import InlineEditableName from '../categories/InlineEditableName';
@@ -8,7 +9,7 @@ import { TagIcon, SearchIcon, FilterIcon, EditIcon, TrashIcon, SpinnerIcon, Link
 const ITEMS_PER_PAGE = 50;
 
 export default function TagsList({ onEdit, onDelete }) {
-    const { tags, sites, deleteTag, updateTag, loading, searchQuery, multiSelectMode, selectedTags, setSelectedTags, usageFilterTags, neededFilterTags } = useDashboard();
+    const { tags, deleteTag, updateTag, loading, searchQuery, multiSelectMode, selectedTags, setSelectedTags, usageFilterTags, neededFilterTags } = useDashboard();
     const [deletingId, setDeletingId] = useState(null);
     const [tagToDelete, setTagToDelete] = useState(null);
     const [usageWarning, setUsageWarning] = useState(null);
@@ -86,19 +87,30 @@ export default function TagsList({ onEdit, onDelete }) {
         }
     };
 
-    const handleDeleteClick = (tag) => {
-        // Check if tag is used on any site
-        const sitesUsingTag = sites.filter(site =>
-            site.tags_array?.some(t => t?.id === tag.id)
-        );
+    const handleDeleteClick = async (tag) => {
+        // Use site_count from API (accurate across all sites, not just current page)
+        const usageCount = tag.site_count || 0;
 
-        if (sitesUsingTag.length > 0) {
-            setUsageWarning({
-                type: 'tag',
-                name: tag.name,
-                count: sitesUsingTag.length,
-                sites: sitesUsingTag
-            });
+        if (usageCount > 0) {
+            try {
+                // Fetch the actual affected sites to show in modal
+                const res = await fetchAPI(`/sites?tag_id=${tag.id}&limit=100&page=1`);
+                const affectedSites = Array.isArray(res) ? res : (res?.data || []);
+                setUsageWarning({
+                    type: 'tag',
+                    name: tag.name,
+                    count: usageCount,
+                    sites: affectedSites
+                });
+            } catch {
+                // Fallback: show warning with count only
+                setUsageWarning({
+                    type: 'tag',
+                    name: tag.name,
+                    count: usageCount,
+                    sites: []
+                });
+            }
         } else if (onDelete) {
             onDelete(tag);
         } else {
@@ -109,12 +121,55 @@ export default function TagsList({ onEdit, onDelete }) {
     const confirmDelete = async () => {
         if (!tagToDelete) return;
 
+        // Re-check usage via site_count (accurate across all sites)
+        const freshTag = tags.find(t => t.id === tagToDelete.id);
+        const usageCount = freshTag?.site_count || 0;
+        if (usageCount > 0) {
+            try {
+                const res = await fetchAPI(`/sites?tag_id=${tagToDelete.id}&limit=100&page=1`);
+                const affectedSites = Array.isArray(res) ? res : (res?.data || []);
+                setUsageWarning({
+                    type: 'tag',
+                    name: tagToDelete.name,
+                    count: usageCount,
+                    sites: affectedSites
+                });
+            } catch {
+                setUsageWarning({
+                    type: 'tag',
+                    name: tagToDelete.name,
+                    count: usageCount,
+                    sites: []
+                });
+            }
+            setTagToDelete(null);
+            setDeletingId(null);
+            return;
+        }
+
         setDeletingId(tagToDelete.id);
         try {
             await deleteTag(tagToDelete.id);
             setTagToDelete(null);
         } catch (err) {
-            alert('Failed to delete tag: ' + err.message);
+            // If backend blocks deletion, fetch affected sites and show modal
+            try {
+                const res = await fetchAPI(`/sites?tag_id=${tagToDelete.id}&limit=100&page=1`);
+                const affectedSites = Array.isArray(res) ? res : (res?.data || []);
+                if (affectedSites.length > 0) {
+                    setUsageWarning({
+                        type: 'tag',
+                        name: tagToDelete.name,
+                        count: affectedSites.length,
+                        sites: affectedSites
+                    });
+                    setTagToDelete(null);
+                } else {
+                    alert('Failed to delete tag: ' + err.message);
+                }
+            } catch {
+                alert('Failed to delete tag: ' + err.message);
+            }
         } finally {
             setDeletingId(null);
         }
@@ -207,10 +262,7 @@ export default function TagsList({ onEdit, onDelete }) {
                     {/* Tags Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                         {paginatedTags.map((tag, _index) => {
-                            // Count sites using this tag
-                            const siteCount = sites.filter(site =>
-                                site.tags_array?.some(t => t?.id === tag.id)
-                            ).length;
+                            const siteCount = tag.site_count || 0;
 
                             return (
                                 <div
@@ -298,8 +350,7 @@ export default function TagsList({ onEdit, onDelete }) {
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteClick(tag)}
-                                                    disabled={deletingId === tag.id}
-                                                    className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-app-bg-light"
+                                                    className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-app-bg-light"
                                                     title="Delete tag"
                                                     aria-label="Delete tag"
                                                 >
@@ -343,38 +394,40 @@ export default function TagsList({ onEdit, onDelete }) {
                 cancelText="Cancel"
                 variant="danger"
             />
-            {/* Usage Warning Modal */}
-            <Modal
-                isOpen={usageWarning?.type === 'tag'}
-                onClose={() => setUsageWarning(null)}
-                title="Cannot Delete Tag"
-                size="sm"
-            >
-                <div className="space-y-4">
-                    <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                        <WarningIcon className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                        <p className="text-app-text-secondary">
-                            The tag <strong>&quot;{usageWarning?.name}&quot;</strong> is used on <strong>{usageWarning?.count}</strong> site{usageWarning?.count !== 1 ? 's' : ''}:
+            {/* Usage Warning Modal for tag */}
+            {usageWarning?.type === 'tag' && (
+                <Modal
+                    isOpen={true}
+                    onClose={() => setUsageWarning(null)}
+                    title="Cannot Delete Tag"
+                    size="sm"
+                >
+                    <div className="space-y-4">
+                        <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                            <WarningIcon className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-app-text-secondary">
+                                The tag <strong>&quot;{usageWarning?.name}&quot;</strong> cannot be deleted because it is used on <strong>{usageWarning?.count}</strong> site{usageWarning?.count !== 1 ? 's' : ''}:
+                            </p>
+                        </div>
+                        <div className="bg-app-bg-light rounded-lg p-3 max-h-40 overflow-y-auto border border-app-border">
+                            {usageWarning?.sites?.map(site => (
+                                <div key={site.id} className="text-sm text-app-text-secondary py-1">
+                                    • {site.name}
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-sm text-app-text-secondary">
+                            Remove this tag from all sites first to delete it.
                         </p>
+                        <button
+                            onClick={() => setUsageWarning(null)}
+                            className="w-full px-4 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
+                        >
+                            Got it
+                        </button>
                     </div>
-                    <div className="bg-app-bg-light rounded-lg p-3 max-h-40 overflow-y-auto border border-app-border">
-                        {usageWarning?.sites?.map(site => (
-                            <div key={site.id} className="text-sm text-app-text-secondary py-1">
-                                • {site.name}
-                            </div>
-                        ))}
-                    </div>
-                    <p className="text-sm text-app-text-secondary">
-                        Remove this tag from all sites first to delete it.
-                    </p>
-                    <button
-                        onClick={() => setUsageWarning(null)}
-                        className="w-full px-4 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
-                    >
-                        Got it
-                    </button>
-                </div>
-            </Modal>
+                </Modal>
+            )}
         </div>
     );
 }

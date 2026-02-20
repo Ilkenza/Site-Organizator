@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
-import { ConfirmModal } from '../ui/Modal';
+import { fetchAPI } from '../../lib/supabase';
+import Modal, { ConfirmModal } from '../ui/Modal';
 import Pagination from '../ui/Pagination';
 import InlineEditableName from './InlineEditableName';
 import { FolderIcon, FilterIcon, EditIcon, TrashIcon, SpinnerIcon, LinkIcon, WarningIcon, CheckCircleFilledIcon, BanIcon } from '../ui/Icons';
@@ -10,7 +11,6 @@ const ITEMS_PER_PAGE = 50;
 export default function CategoriesList({ onEdit, onDelete }) {
     const {
         categories,
-        sites,
         deleteCategory,
         updateCategory,
         loading,
@@ -99,19 +99,30 @@ export default function CategoriesList({ onEdit, onDelete }) {
         }
     };
 
-    const handleDeleteClick = (category) => {
-        // Check if category is used on any site
-        const sitesUsingCategory = sites.filter(site =>
-            site.categories_array?.some(c => c?.id === category.id)
-        );
+    const handleDeleteClick = async (category) => {
+        // Use site_count from API (accurate across all sites, not just current page)
+        const usageCount = category.site_count || 0;
 
-        if (sitesUsingCategory.length > 0) {
-            setUsageWarning({
-                type: 'category',
-                name: category.name,
-                count: sitesUsingCategory.length,
-                sites: sitesUsingCategory
-            });
+        if (usageCount > 0) {
+            try {
+                // Fetch the actual affected sites to show in modal
+                const res = await fetchAPI(`/sites?category_id=${category.id}&limit=100&page=1`);
+                const affectedSites = Array.isArray(res) ? res : (res?.data || []);
+                setUsageWarning({
+                    type: 'category',
+                    name: category.name,
+                    count: usageCount,
+                    sites: affectedSites
+                });
+            } catch {
+                // Fallback: show warning with count only
+                setUsageWarning({
+                    type: 'category',
+                    name: category.name,
+                    count: usageCount,
+                    sites: []
+                });
+            }
         } else if (onDelete) {
             onDelete(category);
         } else {
@@ -122,12 +133,55 @@ export default function CategoriesList({ onEdit, onDelete }) {
     const confirmDelete = async () => {
         if (!categoryToDelete) return;
 
+        // Re-check usage via site_count (accurate across all sites)
+        const freshCat = categories.find(c => c.id === categoryToDelete.id);
+        const usageCount = freshCat?.site_count || 0;
+        if (usageCount > 0) {
+            try {
+                const res = await fetchAPI(`/sites?category_id=${categoryToDelete.id}&limit=100&page=1`);
+                const affectedSites = Array.isArray(res) ? res : (res?.data || []);
+                setUsageWarning({
+                    type: 'category',
+                    name: categoryToDelete.name,
+                    count: usageCount,
+                    sites: affectedSites
+                });
+            } catch {
+                setUsageWarning({
+                    type: 'category',
+                    name: categoryToDelete.name,
+                    count: usageCount,
+                    sites: []
+                });
+            }
+            setCategoryToDelete(null);
+            setDeletingId(null);
+            return;
+        }
+
         setDeletingId(categoryToDelete.id);
         try {
             await deleteCategory(categoryToDelete.id);
             setCategoryToDelete(null);
         } catch (err) {
-            alert('Failed to delete category: ' + err.message);
+            // If backend blocks deletion, fetch affected sites and show modal
+            try {
+                const res = await fetchAPI(`/sites?category_id=${categoryToDelete.id}&limit=100&page=1`);
+                const affectedSites = Array.isArray(res) ? res : (res?.data || []);
+                if (affectedSites.length > 0) {
+                    setUsageWarning({
+                        type: 'category',
+                        name: categoryToDelete.name,
+                        count: affectedSites.length,
+                        sites: affectedSites
+                    });
+                    setCategoryToDelete(null);
+                } else {
+                    alert('Failed to delete category: ' + err.message);
+                }
+            } catch {
+                alert('Failed to delete category: ' + err.message);
+            }
         } finally {
             setDeletingId(null);
         }
@@ -201,9 +255,7 @@ export default function CategoriesList({ onEdit, onDelete }) {
             {/* Categories Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {paginatedCategories.map((category) => {
-                    const siteCount = sites.filter(site =>
-                        site.categories_array?.some(c => c?.id === category.id)
-                    ).length;
+                    const siteCount = category.site_count || 0;
 
                     return (
                         <div
@@ -282,8 +334,7 @@ export default function CategoriesList({ onEdit, onDelete }) {
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                     <button
                                         onClick={() => onEdit(category)}
-                                        disabled={deletingId === category.id}
-                                        className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-accent/10 rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-app-accent focus:ring-offset-2 focus:ring-offset-app-bg-light"
+                                        className="p-1.5 text-app-text-secondary hover:text-app-accent hover:bg-app-accent/10 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-app-accent focus:ring-offset-2 focus:ring-offset-app-bg-light"
                                         title="Edit category"
                                         aria-label="Edit category"
                                     >
@@ -291,8 +342,7 @@ export default function CategoriesList({ onEdit, onDelete }) {
                                     </button>
                                     <button
                                         onClick={() => handleDeleteClick(category)}
-                                        disabled={deletingId === category.id}
-                                        className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-app-bg-light"
+                                        className="p-1.5 text-app-text-secondary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-app-bg-light"
                                         title="Delete category"
                                         aria-label="Delete category"
                                     >
@@ -334,37 +384,39 @@ export default function CategoriesList({ onEdit, onDelete }) {
                 variant="danger"
             />
 
-            {/* Usage Warning Modal */}
+            {/* Usage Warning Modal for category */}
             {usageWarning?.type === 'category' && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-app-bg-primary rounded-lg shadow-lg max-w-md w-full mx-4">
-                        <div className="p-6">
-                            <h2 className="text-lg font-semibold text-app-text-primary mb-4 flex items-center gap-2">
-                                <WarningIcon className="w-5 h-5 text-amber-400" />
-                                Cannot Delete Category
-                            </h2>
-                            <p className="text-app-text-secondary mb-4">
-                                The category <strong>&quot;{usageWarning.name}&quot;</strong> is used on <strong>{usageWarning.count}</strong> site{usageWarning.count !== 1 ? 's' : ''}:
+                <Modal
+                    isOpen={true}
+                    onClose={() => setUsageWarning(null)}
+                    title="Cannot Delete Category"
+                    size="sm"
+                >
+                    <div className="space-y-4">
+                        <div className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                            <WarningIcon className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-app-text-secondary">
+                                The category <strong>&quot;{usageWarning.name}&quot;</strong> cannot be deleted because it is used on <strong>{usageWarning.count}</strong> site{usageWarning.count !== 1 ? 's' : ''}:
                             </p>
-                            <div className="bg-app-bg-light rounded p-3 mb-4 max-h-40 overflow-y-auto">
-                                {usageWarning.sites?.map(site => (
-                                    <div key={site.id} className="text-sm text-app-text-secondary py-1">
-                                        • {site.name}
-                                    </div>
-                                ))}
-                            </div>
-                            <p className="text-sm text-app-text-secondary mb-6">
-                                Remove this category from all sites first to delete it.
-                            </p>
-                            <button
-                                onClick={() => setUsageWarning(null)}
-                                className="w-full px-4 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
-                            >
-                                Got it
-                            </button>
                         </div>
+                        <div className="bg-app-bg-light rounded-lg p-3 max-h-40 overflow-y-auto border border-app-border">
+                            {usageWarning.sites?.map(site => (
+                                <div key={site.id} className="text-sm text-app-text-secondary py-1">
+                                    • {site.name}
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-sm text-app-text-secondary">
+                            Remove this category from all sites first to delete it.
+                        </p>
+                        <button
+                            onClick={() => setUsageWarning(null)}
+                            className="w-full px-4 py-2 bg-app-primary text-white rounded-lg hover:bg-app-primary-hover transition-colors"
+                        >
+                            Got it
+                        </button>
                     </div>
-                </div>
+                </Modal>
             )}
         </div>
     );

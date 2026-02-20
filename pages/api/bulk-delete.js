@@ -29,11 +29,27 @@ export default async function handler(req, res) {
             return sendOk(res, { deleted: count });
         }
         if (type === 'categories') {
+            // Check if any category is used
+            const usedUrl = `${config.url}/rest/v1/site_categories?category_id=in.(${ids.map(id => '"'+id+'"').join(',')})&select=category_id`;
+            const usedRes = await fetch(usedUrl, { headers: svcH });
+            if (!usedRes.ok) return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: await usedRes.text() });
+            const usedRows = await usedRes.json();
+            if (usedRows && usedRows.length > 0) {
+                return sendError(res, HTTP.FORBIDDEN, 'Cannot delete: one or more categories are used on sites');
+            }
             await batchDelete(config, 'site_categories', 'category_id', ids, svcH);
             const count = await batchDelete(config, 'categories', 'id', ids, usrH);
             return sendOk(res, { deleted: count });
         }
         if (type === 'tags') {
+            // Check if any tag is used
+            const usedUrl = `${config.url}/rest/v1/site_tags?tag_id=in.(${ids.map(id => '"'+id+'"').join(',')})&select=tag_id`;
+            const usedRes = await fetch(usedUrl, { headers: svcH });
+            if (!usedRes.ok) return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: await usedRes.text() });
+            const usedRows = await usedRes.json();
+            if (usedRows && usedRows.length > 0) {
+                return sendError(res, HTTP.FORBIDDEN, 'Cannot delete: one or more tags are used on sites');
+            }
             await batchDelete(config, 'site_tags', 'tag_id', ids, svcH);
             const count = await batchDelete(config, 'tags', 'id', ids, usrH);
             return sendOk(res, { deleted: count });
