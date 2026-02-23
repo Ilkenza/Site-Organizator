@@ -98,6 +98,12 @@ export default function CategoryModal({ isOpen, onClose, category = null }) {
             }
         >
             <form onSubmit={handleSubmit} className="space-y-4">
+                {!isEditing && (
+                    <p className="text-xs text-app-text-muted -mt-1 leading-relaxed">
+                        Categories group sites by topic or purpose — each site can belong to one or more categories. Use them for broad organization like "Dev Tools" or "Design".
+                    </p>
+                )}
+
                 {error && (
                     <div className="p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
                         {error}

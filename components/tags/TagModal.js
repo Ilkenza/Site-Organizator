@@ -80,6 +80,12 @@ export default function TagModal({ isOpen, onClose, tag = null }) {
             }
         >
             <form onSubmit={handleSubmit} className="space-y-4">
+                {!isEditing && (
+                    <p className="text-xs text-app-text-muted -mt-1 leading-relaxed">
+                        Tags are flexible labels you can attach to any site for quick filtering — like "free", "tutorial", or "favorite". A site can have multiple tags.
+                    </p>
+                )}
+
                 {error && (
                     <div className="p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm">
                         {error}
