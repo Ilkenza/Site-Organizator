@@ -68,28 +68,60 @@ export default async function handler(req, res) {
 
     try {
         const fmt = (req.query.format || 'json').toLowerCase();
-        const sites = await fetchAll((f, t) => supabase.from('sites').select('*').eq('user_id', userId).range(f, t));
-        const ids = sites.map(s => s.id);
+        // Parse include param: which data to export (default: all)
+        const includeRaw = (req.query.include || 'sites,categories,tags').toLowerCase().split(',').map(s => s.trim());
+        const includeSites = includeRaw.includes('sites');
+        const includeCategories = includeRaw.includes('categories');
+        const includeTags = includeRaw.includes('tags');
 
-        const [cats, tags, sc, st] = await Promise.all([
-            batchIn('site_categories', 'category_id', 'site_id', ids).then(async scData => {
-                const cids = [...new Set(scData.map(r => r.category_id).filter(Boolean))];
-                return cids.length ? batchIn('categories', '*', 'id', cids) : [];
-            }),
-            batchIn('site_tags', 'tag_id', 'site_id', ids).then(async stData => {
-                const tids = [...new Set(stData.map(r => r.tag_id).filter(Boolean))];
-                return tids.length ? batchIn('tags', '*', 'id', tids) : [];
-            }),
-            batchIn('site_categories', 'site_id,category_id', 'site_id', ids),
-            batchIn('site_tags', 'site_id,tag_id', 'site_id', ids),
-        ]);
+        let sites = [], cats = [], tags = [], sc = [], st = [];
 
-        const enriched = enrichSites(sites, cats, tags, sc, st);
+        if (includeSites) {
+            sites = await fetchAll((f, t) => supabase.from('sites').select('*').eq('user_id', userId).range(f, t));
+            const ids = sites.map(s => s.id);
+
+            if (includeCategories) {
+                sc = await batchIn('site_categories', 'site_id,category_id', 'site_id', ids);
+                const cids = [...new Set(sc.map(r => r.category_id).filter(Boolean))];
+                cats = cids.length ? await batchIn('categories', '*', 'id', cids) : [];
+            }
+            if (includeTags) {
+                st = await batchIn('site_tags', 'site_id,tag_id', 'site_id', ids);
+                const tids = [...new Set(st.map(r => r.tag_id).filter(Boolean))];
+                tags = tids.length ? await batchIn('tags', '*', 'id', tids) : [];
+            }
+        } else {
+            // No sites — fetch categories/tags directly if requested
+            if (includeCategories) {
+                cats = await fetchAll((f, t) => supabase.from('categories').select('*').eq('user_id', userId).range(f, t));
+            }
+            if (includeTags) {
+                tags = await fetchAll((f, t) => supabase.from('tags').select('*').eq('user_id', userId).range(f, t));
+            }
+        }
+
+        let enriched = includeSites ? enrichSites(sites, cats, tags, sc, st) : [];
+        // Strip category/tag arrays from sites if those options are unchecked
+        if (includeSites && (!includeCategories || !includeTags)) {
+            enriched = enriched.map(s => {
+                const copy = { ...s };
+                if (!includeCategories) delete copy.categories_array;
+                if (!includeTags) delete copy.tags_array;
+                return copy;
+            });
+        }
         const ts = new Date().toISOString().split('T')[0];
+        const prefix = [includeSites && 'sites', includeCategories && 'categories', includeTags && 'tags'].filter(Boolean).join('-');
 
-        if (fmt === 'csv') { res.setHeader('Content-Type', 'text/csv; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="sites-export-${ts}.csv"`); return res.end(toCSV(enriched)); }
-        if (fmt === 'html') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="sites-export-${ts}.html"`); return res.end(toHTML(enriched)); }
-        return res.json({ version: '1.0', exportedAt: new Date().toISOString(), sites: enriched, categories: cats, tags });
+        if (fmt === 'csv') { res.setHeader('Content-Type', 'text/csv; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="${prefix}-export-${ts}.csv"`); return res.end(toCSV(enriched)); }
+        if (fmt === 'html') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="${prefix}-export-${ts}.html"`); return res.end(toHTML(enriched)); }
+
+        // JSON: build response based on what was requested
+        const jsonResult = { version: '1.0', exportedAt: new Date().toISOString() };
+        if (includeSites) jsonResult.sites = enriched;
+        if (includeCategories) jsonResult.categories = cats;
+        if (includeTags) jsonResult.tags = tags;
+        return res.json(jsonResult);
     } catch (err) {
         console.error('Export error:', err);
         return sendError(res, HTTP.INTERNAL_ERROR, 'Export failed', { message: err.message });
