@@ -7,6 +7,11 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
     const [showDuplicates, setShowDuplicates] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [exportingFormat, setExportingFormat] = useState(null);
+    // Export modal state
+    const [exportModalFormat, setExportModalFormat] = useState(null); // null = closed, 'json'|'csv'|'html' = open
+    const [exportIncludes, setExportIncludes] = useState({ sites: true, categories: true, tags: true });
+    const toggleExportInclude = (key) => setExportIncludes(prev => ({ ...prev, [key]: !prev[key] }));
+    const hasAnyExportInclude = exportIncludes.sites || exportIncludes.categories || exportIncludes.tags;
 
     // Import state from context (persists across tab changes)
     const {
@@ -24,11 +29,13 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
         setExportingFormat(format);
         try {
             const { exportSites } = await import('../../lib/exportImport.js');
-            const result = await exportSites(user?.id, format);
+            const includes = Object.entries(exportIncludes).filter(([, v]) => v).map(([k]) => k);
+            const result = await exportSites(user?.id, format, includes);
             if (!result.success) {
                 setImportMessage({ type: 'error', text: `Export failed: ${result.error}` });
             } else {
-                showToast?.(`Sites exported successfully as ${format.toUpperCase()}`, 'success');
+                showToast?.(`Exported successfully as ${format.toUpperCase()}`, 'success');
+                setExportModalFormat(null);
             }
         } catch (err) {
             console.error('Export failed:', err);
@@ -129,9 +136,9 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
         <>
             {/* Export Section */}
             <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
-                <h2 className="text-lg font-semibold text-app-text-primary mb-2">Export Sites</h2>
+                <h2 className="text-lg font-semibold text-app-text-primary mb-2">Export Data</h2>
                 <p className="text-sm text-app-text-secondary mb-4">
-                    Download all your sites in your preferred format.
+                    Download your data in your preferred format.
                 </p>
 
                 <div className="flex flex-col xs:flex-row flex-wrap gap-2 xs:gap-3">
@@ -142,22 +149,90 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                     ].map(({ fmt, icon }) => (
                         <button
                             key={fmt}
-                            onClick={() => handleExport(fmt)}
+                            onClick={() => { setExportModalFormat(fmt); setExportIncludes({ sites: true, categories: true, tags: true }); }}
                             disabled={exporting}
                             className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
                         >
-                            {exportingFormat === fmt ? (
-                                <SpinnerIcon className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
-                                </svg>
-                            )}
-                            {exportingFormat === fmt ? 'Exporting...' : fmt.toUpperCase()}
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+                            </svg>
+                            {fmt.toUpperCase()}
                         </button>
                     ))}
                 </div>
             </div>
+
+            {/* Export Options Modal */}
+            {exportModalFormat && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => !exporting && setExportModalFormat(null)}>
+                    <div className="bg-app-bg-primary border border-app-border rounded-xl shadow-2xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+                        <div className="p-5">
+                            <h3 className="text-base font-semibold text-app-text-primary mb-1">Export as {exportModalFormat.toUpperCase()}</h3>
+                            <p className="text-xs text-app-text-secondary mb-4">Pick what you want in the file:</p>
+
+                            <div className="space-y-2 mb-5">
+                                {[
+                                    { key: 'sites', label: 'Sites', desc: 'All your saved sites with details', icon: <GlobeIcon className="w-5 h-5" /> },
+                                    { key: 'categories', label: 'Categories', desc: 'Include category data in sites & as list', icon: <FolderIcon className="w-5 h-5" /> },
+                                    { key: 'tags', label: 'Tags', desc: 'Include tag data in sites & as list', icon: <TagIcon className="w-5 h-5" /> },
+                                ].map(({ key, label, desc, icon }) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        onClick={() => toggleExportInclude(key)}
+                                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${exportIncludes[key]
+                                                ? 'bg-app-accent/10 border-app-accent/40'
+                                                : 'bg-app-bg-light border-app-border hover:border-app-accent/30'
+                                            }`}
+                                    >
+                                        <span className={exportIncludes[key] ? 'text-app-accent' : 'text-app-text-muted'}>{icon}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <span className={`text-sm font-medium ${exportIncludes[key] ? 'text-app-accent' : 'text-app-text-secondary'}`}>{label}</span>
+                                            <p className="text-[10px] text-app-text-muted leading-tight">{desc}</p>
+                                        </div>
+                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${exportIncludes[key]
+                                                ? 'bg-app-accent border-app-accent'
+                                                : 'border-app-border'
+                                            }`}>
+                                            {exportIncludes[key] && (
+                                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Filename preview */}
+                            <div className="text-[10px] text-app-text-muted mb-4 bg-app-bg-light rounded px-2.5 py-1.5 border border-app-border font-mono truncate">
+                                {[exportIncludes.sites && 'sites', exportIncludes.categories && 'categories', exportIncludes.tags && 'tags'].filter(Boolean).join('-') || '...'}-export-{new Date().toISOString().split('T')[0]}.{exportModalFormat}
+                            </div>
+
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setExportModalFormat(null)}
+                                    disabled={exporting}
+                                    className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border border-app-border text-app-text-secondary hover:bg-app-bg-light transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => handleExport(exportModalFormat)}
+                                    disabled={exporting || !hasAnyExportInclude}
+                                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-app-accent text-white hover:bg-app-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    {exporting ? (
+                                        <><SpinnerIcon className="w-4 h-4 animate-spin" /> Exporting...</>
+                                    ) : (
+                                        <><DownloadIcon className="w-4 h-4" /> Export</>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Import Section */}
             <div className="bg-app-bg-light border border-app-border rounded-lg p-4 sm:p-6 mb-6">
@@ -376,13 +451,13 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                 {importMessage && (
                     importMessage.detail ? (
                         <div className={`mb-4 mt-2 rounded-lg border overflow-hidden ${importMessage.type === 'success'
-                                ? 'border-green-500/30'
-                                : 'border-amber-500/30'
+                            ? 'border-green-500/30'
+                            : 'border-amber-500/30'
                             }`}>
                             {/* Header */}
                             <div className={`flex items-center gap-2 px-4 py-3 ${importMessage.type === 'success'
-                                    ? 'bg-green-500/15'
-                                    : 'bg-amber-500/15'
+                                ? 'bg-green-500/15'
+                                : 'bg-amber-500/15'
                                 }`}>
                                 {importMessage.type === 'success' ? (
                                     <CheckCircleIcon className="w-5 h-5 text-green-400 flex-shrink-0" />
