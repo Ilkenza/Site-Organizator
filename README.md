@@ -263,7 +263,7 @@ Full reference: [KEYBOARD_SHORTCUTS.md](KEYBOARD_SHORTCUTS.md)
 #### 1. Clone Repository
 
 ```bash
-git clone https://github.com/ilkeroguz/site-organizator.git
+git clone https://github.com/ilkenza/site-organizator.git
 cd site-organizator
 ```
 
@@ -296,188 +296,7 @@ GITHUB_TOKEN=your-github-token          # Optional: enables AI suggestions
 5. Copy **anon public** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 6. Copy **service_role** → `SUPABASE_SERVICE_ROLE_KEY` (⚠️ Keep secret!)
 
-#### 4. Database Setup
-
-Run this SQL in **Supabase SQL Editor** (Dashboard → SQL Editor → New Query):
-
-```sql
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- ============================================
--- PROFILES TABLE
--- ============================================
-CREATE TABLE profiles (
-  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  name TEXT,
-  avatar_url TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
--- ============================================
--- SITES TABLE
--- ============================================
-CREATE TABLE sites (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
-  name TEXT NOT NULL,
-  url TEXT NOT NULL,
-  description TEXT,
-  icon_url TEXT,
-  pricing TEXT CHECK (pricing IN ('fully_free', 'freemium', 'free_trial', 'paid')),
-  is_favorite BOOLEAN DEFAULT false,
-  is_pinned BOOLEAN DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
--- ============================================
--- CATEGORIES TABLE
--- ============================================
-CREATE TABLE categories (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
-  name TEXT NOT NULL,
-  color TEXT DEFAULT '#6b7280',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  UNIQUE(user_id, name)
-);
-
--- ============================================
--- TAGS TABLE
--- ============================================
-CREATE TABLE tags (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
-  name TEXT NOT NULL,
-  color TEXT DEFAULT '#5B8DEE',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  UNIQUE(user_id, name)
-);
-
--- ============================================
--- JUNCTION TABLES (Many-to-Many)
--- ============================================
-CREATE TABLE site_categories (
-  site_id UUID REFERENCES sites ON DELETE CASCADE,
-  category_id UUID REFERENCES categories ON DELETE CASCADE,
-  PRIMARY KEY (site_id, category_id)
-);
-
-CREATE TABLE site_tags (
-  site_id UUID REFERENCES sites ON DELETE CASCADE,
-  tag_id UUID REFERENCES tags ON DELETE CASCADE,
-  PRIMARY KEY (site_id, tag_id)
-);
-
--- ============================================
--- ROW LEVEL SECURITY (RLS)
--- ============================================
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
-ALTER TABLE site_categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE site_tags ENABLE ROW LEVEL SECURITY;
-
--- ============================================
--- RLS POLICIES
--- ============================================
-
--- Profiles policies
-CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
-
--- Sites policies
-CREATE POLICY "Users can view own sites" ON sites FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own sites" ON sites FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own sites" ON sites FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own sites" ON sites FOR DELETE USING (auth.uid() = user_id);
-
--- Categories policies
-CREATE POLICY "Users can view own categories" ON categories FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own categories" ON categories FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own categories" ON categories FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own categories" ON categories FOR DELETE USING (auth.uid() = user_id);
-
--- Tags policies
-CREATE POLICY "Users can view own tags" ON tags FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own tags" ON tags FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own tags" ON tags FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own tags" ON tags FOR DELETE USING (auth.uid() = user_id);
-
--- Junction table policies
-CREATE POLICY "Users can view own site_categories" ON site_categories FOR SELECT
-  USING (EXISTS (SELECT 1 FROM sites WHERE sites.id = site_id AND sites.user_id = auth.uid()));
-CREATE POLICY "Users can insert own site_categories" ON site_categories FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM sites WHERE sites.id = site_id AND sites.user_id = auth.uid()));
-CREATE POLICY "Users can delete own site_categories" ON site_categories FOR DELETE
-  USING (EXISTS (SELECT 1 FROM sites WHERE sites.id = site_id AND sites.user_id = auth.uid()));
-
-CREATE POLICY "Users can view own site_tags" ON site_tags FOR SELECT
-  USING (EXISTS (SELECT 1 FROM sites WHERE sites.id = site_id AND sites.user_id = auth.uid()));
-CREATE POLICY "Users can insert own site_tags" ON site_tags FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM sites WHERE sites.id = site_id AND sites.user_id = auth.uid()));
-CREATE POLICY "Users can delete own site_tags" ON site_tags FOR DELETE
-  USING (EXISTS (SELECT 1 FROM sites WHERE sites.id = site_id AND sites.user_id = auth.uid()));
-
--- ============================================
--- INDEXES FOR PERFORMANCE
--- ============================================
-CREATE INDEX sites_user_id_idx ON sites(user_id);
-CREATE INDEX categories_user_id_idx ON categories(user_id);
-CREATE INDEX tags_user_id_idx ON tags(user_id);
-CREATE INDEX site_categories_site_id_idx ON site_categories(site_id);
-CREATE INDEX site_categories_category_id_idx ON site_categories(category_id);
-CREATE INDEX site_tags_site_id_idx ON site_tags(site_id);
-CREATE INDEX site_tags_tag_id_idx ON site_tags(tag_id);
-
--- ============================================
--- REAL-TIME SUBSCRIPTIONS
--- ============================================
-ALTER PUBLICATION supabase_realtime ADD TABLE sites;
-ALTER PUBLICATION supabase_realtime ADD TABLE categories;
-ALTER PUBLICATION supabase_realtime ADD TABLE tags;
-```
-
-#### 5. Enable MFA in Supabase
-
-1. Go to **Authentication** → **Providers**
-2. Scroll to **Multi-Factor Authentication**
-3. Enable **Time-based One-time Password (TOTP)**
-4. Save
-
-#### 6. Storage Setup (Avatar Upload)
-
-Run in **Supabase SQL Editor**:
-
-```sql
--- Create avatars bucket
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('avatars', 'avatars', true);
-
--- Allow users to upload their own avatars
-CREATE POLICY "Users can upload own avatar" ON storage.objects
-  FOR INSERT WITH CHECK (
-    bucket_id = 'avatars' AND
-    auth.uid()::text = (storage.foldername(name))[1]
-  );
-
--- Allow users to update their own avatars
-CREATE POLICY "Users can update own avatar" ON storage.objects
-  FOR UPDATE USING (
-    bucket_id = 'avatars' AND
-    auth.uid()::text = (storage.foldername(name))[1]
-  );
-
--- Allow public read access to all avatars
-CREATE POLICY "Public can view avatars" ON storage.objects
-  FOR SELECT USING (bucket_id = 'avatars');
-```
-
-#### 7. Run Development Server
+#### 4. Run Development Server
 
 ```bash
 npm run dev
@@ -500,134 +319,138 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## 📁 Project Structure
 
 ```
+
+
+
 site-organizator/
 ├── components/
-│   ├── categories/              # Category management
-│   │   ├── CategoriesList.js    # List with search, filter, multi-select, pagination
-│   │   ├── CategoryModal.js     # Create/edit category modal
-│   │   ├── InlineEditableName.js # Double-click to rename
-│   │   └── index.js             # Barrel exports
-│   ├── tags/                    # Tag management
-│   │   ├── TagsList.js          # List with search, filter, multi-select, pagination
-│   │   ├── TagModal.js          # Create/edit tag modal
-│   │   └── index.js
-│   ├── sites/                   # Site management
-│   │   ├── SitesList.js         # Responsive card grid with skeleton loading
-│   │   ├── SiteCard.js          # Site card with favicon, badges, animations
-│   │   ├── SiteModal.js         # Create/edit site with AI suggestions
-│   │   ├── FavoritesList.js     # Favorites-only view
-│   │   └── index.js
-│   ├── layout/                  # Layout components
-│   │   ├── Header.js            # Top nav, search, tier badge, avatar
-│   │   ├── Sidebar.js           # Categories, tags, source filters, sort controls
-│   │   ├── MobileToolbar.js     # Bottom toolbar for mobile
-│   │   ├── CategoryColorIndicator.js # Color dot component
-│   │   └── index.js
-│   ├── settings/                # Settings panel sections
-│   │   ├── SettingsPanel.js     # Main settings container
-│   │   ├── AvatarSection.js     # Avatar upload with preview
-│   │   ├── ProfileEditSection.js # Display name editor
-│   │   ├── StatsSection.js      # Stats + link health checker UI
-│   │   ├── ImportExportSection.js # Import/export UI with preview
-│   │   ├── SecuritySection.js   # Password, email, MFA, sessions
-│   │   ├── DangerZoneSection.js # Reset/delete options
-│   │   ├── PasswordModal.js     # Change password modal
-│   │   ├── EmailModal.js        # Change email modal
-│   │   └── MfaModal.js          # MFA enrollment modal
-│   └── ui/                      # Reusable UI components
-│       ├── Button.js            # Button variants
-│       ├── Modal.js             # Modal + confirm dialog
-│       ├── Input.js             # Input component
-│       ├── Badge.js             # Badge component
-│       ├── Icons.js             # SVG icon components
-│       ├── Toast.js             # Toast notifications
-│       ├── UndoToast.js         # 5-second undo countdown toast
-│       ├── CommandMenu.js       # Ctrl+K command palette
-│       ├── OnboardingTour.js    # 13-step guided tour
-│       ├── ServerStatus.js      # Online/offline health indicator
-│       ├── SortButton.js        # Sort toggle button
-│       ├── Pagination.js        # Paginator with keyboard nav
-│       ├── ErrorBoundary.js     # React error boundary
-│       ├── ExportImportModal.js # Export format picker modal
-│       ├── PasswordResetModal.js # Password reset flow
-│       └── index.js
+│ ├── categories/ # Category management
+│ │ ├── CategoriesList.js # List with search, filter, multi-select, pagination
+│ │ ├── CategoryModal.js # Create/edit category modal
+│ │ ├── InlineEditableName.js # Double-click to rename
+│ │ └── index.js # Barrel exports
+│ ├── tags/ # Tag management
+│ │ ├── TagsList.js # List with search, filter, multi-select, pagination
+│ │ ├── TagModal.js # Create/edit tag modal
+│ │ └── index.js
+│ ├── sites/ # Site management
+│ │ ├── SitesList.js # Responsive card grid with skeleton loading
+│ │ ├── SiteCard.js # Site card with favicon, badges, animations
+│ │ ├── SiteModal.js # Create/edit site with AI suggestions
+│ │ ├── FavoritesList.js # Favorites-only view
+│ │ └── index.js
+│ ├── layout/ # Layout components
+│ │ ├── Header.js # Top nav, search, tier badge, avatar
+│ │ ├── Sidebar.js # Categories, tags, source filters, sort controls
+│ │ ├── MobileToolbar.js # Bottom toolbar for mobile
+│ │ ├── CategoryColorIndicator.js # Color dot component
+│ │ └── index.js
+│ ├── settings/ # Settings panel sections
+│ │ ├── SettingsPanel.js # Main settings container
+│ │ ├── AvatarSection.js # Avatar upload with preview
+│ │ ├── ProfileEditSection.js # Display name editor
+│ │ ├── StatsSection.js # Stats + link health checker UI
+│ │ ├── ImportExportSection.js # Import/export UI with preview
+│ │ ├── SecuritySection.js # Password, email, MFA, sessions
+│ │ ├── DangerZoneSection.js # Reset/delete options
+│ │ ├── PasswordModal.js # Change password modal
+│ │ ├── EmailModal.js # Change email modal
+│ │ └── MfaModal.js # MFA enrollment modal
+│ └── ui/ # Reusable UI components
+│ ├── Button.js # Button variants
+│ ├── Modal.js # Modal + confirm dialog
+│ ├── Input.js # Input component
+│ ├── Badge.js # Badge component
+│ ├── Icons.js # SVG icon components
+│ ├── Toast.js # Toast notifications
+│ ├── UndoToast.js # 5-second undo countdown toast
+│ ├── CommandMenu.js # Ctrl+K command palette
+│ ├── OnboardingTour.js # 13-step guided tour
+│ ├── ServerStatus.js # Online/offline health indicator
+│ ├── SortButton.js # Sort toggle button
+│ ├── Pagination.js # Paginator with keyboard nav
+│ ├── ErrorBoundary.js # React error boundary
+│ ├── ExportImportModal.js # Export format picker modal
+│ ├── PasswordResetModal.js # Password reset flow
+│ └── index.js
 ├── context/
-│   ├── AuthContext.js           # Auth state, MFA, session, token refresh
-│   └── DashboardContext.js      # Sites, categories, tags, search, filters, sort, pagination, import, undo
+│ ├── AuthContext.js # Auth state, MFA, session, token refresh
+│ └── DashboardContext.js # Sites, categories, tags, search, filters, sort, pagination, import, undo
 ├── lib/
-│   ├── supabase.js              # Supabase client init
-│   ├── sharedColors.js          # CATEGORY_COLORS & TAG_COLORS palettes
-│   ├── urlPatternUtils.js       # Domain extraction, pattern matching, reverse matching
-│   ├── categorySuggestions.js   # 20+ category patterns for client-side suggestions
-│   ├── tagSuggestions.js        # 40+ tag patterns for client-side suggestions
-│   ├── exportImport.js          # Parse/generate JSON, CSV, HTML, PDF imports
-│   └── tierConfig.js            # Free/Pro/ProMax limits, feature gates, labels
+│ ├── supabase.js # Supabase client init
+│ ├── sharedColors.js # CATEGORY_COLORS & TAG_COLORS palettes
+│ ├── urlPatternUtils.js # Domain extraction, pattern matching, reverse matching
+│ ├── categorySuggestions.js # 20+ category patterns for client-side suggestions
+│ ├── tagSuggestions.js # 40+ tag patterns for client-side suggestions
+│ ├── exportImport.js # Parse/generate JSON, CSV, HTML, PDF imports
+│ └── tierConfig.js # Free/Pro/ProMax limits, feature gates, labels
 ├── pages/
-│   ├── _app.js                  # App wrapper with AuthProvider + error boundary
-│   ├── index.js                 # Landing page (SEO, hero, features, pricing, FAQ)
-│   ├── login.js                 # Login/signup with MFA flow
-│   ├── dashboard.js             # Redirect to /dashboard/sites
-│   ├── dashboard-redirect.js    # Dashboard redirect helper
-│   ├── admin.js                 # Admin panel (overview, users, content, tools)
-│   ├── health.js                # Health check page
-│   ├── dashboard/
-│   │   └── [tab].js             # Main dashboard (sites/favorites/categories/tags/settings tabs)
-│   └── api/
-│       ├── sites.js             # GET (paginated, filtered, sorted) / POST
-│       ├── categories.js        # GET / POST (with tier limit)
-│       ├── tags.js              # GET / POST (with tier limit)
-│       ├── favorites.js         # POST toggle favorite
-│       ├── pinned.js            # POST toggle pinned
-│       ├── bulk-delete.js       # POST bulk delete sites
-│       ├── reset.js             # POST reset all (returns data for undo)
-│       ├── restore.js           # POST restore deleted data (undo)
-│       ├── export.js            # GET export as JSON/CSV/HTML
-│       ├── import.js            # POST bulk import (with tier limit)
-│       ├── stats.js             # GET dashboard statistics
-│       ├── profile.js           # GET / PUT / PATCH user profile
-│       ├── upload-avatar.js     # POST avatar image upload
-│       ├── health.js            # GET server health check
-│       ├── sites/
-│       │   └── [id].js          # GET / PUT / DELETE single site
-│       ├── categories/
-│       │   └── [id].js          # GET / PUT / DELETE single category
-│       ├── category/
-│       │   └── [name]/sites.js  # GET sites by category name
-│       ├── tags/
-│       │   └── [id].js          # GET / PUT / DELETE single tag
-│       ├── ai/
-│       │   └── suggest.js       # POST AI suggestions (GPT-4o-mini)
-│       ├── links/
-│       │   └── check.js         # POST batch link health check
-│       ├── helpers/
-│       │   ├── api-utils.js     # Shared API helpers (auth, headers, batch ops)
-│       │   └── admin-utils.js   # Admin guard helper
-│       └── admin/
-│           ├── stats.js         # GET admin overview stats
-│           ├── delete-user.js   # DELETE user
-│           ├── ban-user.js      # POST ban/unban user
-│           ├── toggle-pro.js    # POST change user tier
-│           ├── export.js        # GET export users/sites CSV
-│           └── check-links.js   # POST global broken links check
-├── Extension/                   # Chrome extension (Manifest V3)
-│   ├── manifest.json            # Extension manifest
-│   ├── popup.html               # Extension popup UI
-│   ├── popup.js                 # Popup logic (save, auth, AI suggestions)
-│   ├── background.js            # Service worker (token refresh)
-│   ├── config.js                # API URL config
-│   └── icons/                   # Extension icons
+│ ├── \_app.js # App wrapper with AuthProvider + error boundary
+│ ├── index.js # Landing page (SEO, hero, features, pricing, FAQ)
+│ ├── login.js # Login/signup with MFA flow
+│ ├── dashboard.js # Redirect to /dashboard/sites
+│ ├── dashboard-redirect.js # Dashboard redirect helper
+│ ├── admin.js # Admin panel (overview, users, content, tools)
+│ ├── health.js # Health check page
+│ ├── dashboard/
+│ │ └── [tab].js # Main dashboard (sites/favorites/categories/tags/settings tabs)
+│ └── api/
+│ ├── sites.js # GET (paginated, filtered, sorted) / POST
+│ ├── categories.js # GET / POST (with tier limit)
+│ ├── tags.js # GET / POST (with tier limit)
+│ ├── favorites.js # POST toggle favorite
+│ ├── pinned.js # POST toggle pinned
+│ ├── bulk-delete.js # POST bulk delete sites
+│ ├── reset.js # POST reset all (returns data for undo)
+│ ├── restore.js # POST restore deleted data (undo)
+│ ├── export.js # GET export as JSON/CSV/HTML
+│ ├── import.js # POST bulk import (with tier limit)
+│ ├── stats.js # GET dashboard statistics
+│ ├── profile.js # GET / PUT / PATCH user profile
+│ ├── upload-avatar.js # POST avatar image upload
+│ ├── health.js # GET server health check
+│ ├── sites/
+│ │ └── [id].js # GET / PUT / DELETE single site
+│ ├── categories/
+│ │ └── [id].js # GET / PUT / DELETE single category
+│ ├── category/
+│ │ └── [name]/sites.js # GET sites by category name
+│ ├── tags/
+│ │ └── [id].js # GET / PUT / DELETE single tag
+│ ├── ai/
+│ │ └── suggest.js # POST AI suggestions (GPT-4o-mini)
+│ ├── links/
+│ │ └── check.js # POST batch link health check
+│ ├── helpers/
+│ │ ├── api-utils.js # Shared API helpers (auth, headers, batch ops)
+│ │ └── admin-utils.js # Admin guard helper
+│ └── admin/
+│ ├── stats.js # GET admin overview stats
+│ ├── delete-user.js # DELETE user
+│ ├── ban-user.js # POST ban/unban user
+│ ├── toggle-pro.js # POST change user tier
+│ ├── export.js # GET export users/sites CSV
+│ └── check-links.js # POST global broken links check
+├── Extension/ # Chrome extension (Manifest V3)
+│ ├── manifest.json # Extension manifest
+│ ├── popup.html # Extension popup UI
+│ ├── popup.js # Popup logic (save, auth, AI suggestions)
+│ ├── background.js # Service worker (token refresh)
+│ ├── config.js # API URL config
+│ └── icons/ # Extension icons
 ├── styles/
-│   └── globals.css              # Tailwind + custom animations + dark theme
+│ └── globals.css # Tailwind + custom animations + dark theme
 ├── public/
-│   ├── manifest.json            # PWA manifest
-│   ├── sw.js                    # Service worker (offline caching)
-│   └── icons/                   # PWA icons (72–512px)
-├── scripts/                     # Build/deploy utility scripts
-├── supabase/                    # Supabase config
-├── tailwind.config.js           # Tailwind custom theme
-├── next.config.js               # Next.js config
-├── netlify.toml                 # Netlify deployment config
+│ ├── manifest.json # PWA manifest
+│ ├── sw.js # Service worker (offline caching)
+│ └── icons/ # PWA icons (72–512px)
+├── scripts/ # Build/deploy utility scripts
+├── supabase/ # Supabase config
+├── tailwind.config.js # Tailwind custom theme
+├── next.config.js # Next.js config
+├── netlify.toml # Netlify deployment config
 └── package.json
+
 ```
 
 ## 🔧 Configuration
@@ -670,7 +493,7 @@ colors: {
    git init
    git add .
    git commit -m "Initial commit"
-   git remote add origin https://github.com/ilkeroguz/site-organizator.git
+   git remote add origin https://github.com/ilkenza/site-organizator.git
    git push -u origin main
    ```
 
@@ -896,7 +719,7 @@ This project is licensed under the **MIT License**.
 
 ### Support
 
-For bugs or feature requests, please [open an issue](https://github.com/ilkeroguz/site-organizator/issues).
+For bugs or feature requests, please [open an issue](https://github.com/ilkenza/site-organizator/issues).
 
 ---
 
@@ -908,8 +731,8 @@ For bugs or feature requests, please [open an issue](https://github.com/ilkerogu
 **Last Updated**: February 11, 2026  
 **Status**: Active Development  
 **License**: MIT  
-**Author**: [@ilkeroguz](https://github.com/ilkeroguz)  
-**Repository**: [github.com/ilkeroguz/site-organizator](https://github.com/ilkeroguz/site-organizator)
+**Author**: [@ilkenza](https://github.com/ilkenza)  
+**Repository**: [https://github.com/Ilkenza/Site-Organizator](https://github.com/Ilkenza/Site-Organizator)
 
 ---
 
