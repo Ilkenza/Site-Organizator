@@ -1,9 +1,12 @@
+import { useState, useRef } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import { SearchIcon, PlusIcon } from '../ui/Icons';
 
 
 export default function MobileToolbar({ onAddClick }) {
     const { activeTab, searchInput, handleSearchInput, clearSearch } = useDashboard();
+    const [hintOpen, setHintOpen] = useState(false);
+    const inputRef = useRef(null);
 
     // Don't show on settings tab or desktop
     if (activeTab === 'settings') return null;
@@ -46,10 +49,13 @@ export default function MobileToolbar({ onAddClick }) {
                         className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-app-text-tertiary"
                     />
                     <input
+                        ref={inputRef}
                         type="text"
-                        placeholder={getPlaceholder()}
+                        placeholder={(activeTab === 'sites' || activeTab === 'favorites') ? 'Search... (try cat: or tag:)' : getPlaceholder()}
                         value={searchInput}
                         onChange={(e) => handleSearchInput(e.target.value)}
+                        onFocus={() => (activeTab === 'sites' || activeTab === 'favorites') && setHintOpen(true)}
+                        onBlur={() => setTimeout(() => setHintOpen(false), 200)}
                         className="w-full pl-10 pr-10 py-2 bg-app-bg-light border border-app-border rounded-lg text-app-text-primary text-sm placeholder-app-text-tertiary focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     />
                     {searchInput && (
@@ -60,6 +66,36 @@ export default function MobileToolbar({ onAddClick }) {
                         >
                             ✕
                         </button>
+                    )}
+                    {hintOpen && !searchInput && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-app-bg-primary border border-app-border rounded-lg shadow-xl z-50 p-2.5">
+                            <p className="text-[10px] font-semibold text-app-text-muted uppercase tracking-wider mb-1.5">Advanced Search</p>
+                            <div className="grid grid-cols-2 gap-1">
+                                {[
+                                    { prefix: 'cat:', hint: 'category' },
+                                    { prefix: 'tag:', hint: 'tag' },
+                                    { prefix: 'desc:', hint: 'description' },
+                                    { prefix: 'fav:', hint: 'yes/no' },
+                                    { prefix: 'pin:', hint: 'yes/no' },
+                                    { prefix: 'price:', hint: 'free/paid' },
+                                ].map(({ prefix, hint }) => (
+                                    <button
+                                        key={prefix}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleSearchInput(prefix);
+                                            setHintOpen(false);
+                                            inputRef.current?.focus();
+                                        }}
+                                        className="flex items-baseline gap-1 px-1.5 py-1 rounded text-left hover:bg-app-bg-light transition-colors"
+                                    >
+                                        <code className="text-xs font-mono text-app-accent font-semibold">{prefix}</code>
+                                        <span className="text-[10px] text-app-text-muted">{hint}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     )}
                 </div>
 

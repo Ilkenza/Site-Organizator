@@ -93,6 +93,7 @@ export default function Sidebar({
         sortOrderTags,
         setSortOrderTags,
         crossFilterCounts,
+        crossFilterReady,
         usageFilterCategories,
         setUsageFilterCategories,
         usageFilterTags,
@@ -378,6 +379,7 @@ export default function Sidebar({
             return `${vc} / ${ownCount}`;
         }
         if (!hasOtherCategoryFilter) return ownCount;
+        if (!crossFilterReady) return ownCount;
         const crossCount = crossFilterCounts.categories[catId] ?? 0;
         return `${crossCount} / ${ownCount}`;
     };
@@ -388,6 +390,7 @@ export default function Sidebar({
             return `${vc} / ${ownCount}`;
         }
         if (!hasOtherTagFilter) return ownCount;
+        if (!crossFilterReady) return ownCount;
         const crossCount = crossFilterCounts.tags[tagId] ?? 0;
         return `${crossCount} / ${ownCount}`;
     };
@@ -400,6 +403,7 @@ export default function Sidebar({
             return `${vc} / ${ownCount}`;
         }
         if (!hasOtherImportSourceFilter) return ownCount;
+        if (!crossFilterReady) return ownCount;
         const crossCount = crossFilterCounts.importSources?.[sourceKey] ?? 0;
         return `${crossCount} / ${ownCount}`;
     };
@@ -420,6 +424,7 @@ export default function Sidebar({
             return `${vc} / ${ownCount}`;
         }
         if (!hasOtherPricingFilter) return ownCount;
+        if (!crossFilterReady) return ownCount;
         const crossCount = crossFilterCounts.pricing?.[pricingKey] ?? 0;
         return `${crossCount} / ${ownCount}`;
     };
@@ -438,6 +443,7 @@ export default function Sidebar({
             return `${vc} / ${ownCount}`;
         }
         if (!hasOtherNeededFilter) return ownCount;
+        if (!crossFilterReady) return ownCount;
         const crossCount = crossFilterCounts.needed?.[key] ?? 0;
         return `${crossCount} / ${ownCount}`;
     };
@@ -807,11 +813,14 @@ export default function Sidebar({
                                 const isActive = selectedSuperCategory === grp.key;
                                 const editObj = grp.isCustom ? grp : buildAutoGroupEdit(grp);
                                 return (
-                                    <button
+                                    <div
                                         key={grp.key}
+                                        role="button"
+                                        tabIndex={0}
                                         onClick={() => handleGroupClick(grp.key)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleGroupClick(grp.key); } }}
                                         onContextMenu={(e) => { e.preventDefault(); setEditingGroup(editObj); setGroupModalOpen(true); }}
-                                        className={`px-0.5 py-1.5 rounded-md text-[10px] font-medium transition-all flex flex-col items-center gap-0.5 border relative group/grp ${isActive ? 'shadow-sm' : 'hover:shadow-md'}`}
+                                        className={`px-0.5 py-1.5 rounded-md text-[10px] font-medium transition-all flex flex-col items-center gap-0.5 border relative group/grp cursor-pointer ${isActive ? 'shadow-sm' : 'hover:shadow-md'}`}
                                         style={{
                                             backgroundColor: isActive ? `${grp.color}20` : '#1A2E4A',
                                             color: isActive ? grp.color : '#8BA4C4',
@@ -834,7 +843,7 @@ export default function Sidebar({
                                                 title="Delete"
                                             >✕</button>
                                         </span>
-                                    </button>
+                                    </div>
                                 );
                             })}
                             {/* Other group for unmatched categories */}
