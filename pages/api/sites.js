@@ -170,14 +170,14 @@ async function handleGet(req, res, cfg, authKey, relKey) {
     const names = String(q.cat_name).split(',').map(n => n.trim()).filter(Boolean);
     if (names.length) {
       try {
-      const catFilter = names.length === 1
-        ? `name=ilike.*${encodeURIComponent(names[0])}*`
-        : `or=(${names.map(n => `name.ilike.*${encodeURIComponent(n)}*`).join(',')})`;
-      const cr = await fetch(`${restUrl(cfg, 'categories')}?select=id&${catFilter}`, { headers: h(cfg, authKey) });
-      if (cr.ok) {
-        const cats = await cr.json();
-        catNameIds = cats.length ? cats.map(c => c.id).filter(Boolean) : [];
-      } else { console.error('cat_name resolve status:', cr.status); catNameIds = []; }
+        const catFilter = names.length === 1
+          ? `name=ilike.*${encodeURIComponent(names[0])}*`
+          : `or=(${names.map(n => `name.ilike.*${encodeURIComponent(n)}*`).join(',')})`;
+        const cr = await fetch(`${restUrl(cfg, 'categories')}?select=id&${catFilter}`, { headers: h(cfg, authKey) });
+        if (cr.ok) {
+          const cats = await cr.json();
+          catNameIds = cats.length ? cats.map(c => c.id).filter(Boolean) : [];
+        } else { console.error('cat_name resolve status:', cr.status); catNameIds = []; }
       } catch (e) { console.error('cat_name fetch error:', e?.cause || e); catNameIds = []; }
     }
   }
@@ -187,14 +187,14 @@ async function handleGet(req, res, cfg, authKey, relKey) {
     const names = String(q.tag_name).split(',').map(n => n.trim()).filter(Boolean);
     if (names.length) {
       try {
-      const tagFilter = names.length === 1
-        ? `name=ilike.*${encodeURIComponent(names[0])}*`
-        : `or=(${names.map(n => `name.ilike.*${encodeURIComponent(n)}*`).join(',')})`;
-      const tr = await fetch(`${restUrl(cfg, 'tags')}?select=id&${tagFilter}`, { headers: h(cfg, authKey) });
-      if (tr.ok) {
-        const tgs = await tr.json();
-        tagNameIds = tgs.length ? tgs.map(t => t.id).filter(Boolean) : [];
-      } else { console.error('tag_name resolve status:', tr.status); tagNameIds = []; }
+        const tagFilter = names.length === 1
+          ? `name=ilike.*${encodeURIComponent(names[0])}*`
+          : `or=(${names.map(n => `name.ilike.*${encodeURIComponent(n)}*`).join(',')})`;
+        const tr = await fetch(`${restUrl(cfg, 'tags')}?select=id&${tagFilter}`, { headers: h(cfg, authKey) });
+        if (tr.ok) {
+          const tgs = await tr.json();
+          tagNameIds = tgs.length ? tgs.map(t => t.id).filter(Boolean) : [];
+        } else { console.error('tag_name resolve status:', tr.status); tagNameIds = []; }
       } catch (e) { console.error('tag_name fetch error:', e?.cause || e); tagNameIds = []; }
     }
   }
