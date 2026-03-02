@@ -482,14 +482,41 @@ export function DashboardProvider({ children }) {
 
     // Cross-filter counts: when multiple filter dimensions are active,
     // shows per-category and per-tag counts intersected with other active filters
-    const [crossFilterCounts, setCrossFilterCounts] = useState({ categories: {}, tags: {} });
+    const [crossFilterCounts, setCrossFilterCounts] = useState({ categories: {}, tags: {}, importSources: {}, pricing: {}, needed: {} });
+    const [crossFilterReady, setCrossFilterReady] = useState(false);
+
+    // Parse advanced search prefixes from the query string
+    // Supported: cat:name, tag:name, fav:yes/no, pin:yes/no, price:free/paid, desc:text
+    const parseSearchPrefixes = useCallback((raw) => {
+        if (!raw) return { text: null, prefixes: {} };
+        const prefixes = {};
+        // Extract quoted or unquoted prefix values
+        const prefixPattern = /\b(cat|tag|fav|pin|price|desc|needed):(?:"([^"]*)"|([^\s]*))/gi;
+        let text = raw.replace(prefixPattern, (_, key, quoted, unquoted) => {
+            const val = (quoted ?? unquoted).trim();
+            const k = key.toLowerCase();
+            if (!prefixes[k]) prefixes[k] = [];
+            prefixes[k].push(val);
+            return '';
+        }).trim() || null;
+        return { text, prefixes };
+    }, []);
 
     // Build query string for current filters (all server-side including import_source)
     const buildSitesQuery = useCallback((page = 1) => {
         const params = new URLSearchParams();
         params.set('limit', SITES_PAGE_SIZE);
         params.set('page', page);
-        if (searchQuery) params.set('q', searchQuery);
+        // Parse prefixes from search
+        const { text, prefixes } = parseSearchPrefixes(searchQuery);
+        if (text) params.set('q', text);
+        if (prefixes.cat) params.set('cat_name', prefixes.cat.join(','));
+        if (prefixes.tag) params.set('tag_name', prefixes.tag.join(','));
+        if (prefixes.desc) params.set('desc', prefixes.desc.join(' '));
+        if (prefixes.fav) params.set('favorites', prefixes.fav[0] === 'yes' ? 'true' : 'false');
+        if (prefixes.pin) params.set('pinned', prefixes.pin[0]);
+        if (prefixes.price) params.set('pricing', prefixes.price[0] === 'free' ? 'fully_free' : prefixes.price[0]);
+        if (prefixes.needed) params.set('needed', prefixes.needed[0] === 'yes' ? 'needed' : 'not_needed');
         if (selectedCategory) params.set('category_id', selectedCategory);
         if (selectedTag) params.set('tag_id', selectedTag);
         if (sortBy) params.set('sort_by', sortBy);
@@ -499,7 +526,7 @@ export function DashboardProvider({ children }) {
         if (selectedPricing) params.set('pricing', selectedPricing);
         if (neededFilterSites && neededFilterSites !== 'all') params.set('needed', neededFilterSites);
         return params.toString();
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, neededFilterSites]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, neededFilterSites, parseSearchPrefixes]);
 
     // Fetch a single page of sites from server (all filters are server-side now)
     const fetchSitesPage = useCallback(async (page = 1) => {
@@ -523,7 +550,16 @@ export function DashboardProvider({ children }) {
             const params = new URLSearchParams();
             params.set('limit', 9999);
             params.set('page', 1);
-            if (searchQuery) params.set('q', searchQuery);
+            // Parse prefixes from search
+            const { text, prefixes } = parseSearchPrefixes(searchQuery);
+            if (text) params.set('q', text);
+            if (prefixes.cat) params.set('cat_name', prefixes.cat.join(','));
+            if (prefixes.tag) params.set('tag_name', prefixes.tag.join(','));
+            if (prefixes.desc) params.set('desc', prefixes.desc.join(' '));
+            if (prefixes.fav) params.set('favorites', prefixes.fav[0] === 'yes' ? 'true' : 'false');
+            if (prefixes.pin) params.set('pinned', prefixes.pin[0]);
+            if (prefixes.price) params.set('pricing', prefixes.price[0] === 'free' ? 'fully_free' : prefixes.price[0]);
+            if (prefixes.needed) params.set('needed', prefixes.needed[0] === 'yes' ? 'needed' : 'not_needed');
             if (selectedCategory) params.set('category_id', selectedCategory);
             if (selectedTag) params.set('tag_id', selectedTag);
             if (sortBy) params.set('sort_by', sortBy);
@@ -543,7 +579,7 @@ export function DashboardProvider({ children }) {
         } catch (err) {
             console.error('Failed to fetch all sites:', err);
         }
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, neededFilterSites]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, neededFilterSites, parseSearchPrefixes]);
 
     // Fetch initial data (categories, tags, first page of sites, sidebar counts)
     const fetchData = useCallback(async () => {
@@ -713,10 +749,13 @@ export function DashboardProvider({ children }) {
 
         if (!hasOtherForCategories && !hasOtherForTags && !hasOtherForImportSources && !hasOtherForPricing && !hasOtherForNeeded) {
             setCrossFilterCounts({ categories: {}, tags: {}, importSources: {}, pricing: {}, needed: {} });
+            setCrossFilterReady(false);
             return;
         }
 
         let cancelled = false;
+        // Mark cross-filter data as stale while fetching
+        setCrossFilterReady(false);
 
         // Debounce to prevent hammering API on rapid filter clicks
         if (crossFilterTimerRef.current) clearTimeout(crossFilterTimerRef.current);
@@ -849,7 +888,10 @@ export function DashboardProvider({ children }) {
                 } catch (e) { console.warn('Cross-filter needed counts failed:', e); }
             }
 
-            if (!cancelled) setCrossFilterCounts(newCounts);
+            if (!cancelled) {
+                setCrossFilterCounts(newCounts);
+                setCrossFilterReady(true);
+            }
         }, 400);
 
         return () => {
@@ -968,6 +1010,20 @@ export function DashboardProvider({ children }) {
         return () => navigator.serviceWorker.removeEventListener('message', handler);
     }, [fetchData, showToast]);
 
+    // Lightweight helper: refresh categories & tags to update site_count
+    const refreshCatTagCounts = useCallback(async () => {
+        try {
+            const [catRes, tagRes] = await Promise.all([
+                fetchAPI('/categories'),
+                fetchAPI('/tags'),
+            ]);
+            const catsData = dedupeById(Array.isArray(catRes) ? catRes : (catRes?.data || []));
+            const tagsData = dedupeById(Array.isArray(tagRes) ? tagRes : (tagRes?.data || []));
+            setCategories(catsData);
+            setTags(tagsData);
+        } catch { /* non-critical */ }
+    }, []);
+
     // Site operations
     const addSite = useCallback(async (siteData) => {
         if (!user) throw new Error('Must be logged in to add a site');
@@ -994,6 +1050,8 @@ export function DashboardProvider({ children }) {
 
             // Re-fetch current page so server-side filters stay accurate
             fetchSitesPage(currentPage).catch(() => { });
+            // Refresh category/tag counts (site may have added/changed associations)
+            refreshCatTagCounts();
 
             return newSite;
         } catch (err) {
@@ -1022,7 +1080,7 @@ export function DashboardProvider({ children }) {
             showToast(`Failed to add site: ${err.message}`, 'error');
             throw err;
         }
-    }, [user, showToast, fetchData, fetchSitesPage, currentPage]);
+    }, [user, showToast, fetchData, fetchSitesPage, currentPage, refreshCatTagCounts]);
 
     const updateSite = useCallback(async (id, siteData) => {
         try {
@@ -1049,6 +1107,8 @@ export function DashboardProvider({ children }) {
             // Re-fetch current page so server-side filters (uncategorized, untagged, etc.)
             // correctly include/exclude this site after the edit
             fetchSitesPage(currentPage).catch(() => { });
+            // Refresh category/tag counts (site may have changed associations)
+            refreshCatTagCounts();
 
             return updated;
         } catch (err) {
@@ -1062,7 +1122,7 @@ export function DashboardProvider({ children }) {
             showToast(`Failed to update site: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast, fetchData, fetchSitesPage, currentPage]);
+    }, [showToast, fetchData, fetchSitesPage, currentPage, refreshCatTagCounts]);
 
     const deleteSite = useCallback(async (id) => {
         try {
@@ -1073,6 +1133,8 @@ export function DashboardProvider({ children }) {
             showToast('Site deleted successfully', 'success');
             // Re-fetch current page to fill the gap
             fetchSitesPage(currentPage).catch(() => { });
+            // Refresh category/tag counts (deleted site's associations are gone)
+            refreshCatTagCounts();
         } catch (err) {
             if (isNetworkError(err)) {
                 setSites(prev => prev.filter(s => s.id !== id));
@@ -1086,7 +1148,7 @@ export function DashboardProvider({ children }) {
             showToast(`Failed to delete site: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast, fetchSitesPage, currentPage]);
+    }, [showToast, fetchSitesPage, currentPage, refreshCatTagCounts]);
 
     // Retry failed relation updates for a site (requires service role key configured)
     const retrySiteRelations = useCallback(async (id) => {
@@ -1143,6 +1205,7 @@ export function DashboardProvider({ children }) {
                 body: JSON.stringify(categoryData)
             });
             const newCategory = response?.data || response;
+            if (newCategory.site_count === undefined) newCategory.site_count = 0;
             setCategories(prev => prev.some(c => c.id === newCategory.id) ? prev : [...prev, newCategory]);
             setStats(prev => ({ ...prev, categories: prev.categories + 1 }));
             showToast(`Category "${newCategory.name}" created successfully`, 'success');
@@ -1170,11 +1233,11 @@ export function DashboardProvider({ children }) {
                 body: JSON.stringify(categoryData)
             });
             const updated = response?.data || response;
-            setCategories(prev => prev.map(c => c.id === id ? updated : c));
+            setCategories(prev => prev.map(c => c.id === id ? { ...updated, site_count: updated.site_count ?? c.site_count ?? 0 } : c));
             // Update all sites that use this category
             setSites(prev => prev.map(site => ({
                 ...site,
-                categories_array: site.categories_array?.map(c => c?.id === id ? updated : c) || []
+                categories_array: site.categories_array?.map(c => c?.id === id ? { ...updated, site_count: updated.site_count ?? c?.site_count ?? 0 } : c) || []
             })));
             showToast(`Category "${updated.name}" updated successfully`, 'success');
             return updated;
@@ -1243,6 +1306,7 @@ export function DashboardProvider({ children }) {
                 body: JSON.stringify(tagData)
             });
             const newTag = response?.data || response;
+            if (newTag.site_count === undefined) newTag.site_count = 0;
             setTags(prev => prev.some(t => t.id === newTag.id) ? prev : [...prev, newTag]);
             setStats(prev => ({ ...prev, tags: prev.tags + 1 }));
             showToast(`Tag "${newTag.name}" created successfully`, 'success');
@@ -1270,11 +1334,11 @@ export function DashboardProvider({ children }) {
                 body: JSON.stringify(tagData)
             });
             const updated = response?.data || response;
-            setTags(prev => prev.map(t => t.id === id ? updated : t));
+            setTags(prev => prev.map(t => t.id === id ? { ...updated, site_count: updated.site_count ?? t.site_count ?? 0 } : t));
             // Update all sites that use this tag
             setSites(prev => prev.map(site => ({
                 ...site,
-                tags_array: site.tags_array?.map(t => t?.id === id ? updated : t) || []
+                tags_array: site.tags_array?.map(t => t?.id === id ? { ...updated, site_count: updated.site_count ?? t?.site_count ?? 0 } : t) || []
             })));
             showToast(`Tag "${updated.name}" updated successfully`, 'success');
             return updated;
@@ -1361,6 +1425,7 @@ export function DashboardProvider({ children }) {
 
         // Cross-filter counts for sidebar stacked display
         crossFilterCounts,
+        crossFilterReady,
 
         // Filters
         searchQuery,
@@ -1368,6 +1433,7 @@ export function DashboardProvider({ children }) {
         handleSearchInput,
         clearSearch,
         setSearchQuery,
+        parseSearchPrefixes,
         selectedCategory,
         setSelectedCategory,
         selectedTag,

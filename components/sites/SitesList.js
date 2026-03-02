@@ -12,7 +12,9 @@ export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new 
     const {
         filteredSites: rawFilteredSites, loading, searchQuery, selectedCategory, selectedTag, categories,
         currentPage, totalPages, totalSitesCount, fetchSitesPage, fetchAllSites, SITES_PAGE_SIZE,
-        selectedImportSource, neededFilterSites, initialDataLoaded
+        selectedImportSource, neededFilterSites, initialDataLoaded,
+        // For advanced search prefix parsing
+        parseSearchPrefixes
     } = useDashboard();
 
     // Client-side exclusion filter — sites use categories_array/tags_array (objects with .id)
@@ -148,6 +150,73 @@ export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new 
     if (filteredSites.length === 0) {
         const hasFilters = searchQuery || selectedCategory || selectedTag || selectedImportSource || (neededFilterSites && neededFilterSites !== 'all') || needsClientFilter;
 
+        // Advanced search prefix detection
+        let advancedPrefix = null;
+        let advancedValue = null;
+        if (searchQuery && typeof parseSearchPrefixes === 'function') {
+            const { prefixes } = parseSearchPrefixes(searchQuery);
+            if (prefixes) {
+                if (prefixes.cat && prefixes.cat.length > 0) {
+                    advancedPrefix = 'category';
+                    advancedValue = prefixes.cat[0];
+                } else if (prefixes.tag && prefixes.tag.length > 0) {
+                    advancedPrefix = 'tag';
+                    advancedValue = prefixes.tag[0];
+                } else if (prefixes.desc && prefixes.desc.length > 0) {
+                    advancedPrefix = 'description';
+                    advancedValue = prefixes.desc[0];
+                } else if (prefixes.fav && prefixes.fav.length > 0) {
+                    advancedPrefix = 'favorite';
+                } else if (prefixes.pin && prefixes.pin.length > 0) {
+                    advancedPrefix = 'pinned';
+                } else if (prefixes.price && prefixes.price.length > 0) {
+                    advancedPrefix = 'pricing';
+                } else if (prefixes.needed && prefixes.needed.length > 0) {
+                    advancedPrefix = 'needed';
+                }
+            }
+        }
+
+        let emptyTitle = 'No sites found';
+        let emptyDesc = 'Try adjusting your search or filters to find what you\'re looking for.';
+        if (advancedPrefix) {
+            switch (advancedPrefix) {
+                case 'category':
+                    emptyTitle = 'No sites found for this category';
+                    emptyDesc = advancedValue ? `No sites match the category "${advancedValue}".` : 'No sites match the selected category.';
+                    break;
+                case 'tag':
+                    emptyTitle = 'No sites found for this tag';
+                    emptyDesc = advancedValue ? `No sites match the tag "${advancedValue}".` : 'No sites match the selected tag.';
+                    break;
+                case 'description':
+                    emptyTitle = 'No sites found for this description';
+                    emptyDesc = advancedValue ? `No sites match the description "${advancedValue}".` : 'No sites match the description.';
+                    break;
+                case 'favorite':
+                    emptyTitle = 'No favorite sites found';
+                    emptyDesc = 'No sites are marked as favorite for this search.';
+                    break;
+                case 'pinned':
+                    emptyTitle = 'No pinned sites found';
+                    emptyDesc = 'No sites are pinned for this search.';
+                    break;
+                case 'pricing':
+                    emptyTitle = 'No sites found for this pricing';
+                    emptyDesc = 'No sites match the selected pricing filter.';
+                    break;
+                case 'needed':
+                    emptyTitle = 'No needed sites found';
+                    emptyDesc = 'No sites match the needed filter.';
+                    break;
+                default:
+                    break;
+            }
+        } else if (!hasFilters) {
+            emptyTitle = 'No sites yet';
+            emptyDesc = 'Add your first site to start organizing your bookmarks and favorite websites.';
+        }
+
         return (
             <div className="flex flex-col items-center justify-center py-16 px-4">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-app-bg-light flex items-center justify-center mb-4">
@@ -158,12 +227,10 @@ export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new 
                     )}
                 </div>
                 <h3 className="text-lg sm:text-xl font-semibold text-app-text-primary mb-2">
-                    {hasFilters ? 'No sites found' : 'No sites yet'}
+                    {emptyTitle}
                 </h3>
                 <p className="text-app-text-secondary text-center max-w-md">
-                    {hasFilters
-                        ? 'Try adjusting your search or filters to find what you\'re looking for.'
-                        : 'Add your first site to start organizing your bookmarks and favorite websites.'}
+                    {emptyDesc}
                 </p>
             </div>
         );

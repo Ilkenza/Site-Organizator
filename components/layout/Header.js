@@ -163,7 +163,9 @@ export default function Header({ onAddClick, onMenuClick }) {
     // User menu state and ref
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const userMenuRef = useRef(null);
-    // Mobile search state
+    // Search hint state
+    const [searchHintOpen, setSearchHintOpen] = useState(false);
+    const searchHintRef = useRef(null);
     // More options menu for mobile
     const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
     const moreOptionsRef = useRef(null);
@@ -514,7 +516,74 @@ export default function Header({ onAddClick, onMenuClick }) {
                         )}
 
                         {/* Desktop Search - hidden on mobile and settings tab */}
-                        {activeTab !== 'settings' && (
+                        {activeTab !== 'settings' && (activeTab === 'sites' || activeTab === 'favorites') && (
+                            <div className="flex-1 min-w-0 max-w-xs sm:max-w-md hidden md:block" data-tour="search-bar" ref={searchHintRef}>
+                                <div className="relative">
+                                    <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-app-text-tertiary" />
+                                    <input
+                                        ref={searchInputRef}
+                                        type="text"
+                                        placeholder="Search... (try cat: or tag:)"
+                                        value={searchInput}
+                                        onChange={(e) => handleSearchInput(e.target.value)}
+                                        onFocus={() => setSearchHintOpen(true)}
+                                        onBlur={() => setTimeout(() => setSearchHintOpen(false), 200)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Escape') {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                clearSearch();
+                                                setSearchHintOpen(false);
+                                                e.target.blur();
+                                            }
+                                        }}
+                                        className="w-full pl-10 pr-4 py-2 bg-app-bg-light border border-app-border rounded-lg text-app-text-primary text-sm placeholder-app-text-tertiary focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    />
+                                    {searchInput && (
+                                        <button
+                                            onClick={() => clearSearch()}
+                                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-app-text-tertiary hover:text-app-text-primary transition-colors"
+                                            title="Clear search"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                    {/* Advanced search hints dropdown */}
+                                    {searchHintOpen && !searchInput && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-app-bg-primary border border-app-border rounded-lg shadow-xl z-50 p-3">
+                                            <p className="text-[10px] font-semibold text-app-text-muted uppercase tracking-wider mb-2">Advanced Search</p>
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                {[
+                                                    { prefix: 'cat:', hint: 'category name', example: 'cat:tools' },
+                                                    { prefix: 'tag:', hint: 'tag name', example: 'tag:free' },
+                                                    { prefix: 'desc:', hint: 'description', example: 'desc:api' },
+                                                    { prefix: 'fav:', hint: 'yes / no', example: 'fav:yes' },
+                                                    { prefix: 'pin:', hint: 'yes / no', example: 'pin:yes' },
+                                                    { prefix: 'price:', hint: 'free / paid / freemium', example: 'price:free' },
+                                                ].map(({ prefix, hint }) => (
+                                                    <button
+                                                        key={prefix}
+                                                        type="button"
+                                                        onMouseDown={(e) => {
+                                                            e.preventDefault();
+                                                            handleSearchInput(prefix);
+                                                            setSearchHintOpen(false);
+                                                            searchInputRef.current?.focus();
+                                                        }}
+                                                        className="flex items-baseline gap-1.5 px-2 py-1.5 rounded text-left hover:bg-app-bg-light transition-colors group"
+                                                    >
+                                                        <code className="text-xs font-mono text-app-accent font-semibold">{prefix}</code>
+                                                        <span className="text-[10px] text-app-text-muted group-hover:text-app-text-secondary truncate">{hint}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-[10px] text-app-text-muted mt-2 border-t border-app-border pt-2">Combine: <code className="text-app-accent">cat:tools tag:free react</code></p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {activeTab !== 'settings' && activeTab !== 'sites' && activeTab !== 'favorites' && (
                             <div className="flex-1 min-w-0 max-w-xs sm:max-w-md hidden md:block" data-tour="search-bar">
                                 <div className="relative">
                                     <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-app-text-tertiary" />
@@ -522,13 +591,11 @@ export default function Header({ onAddClick, onMenuClick }) {
                                         ref={searchInputRef}
                                         type="text"
                                         placeholder={
-                                            activeTab === 'sites'
-                                                ? 'Search sites...'
-                                                : activeTab === 'categories'
-                                                    ? 'Search categories...'
-                                                    : activeTab === 'tags'
-                                                        ? 'Search tags...'
-                                                        : 'Search...'
+                                            activeTab === 'categories'
+                                                ? 'Search categories...'
+                                                : activeTab === 'tags'
+                                                    ? 'Search tags...'
+                                                    : 'Search...'
                                         }
                                         value={searchInput}
                                         onChange={(e) => handleSearchInput(e.target.value)}

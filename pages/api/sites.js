@@ -128,9 +128,11 @@ function buildListUrl(cfg, limit, offset, f) {
   const qf = [];
 
   if (f.isUncategorized) { select += ',site_categories!left(category_id)'; qf.push('site_categories=is.null'); }
+  else if (f.catNameIds) { select += ',site_categories!inner(category_id)'; qf.push(`site_categories.category_id=in.(${f.catNameIds.join(',')})`); }
   else if (f.categoryId) { select += ',site_categories!inner(category_id)'; qf.push(`site_categories.category_id=eq.${encodeURIComponent(f.categoryId)}`); }
 
   if (f.isUntagged) { select += ',site_tags!left(tag_id)'; qf.push('site_tags=is.null'); }
+  else if (f.tagNameIds) { select += ',site_tags!inner(tag_id)'; qf.push(`site_tags.tag_id=in.(${f.tagNameIds.join(',')})`); }
   else if (f.tagId) { select += ',site_tags!inner(tag_id)'; qf.push(`site_tags.tag_id=eq.${encodeURIComponent(f.tagId)}`); }
 
   const validSorts = ['created_at', 'updated_at', 'name', 'url', 'pricing'];
@@ -139,8 +141,10 @@ function buildListUrl(cfg, limit, offset, f) {
 
   let url = `${restUrl(cfg, 'sites')}?select=${encodeURIComponent(select)}&order=is_pinned.desc,${sort}.${order}&limit=${limit}&offset=${offset}`;
   if (f.favoritesOnly) url += '&is_favorite=eq.true';
+  if (f.pinnedOnly) url += '&is_pinned=eq.true';
   qf.forEach(q => { url += `&${q}`; });
   if (f.searchQuery) { const e = encodeURIComponent(f.searchQuery); url += `&or=(name.ilike.*${e}*,url.ilike.*${e}*)`; }
+  if (f.descQuery) { const e = encodeURIComponent(f.descQuery); url += `&description=ilike.*${e}*`; }
   if (f.importSource) url += `&import_source=eq.${encodeURIComponent(f.importSource)}`;
   if (f.pricing) url += `&pricing=eq.${encodeURIComponent(f.pricing)}`;
   if (f.needed === 'needed') url += '&is_needed=eq.true';
@@ -159,13 +163,58 @@ async function handleGet(req, res, cfg, authKey, relKey) {
   if (page <= 0) page = 1;
   const offset = (page - 1) * limit;
 
+  // Resolve cat_name / tag_name prefixes to IDs
+  // Same approach as sidebar: resolve name → IDs, then use the same !inner join filter
+  let catNameIds = null;
+  if (q.cat_name) {
+    const names = String(q.cat_name).split(',').map(n => n.trim()).filter(Boolean);
+    if (names.length) {
+      try {
+      const catFilter = names.length === 1
+        ? `name=ilike.*${encodeURIComponent(names[0])}*`
+        : `or=(${names.map(n => `name.ilike.*${encodeURIComponent(n)}*`).join(',')})`;
+      const cr = await fetch(`${restUrl(cfg, 'categories')}?select=id&${catFilter}`, { headers: h(cfg, authKey) });
+      if (cr.ok) {
+        const cats = await cr.json();
+        catNameIds = cats.length ? cats.map(c => c.id).filter(Boolean) : [];
+      } else { console.error('cat_name resolve status:', cr.status); catNameIds = []; }
+      } catch (e) { console.error('cat_name fetch error:', e?.cause || e); catNameIds = []; }
+    }
+  }
+
+  let tagNameIds = null;
+  if (q.tag_name) {
+    const names = String(q.tag_name).split(',').map(n => n.trim()).filter(Boolean);
+    if (names.length) {
+      try {
+      const tagFilter = names.length === 1
+        ? `name=ilike.*${encodeURIComponent(names[0])}*`
+        : `or=(${names.map(n => `name.ilike.*${encodeURIComponent(n)}*`).join(',')})`;
+      const tr = await fetch(`${restUrl(cfg, 'tags')}?select=id&${tagFilter}`, { headers: h(cfg, authKey) });
+      if (tr.ok) {
+        const tgs = await tr.json();
+        tagNameIds = tgs.length ? tgs.map(t => t.id).filter(Boolean) : [];
+      } else { console.error('tag_name resolve status:', tr.status); tagNameIds = []; }
+      } catch (e) { console.error('tag_name fetch error:', e?.cause || e); tagNameIds = []; }
+    }
+  }
+
+  // If prefix search found no matching categories/tags, return empty immediately
+  if ((catNameIds && catNameIds.length === 0) || (tagNameIds && tagNameIds.length === 0)) {
+    return sendOk(res, { data: [], totalCount: 0 });
+  }
+
   const filters = {
     searchQuery: q.q ? String(q.q).trim() : null,
+    descQuery: q.desc ? String(q.desc).trim() : null,
     categoryId: q.category_id && q.category_id !== 'uncategorized' ? q.category_id : null,
+    catNameIds,
     tagId: q.tag_id && q.tag_id !== 'untagged' ? q.tag_id : null,
+    tagNameIds,
     sortBy: q.sort_by || 'created_at',
     sortOrder: q.sort_order || 'desc',
     favoritesOnly: q.favorites === 'true',
+    pinnedOnly: q.pinned === 'yes',
     isUncategorized: q.category_id === 'uncategorized',
     isUntagged: q.tag_id === 'untagged',
     importSource: q.import_source || null,
@@ -174,8 +223,15 @@ async function handleGet(req, res, cfg, authKey, relKey) {
   };
 
   const url = buildListUrl(cfg, limit, offset, filters);
-  const r = await fetch(url, { headers: { ...h(cfg, authKey), Prefer: 'count=exact' } });
-  if (!r.ok) throw new Error(await r.text());
+  console.log('[sites GET] URL:', url.replace(/apikey=[^&]+/, 'apikey=***').replace(/Bearer [^ ]+/, 'Bearer ***'));
+  let r;
+  try {
+    r = await fetch(url, { headers: { ...h(cfg, authKey), Prefer: 'count=exact' } });
+  } catch (fetchErr) {
+    console.error('[sites GET] fetch threw:', fetchErr?.cause || fetchErr);
+    throw fetchErr;
+  }
+  if (!r.ok) { const body = await r.text(); console.error(`PostgREST ${r.status}:`, body); throw new Error(body); }
   const sites = await r.json();
   const crh = r.headers.get('content-range');
   let total = crh ? parseInt(crh.match(/\/(\d+)/)?.[1], 10) : null;
@@ -197,15 +253,17 @@ async function handleGet(req, res, cfg, authKey, relKey) {
 
   const siteIds = sites.map(s => s.id);
 
-  // IDs mode
+  // IDs mode — build maps directly from junction rows (no embedded objects needed)
   if (fieldsMode === 'ids') {
     const scData = await batchFetchJunction(cfg, 'site_categories', 'category_id', siteIds, relKey);
     const stData = await batchFetchJunction(cfg, 'site_tags', 'tag_id', siteIds, relKey);
-    const { cMap, tMap } = buildRelMaps(scData, stData);
+    const cMap = new Map(), tMap = new Map();
+    for (const sc of scData) { if (sc.category_id) { const a = cMap.get(sc.site_id) || []; a.push(sc.category_id); cMap.set(sc.site_id, a); } }
+    for (const st of stData) { if (st.tag_id) { const a = tMap.get(st.site_id) || []; a.push(st.tag_id); tMap.set(st.site_id, a); } }
     const data = sites.map(s => ({
       id: s.id, url: s.url,
-      category_ids: (cMap.get(s.id) || []).map(c => c.id).filter(Boolean),
-      tag_ids: (tMap.get(s.id) || []).map(t => t.id).filter(Boolean),
+      category_ids: cMap.get(s.id) || [],
+      tag_ids: tMap.get(s.id) || [],
     }));
     return sendOk(res, { data, totalCount: total });
   }
@@ -301,7 +359,8 @@ export default async function handler(req, res) {
     if (req.method === 'POST') return await handlePost(req, res, cfg, authKey, relKey);
     return sendError(res, HTTP.BAD_REQUEST, 'Only GET and POST are allowed');
   } catch (err) {
-    console.error('Unhandled error in sites API:', err);
-    return sendError(res, HTTP.INTERNAL_ERROR, String(err));
+    const cause = err?.cause ? ` | cause: ${err.cause?.code || err.cause?.message || err.cause}` : '';
+    console.error('Unhandled error in sites API:', String(err) + cause, err?.cause || '');
+    return sendError(res, HTTP.INTERNAL_ERROR, String(err) + cause);
   }
 }
