@@ -1,10 +1,13 @@
-import { useCallback, useState, useMemo } from 'react';
+import { useCallback, useState, useMemo, useEffect } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import { SpinnerIcon, GlobeIcon, FolderIcon, TagIcon, TrashIcon, WarningIcon, ChevronDownIcon } from '../ui/Icons';
 import { fetchAPI } from '../../lib/supabase';
 import { extractDomain } from '../../lib/urlPatternUtils';
 
 const PAGE_LIMIT = 5000;
+
+// Module-level cache — survives component unmount/remount (tab switches)
+const _cache = { results: null, similarCategories: [], similarTags: [], catTagScanned: false };
 
 // ── URL normalization ───────────────────────────────────────────────────────
 // Tracking / analytics params to strip
@@ -24,7 +27,6 @@ function normalizeUrl(url) {
         const parsed = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
         const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
         const path = parsed.pathname.replace(/\/+$/, '') || '';
-        // Strip junk query params, keep meaningful ones
         const cleaned = new URLSearchParams();
         for (const [k, v] of parsed.searchParams) {
             if (!JUNK_PARAMS.has(k.toLowerCase())) cleaned.set(k, v);
@@ -36,17 +38,14 @@ function normalizeUrl(url) {
     }
 }
 
-// Extract base domain name without TLD (e.g. "fmoviesz" from "fmoviesz.to")
 function extractBaseDomain(url) {
     try {
         const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
         const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
         const parts = host.split('.');
-        // Handle subdomains like "ww4.fmovies.co" → "fmovies"
         if (parts.length >= 3 && /^(ww\d+|m|app|web|api|cdn|static)$/.test(parts[0])) parts.shift();
-        // Remove TLD(s)
-        if (parts.length >= 2) parts.pop(); // remove .com/.to/.sx
-        if (parts.length >= 2 && parts[parts.length - 1].length <= 3) parts.pop(); // remove .co from .co.uk
+        if (parts.length >= 2) parts.pop();
+        if (parts.length >= 2 && parts[parts.length - 1].length <= 3) parts.pop();
         return parts.join('.') || host;
     } catch { return ''; }
 }
@@ -215,19 +214,26 @@ function SeverityBadge({ count }) {
 }
 
 export default function DuplicateDetectionSection() {
-    const { categories, tags, deleteSite, deleteCategory, deleteTag } = useDashboard();
+    const { categories, tags, deleteCategory, deleteTag } = useDashboard();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [results, setResults] = useState(null); // { urlGroups, domainGroups, baseDomainGroups, nameGroups }
+    // Restore from cache on mount
+    const [results, setResults] = useState(_cache.results);
     const [showDomains, setShowDomains] = useState(true);
     const [showBaseDomains, setShowBaseDomains] = useState(true);
     const [showSiteNames, setShowSiteNames] = useState(true);
-    // Similar categories/tags (fuzzy)
-    const [similarCategories, setSimilarCategories] = useState([]);
-    const [similarTags, setSimilarTags] = useState([]);
-    const [catTagScanned, setCatTagScanned] = useState(false);
+    // Similar categories/tags (fuzzy) — restored from cache
+    const [similarCategories, setSimilarCategories] = useState(_cache.similarCategories);
+    const [similarTags, setSimilarTags] = useState(_cache.similarTags);
+    const [catTagScanned, setCatTagScanned] = useState(_cache.catTagScanned);
     // Deleting state
     const [deleting, setDeleting] = useState(new Set());
+
+    // Sync state to module cache so it persists across tab switches
+    useEffect(() => { _cache.results = results; }, [results]);
+    useEffect(() => { _cache.similarCategories = similarCategories; }, [similarCategories]);
+    useEffect(() => { _cache.similarTags = similarTags; }, [similarTags]);
+    useEffect(() => { _cache.catTagScanned = catTagScanned; }, [catTagScanned]);
 
     const scanDuplicates = useCallback(async () => {
         setLoading(true);
@@ -275,13 +281,18 @@ export default function DuplicateDetectionSection() {
         if (deleting.has(id)) return;
         setDeleting(prev => new Set(prev).add(id));
         try {
-            await deleteSite(id);
-            // Remove from results
+            // Call API directly — avoid context deleteSite which triggers fetchSitesPage
+            // and overwrites the sites list with current search filters
+            await fetchAPI(`/sites/${id}`, { method: 'DELETE' });
+            // Don't call setSites/setStats/setTotalSitesCount here — the sites list
+            // will re-fetch correctly when the user navigates back to the Sites tab.
+            // Calling setSites here would show a stale filtered result.
+            // Remove from scan results — keep groups even if 1 site remains (shows as resolved)
             setResults(prev => {
                 if (!prev) return prev;
                 const remove = (groups) => groups
                     .map(g => ({ ...g, sites: g.sites.filter(s => s.id !== id) }))
-                    .filter(g => g.sites.length > 1);
+                    .filter(g => g.sites.length >= 1);
                 return {
                     ...prev,
                     urlGroups: remove(prev.urlGroups),
@@ -290,9 +301,11 @@ export default function DuplicateDetectionSection() {
                     nameGroups: remove(prev.nameGroups),
                 };
             });
-        } catch { /* toast already shown by deleteSite */ }
+        } catch (_err) {
+            // Silently handle — site may have already been deleted
+        }
         setDeleting(prev => { const n = new Set(prev); n.delete(id); return n; });
-    }, [deleteSite, deleting]);
+    }, [deleting]);
 
     const handleDeleteCategory = useCallback(async (id) => {
         if (deleting.has(id)) return;
@@ -633,9 +646,13 @@ export default function DuplicateDetectionSection() {
 // ── Site group card with delete buttons ─────────────────────────────────────
 
 function SiteGroupCard({ group, label, deleting, onDelete }) {
+    const resolved = group.sites.length <= 1;
     return (
-        <div className="bg-app-bg-dark/50 border border-app-border rounded-lg p-3">
-            <div className="text-xs text-app-text-secondary mb-1.5 font-medium truncate">{label} <span className="text-app-text-tertiary">({group.sites.length})</span></div>
+        <div className={`border rounded-lg p-3 ${resolved ? 'bg-green-500/5 border-green-500/20 opacity-60' : 'bg-app-bg-dark/50 border-app-border'}`}>
+            <div className="text-xs text-app-text-secondary mb-1.5 font-medium truncate flex items-center gap-1.5">
+                {label} <span className="text-app-text-tertiary">({group.sites.length})</span>
+                {resolved && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium">Resolved</span>}
+            </div>
             <div className="space-y-1">
                 {group.sites.map(site => (
                     <div key={site.id} className="flex items-center gap-2 group/row">
@@ -651,14 +668,16 @@ function SiteGroupCard({ group, label, deleting, onDelete }) {
                         {site.is_needed && (
                             <span className="text-[9px] px-1 py-0.5 rounded bg-green-500/20 text-green-400 flex-shrink-0">needed</span>
                         )}
-                        <button
-                            onClick={() => onDelete(site.id, site.name)}
-                            disabled={deleting.has(site.id)}
-                            className="opacity-0 group-hover/row:opacity-100 transition-opacity p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-app-text-tertiary flex-shrink-0"
-                            title={`Delete "${site.name}"`}
-                        >
-                            {deleting.has(site.id) ? <SpinnerIcon className="w-3.5 h-3.5 animate-spin" /> : <TrashIcon className="w-3.5 h-3.5" />}
-                        </button>
+                        {!resolved && (
+                            <button
+                                onClick={() => onDelete(site.id, site.name)}
+                                disabled={deleting.has(site.id)}
+                                className="opacity-0 group-hover/row:opacity-100 transition-opacity p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-app-text-tertiary flex-shrink-0"
+                                title={`Delete "${site.name}"`}
+                            >
+                                {deleting.has(site.id) ? <SpinnerIcon className="w-3.5 h-3.5 animate-spin" /> : <TrashIcon className="w-3.5 h-3.5" />}
+                            </button>
+                        )}
                     </div>
                 ))}
             </div>
