@@ -36,7 +36,7 @@ function DashboardContent() {
         fetchData,
         _loading,
         error,
-        deleteSite,
+        deleteSite: _deleteSite,
         addSite,
         updateSite,
         deleteCategory,
@@ -290,7 +290,11 @@ function DashboardContent() {
             pendingDeleteRef.current = null;
             try {
                 switch (type) {
-                    case 'site': await deleteSite(item.id); break;
+                    case 'site':
+                        // Call API directly — avoid context deleteSite which triggers
+                        // fetchSitesPage and re-runs the active search query
+                        await fetchAPI(`/sites/${item.id}`, { method: 'DELETE' });
+                        break;
                     case 'category': await deleteCategory(item.id); break;
                     case 'tag': await deleteTag(item.id); break;
                 }

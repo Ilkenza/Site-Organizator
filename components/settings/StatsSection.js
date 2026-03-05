@@ -219,7 +219,7 @@ export default function StatsSection({ user, activeTab, showToast }) {
                                 {(stats.pricingDistribution || []).length === 0 && !loadingStats && (
                                     <div className="text-xs text-app-text-muted">No pricing data yet.</div>
                                 )}
-                                {(stats.pricingDistribution || []).map(item => {
+                                {(stats.pricingDistribution || []).filter(item => item.key !== 'unknown').map(item => {
                                     const meta = PRICING_META[item.key] || {};
                                     return (
                                         <div key={item.key} className="flex items-center justify-between text-xs">
@@ -265,12 +265,6 @@ export default function StatsSection({ user, activeTab, showToast }) {
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-app-text-secondary">Last month</span>
                                     <span className="text-sm font-semibold text-app-text-secondary">{loadingStats ? '…' : stats.addedLastMonth}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs text-app-text-secondary">Delta</span>
-                                    <span className={`text-sm font-semibold ${stats.addedThisMonth - stats.addedLastMonth > 0 ? 'text-green-400' : stats.addedThisMonth - stats.addedLastMonth < 0 ? 'text-red-400' : 'text-app-text-tertiary'}`}>
-                                        {loadingStats ? '…' : (stats.addedThisMonth - stats.addedLastMonth === 0 ? 'No change' : `${stats.addedThisMonth - stats.addedLastMonth > 0 ? '+' : ''}${stats.addedThisMonth - stats.addedLastMonth}`)}
-                                    </span>
                                 </div>
                             </div>
                         </div>

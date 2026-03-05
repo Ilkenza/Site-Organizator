@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { fetchAPI } from '../../lib/supabase';
 import { useDashboard } from '../../context/DashboardContext';
+import { useAuth } from '../../context/AuthContext';
 import { ConfirmModal } from '../ui/Modal';
 import Modal from '../ui/Modal';
 import { TrashIcon, WarningIcon, LogoutIcon } from '../ui/Icons';
@@ -62,8 +63,14 @@ export default function DangerZoneSection({ onDeleteComplete, signOut }) {
         stats, totalSitesCount,
         fetchData, showToast,
     } = useDashboard();
+    const { user } = useAuth();
 
     const [confirmType, setConfirmType] = useState(null);
+    // Password verification for destructive actions
+    const [passwordPrompt, setPasswordPrompt] = useState(null); // { action: 'reset'|'delete-account' }
+    const [password, setPassword] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+    const [verifying, setVerifying] = useState(false);
 
     // Delete account state
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -71,6 +78,30 @@ export default function DangerZoneSection({ onDeleteComplete, signOut }) {
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
     const [deleteSuccessModal, setDeleteSuccessModal] = useState(false);
     const [deleteErrorModal, setDeleteErrorModal] = useState({ isOpen: false, message: '' });
+
+    // Verify password before proceeding with destructive action
+    const verifyPassword = async (onSuccess) => {
+        if (!password) {
+            setPasswordError('Password is required');
+            return;
+        }
+        setVerifying(true);
+        setPasswordError('');
+        try {
+            const { error } = await supabase.auth.signInWithPassword({
+                email: user?.email,
+                password,
+            });
+            if (error) throw error;
+            setPasswordPrompt(null);
+            setPassword('');
+            onSuccess();
+        } catch (err) {
+            setPasswordError(err.message || 'Incorrect password');
+        } finally {
+            setVerifying(false);
+        }
+    };
 
     const activeOption = RESET_OPTIONS.find(o => o.type === confirmType);
 
@@ -174,7 +205,11 @@ export default function DangerZoneSection({ onDeleteComplete, signOut }) {
                                         </div>
                                     </div>
                                     <button
-                                        onClick={() => setConfirmType(option.type)}
+                                        onClick={() => {
+                                            setPasswordPrompt({ action: 'reset', type: option.type });
+                                            setPassword('');
+                                            setPasswordError('');
+                                        }}
                                         className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors flex-shrink-0 ${c.border} ${c.text} ${c.hoverBg} disabled:opacity-50`}
                                     >
                                         {option.type === 'all' ? 'Reset' : 'Delete'}
@@ -220,7 +255,11 @@ export default function DangerZoneSection({ onDeleteComplete, signOut }) {
                                 </div>
                             </div>
                             <button
-                                onClick={() => setDeleteModalOpen(true)}
+                                onClick={() => {
+                                    setPasswordPrompt({ action: 'delete-account' });
+                                    setPassword('');
+                                    setPasswordError('');
+                                }}
                                 className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors flex-shrink-0"
                             >
                                 Delete
@@ -229,6 +268,69 @@ export default function DangerZoneSection({ onDeleteComplete, signOut }) {
                     </div>
                 </div>
             </div>
+
+            {/* Password Verification Modal */}
+            <Modal
+                isOpen={!!passwordPrompt}
+                onClose={() => { setPasswordPrompt(null); setPassword(''); setPasswordError(''); }}
+                title="Verify Password"
+            >
+                <div className="space-y-4">
+                    <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
+                        <WarningIcon className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-app-text-secondary">
+                            {passwordPrompt?.action === 'delete-account'
+                                ? 'Enter your password to proceed with account deletion.'
+                                : `Enter your password to confirm this destructive action.`
+                            }
+                        </p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-app-text-secondary mb-2">Password</label>
+                        <input
+                            type="password"
+                            value={password}
+                            onChange={(e) => { setPassword(e.target.value); setPasswordError(''); }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    const prompt = passwordPrompt;
+                                    if (prompt?.action === 'delete-account') {
+                                        verifyPassword(() => setDeleteModalOpen(true));
+                                    } else if (prompt?.action === 'reset') {
+                                        verifyPassword(() => setConfirmType(prompt.type));
+                                    }
+                                }
+                            }}
+                            placeholder="Enter your password"
+                            autoFocus
+                            className="w-full px-4 py-2 bg-app-bg-tertiary border border-app-border rounded-lg text-app-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                        {passwordError && <p className="text-xs text-red-400 mt-1">{passwordError}</p>}
+                    </div>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => { setPasswordPrompt(null); setPassword(''); setPasswordError(''); }}
+                            className="flex-1 px-4 py-2 bg-app-bg-secondary border border-app-border text-app-text-primary rounded-lg hover:bg-app-bg-light transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => {
+                                const prompt = passwordPrompt;
+                                if (prompt?.action === 'delete-account') {
+                                    verifyPassword(() => setDeleteModalOpen(true));
+                                } else if (prompt?.action === 'reset') {
+                                    verifyPassword(() => setConfirmType(prompt.type));
+                                }
+                            }}
+                            disabled={verifying || !password}
+                            className="flex-1 px-4 py-2 bg-red-500/30 hover:bg-red-500/40 text-red-400 border border-red-500/40 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {verifying ? 'Verifying...' : 'Continue'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
 
             {/* Confirm Delete Data Modal */}
             {confirmType && (
