@@ -317,6 +317,7 @@ export default function Header({ onAddClick, onMenuClick }) {
             case 'favorites': return 'Favorited Sites';
             case 'categories': return 'Categories';
             case 'tags': return 'Tags';
+            case 'notes': return 'Notes';
             case 'settings': return 'Settings';
             default: return activeTab;
         }
@@ -583,7 +584,7 @@ export default function Header({ onAddClick, onMenuClick }) {
                                 </div>
                             </div>
                         )}
-                        {activeTab !== 'settings' && activeTab !== 'sites' && activeTab !== 'favorites' && (
+                        {activeTab !== 'settings' && activeTab !== 'sites' && activeTab !== 'favorites' && activeTab !== 'notes' && (
                             <div className="flex-1 min-w-0 max-w-xs sm:max-w-md hidden md:block" data-tour="search-bar">
                                 <div className="relative">
                                     <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-app-text-tertiary" />
@@ -816,8 +817,8 @@ export default function Header({ onAddClick, onMenuClick }) {
                                 );
                             })()}
 
-                            {/* Add button - desktop only */}
-                            {activeTab !== 'settings' && (
+                            {/* Add button - desktop only (notes tab has its own) */}
+                            {activeTab !== 'settings' && activeTab !== 'notes' && (
                                 <Button onClick={onAddClick} variant="primary" size="sm" className="whitespace-nowrap hidden sm:inline-flex" data-tour="add-button">
                                     <PlusIcon className="w-4 h-4 sm:mr-1.5" />
                                     <span className="hidden md:inline">{getAddButtonText()}</span>

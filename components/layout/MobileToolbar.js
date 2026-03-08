@@ -9,7 +9,7 @@ export default function MobileToolbar({ onAddClick }) {
     const inputRef = useRef(null);
 
     // Don't show on settings tab or desktop
-    if (activeTab === 'settings') return null;
+    if (activeTab === 'settings' || activeTab === 'notes') return null;
 
     const getAddButtonText = () => {
         switch (activeTab) {

@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useDashboard } from '../../context/DashboardContext';
 import Pagination from '../ui/Pagination';
 import { ConfirmModal } from '../ui/Modal';
 import { DocumentIcon, SearchIcon, EditIcon, TrashIcon, SpinnerIcon, PlusIcon, CloseIcon } from '../ui/Icons';
 
-const ITEMS_PER_PAGE = 30;
+const ITEMS_PER_PAGE = 50;
 
 export default function NotesList({ onEdit }) {
     const {
@@ -13,15 +13,25 @@ export default function NotesList({ onEdit }) {
         deleteNote,
         loading,
         searchQuery,
+        notesFilter,
+        setNotesFilter,
     } = useDashboard();
+
+    // Derive filter state from context
+    const localSearch = notesFilter.search;
+    const selectedGroupFilter = notesFilter.group;
+    const sortBy = notesFilter.sortBy;
+    const sortOrder = notesFilter.sortOrder;
+    const currentPage = notesFilter.page;
+
+    const setLocalSearch = useCallback((v) => setNotesFilter(prev => ({ ...prev, search: typeof v === 'function' ? v(prev.search) : v })), [setNotesFilter]);
+    const setSelectedGroupFilter = useCallback((v) => setNotesFilter(prev => ({ ...prev, group: typeof v === 'function' ? v(prev.group) : v })), [setNotesFilter]);
+    const setSortBy = useCallback((v) => setNotesFilter(prev => ({ ...prev, sortBy: typeof v === 'function' ? v(prev.sortBy) : v })), [setNotesFilter]);
+    const setSortOrder = useCallback((v) => setNotesFilter(prev => ({ ...prev, sortOrder: typeof v === 'function' ? v(prev.sortOrder) : v })), [setNotesFilter]);
+    const setCurrentPage = useCallback((v) => setNotesFilter(prev => ({ ...prev, page: typeof v === 'function' ? v(prev.page) : v })), [setNotesFilter]);
 
     const [deletingId, setDeletingId] = useState(null);
     const [noteToDelete, setNoteToDelete] = useState(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [localSearch, setLocalSearch] = useState('');
-    const [selectedGroupFilter, setSelectedGroupFilter] = useState(null);
-    const [sortBy, setSortBy] = useState('created_at');
-    const [sortOrder, setSortOrder] = useState('desc');
     const [showFilterDropdown, setShowFilterDropdown] = useState(false);
     const [showSortDropdown, setShowSortDropdown] = useState(false);
     const filterRef = useRef(null);
@@ -80,7 +90,12 @@ export default function NotesList({ onEdit }) {
         return list;
     }, [notes, localSearch, searchQuery, selectedGroupFilter, sortBy, sortOrder]);
 
-    useEffect(() => { setCurrentPage(1); }, [localSearch, selectedGroupFilter, sortBy, sortOrder]);
+    // Reset to page 1 when filters change (but not on mount)
+    const filterChangeRef = useRef(false);
+    useEffect(() => {
+        if (filterChangeRef.current) setCurrentPage(1);
+        else filterChangeRef.current = true;
+    }, [localSearch, selectedGroupFilter, sortBy, sortOrder, setCurrentPage]);
 
     const totalPages = Math.ceil(filteredNotes.length / ITEMS_PER_PAGE);
     const paginatedNotes = filteredNotes.slice(
@@ -155,11 +170,6 @@ export default function NotesList({ onEdit }) {
     if (loading) {
         return (
             <div className="p-3 sm:p-6">
-                {/* Header skeleton */}
-                <div className="mb-6">
-                    <div className="h-7 bg-app-bg-card rounded w-40 mb-2 animate-pulse" />
-                    <div className="h-4 bg-app-bg-card rounded w-64 animate-pulse" />
-                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     {[...Array(6)].map((_, i) => (
                         <div key={i} className="bg-app-bg-light border border-app-border rounded-xl p-4 animate-pulse" style={{ animationDelay: `${i * 50}ms` }}>
@@ -175,13 +185,15 @@ export default function NotesList({ onEdit }) {
 
     return (
         <div className="p-3 sm:p-6">
-            {/* Header */}
-            <div className="mb-5">
-                <h1 className="text-xl sm:text-2xl font-bold text-app-text-primary">Notes</h1>
-                <p className="text-sm text-app-text-secondary mt-0.5">
-                    {notes.length} note{notes.length !== 1 ? 's' : ''}{noteGroups.length > 0 ? ` across ${noteGroups.length} group${noteGroups.length !== 1 ? 's' : ''}` : ''}
-                </p>
-            </div>
+            {/* Results count */}
+            {filteredNotes.length > 0 && (
+                <div className="text-xs text-app-text-muted mb-3">
+                    {filteredNotes.length > ITEMS_PER_PAGE
+                        ? `Showing ${(currentPage - 1) * ITEMS_PER_PAGE + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredNotes.length)} of ${filteredNotes.length} notes`
+                        : `${filteredNotes.length} note${filteredNotes.length !== 1 ? 's' : ''}`
+                    }
+                </div>
+            )}
 
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2 mb-4">
@@ -319,16 +331,6 @@ export default function NotesList({ onEdit }) {
                     >
                         Clear all
                     </button>
-                </div>
-            )}
-
-            {/* Results count */}
-            {filteredNotes.length > 0 && filteredNotes.length !== notes.length && (
-                <div className="text-xs text-app-text-muted mb-3">
-                    {filteredNotes.length > ITEMS_PER_PAGE
-                        ? `Showing ${(currentPage - 1) * ITEMS_PER_PAGE + 1}–${Math.min(currentPage * ITEMS_PER_PAGE, filteredNotes.length)} of ${filteredNotes.length} notes`
-                        : `${filteredNotes.length} note${filteredNotes.length !== 1 ? 's' : ''} found`
-                    }
                 </div>
             )}
 
