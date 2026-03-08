@@ -4,8 +4,9 @@ import {
   HTTP, configGuard, extractTokenFromReq, resolveTier, isDuplicate,
   buildHeaders, restUrl, sendError, sendOk,
 } from './helpers/api-utils';
+import { TIER_LIMITS } from '../../lib/tierConfig';
 
-const ALLOWED = ['name', 'color', 'user_id', 'is_needed'];
+const ALLOWED = ['name', 'color', 'is_needed'];
 const pick = (body) => Object.fromEntries(ALLOWED.filter(k => body[k] !== undefined).map(k => [k, body[k]]));
 
 async function lookupByName(cfg, name, token) {
@@ -19,9 +20,8 @@ async function lookupByName(cfg, name, token) {
 }
 
 async function checkTierLimit(cfg, userToken, res) {
-  const LIMITS = { free: 300, pro: 1000, promax: Infinity };
   const { tier } = resolveTier(userToken);
-  const limit = LIMITS[tier] ?? LIMITS.free;
+  const limit = TIER_LIMITS[tier]?.tags ?? TIER_LIMITS.free.tags;
   if (limit === Infinity) return false;
   try {
     const r = await fetch(`${restUrl(cfg, 'tags')}?select=id&limit=${limit + 1}`, { headers: buildHeaders(cfg.anonKey, userToken) });

@@ -1,66 +1,16 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import { CollectionIcon, CloseIcon, GlobeIcon, FolderIcon, TagIcon, StarIcon, SettingsIcon, PinSimpleIcon, UploadIcon, ChevronDownIcon, PlusIcon, BookmarkIcon, TextLinesIcon, DocumentIcon, FilterIcon, ListBulletIcon, CheckCircleIcon, BanIcon } from '../ui/Icons';
 import GroupModal from './GroupModal';
-
-// Fixed super-categories (parent groups) for organizing categories
-const SUPER_CATEGORIES = [
-    { key: 'design', label: 'Design', icon: '🎨', color: '#f472b6', keywords: ['design', 'ui', 'ux', 'graphic', 'visual', 'layout', 'typography', 'font', 'color', 'figma', 'sketch', 'adobe', 'creative', 'illustration', 'animation', 'branding', 'logo', 'icon', 'style', 'theme', 'photo', 'image', 'art', 'mockup', 'wireframe', 'prototype'] },
-    { key: 'frontend', label: 'Frontend', icon: '🖥️', color: '#60a5fa', keywords: ['frontend', 'front-end', 'react', 'vue', 'angular', 'svelte', 'next', 'nuxt', 'remix', 'html', 'css', 'tailwind', 'sass', 'javascript', 'typescript', 'component', 'spa', 'pwa', 'browser', 'dom', 'state', 'redux', 'zustand', 'responsive'] },
-    { key: 'backend', label: 'Backend', icon: '⚙️', color: '#38bdf8', keywords: ['backend', 'back-end', 'server', 'node', 'express', 'api', 'rest', 'graphql', 'python', 'django', 'flask', 'ruby', 'rails', 'php', 'laravel', 'java', 'spring', 'go', 'rust', 'microservice', 'websocket', 'middleware'] },
-    { key: 'mobile', label: 'Mobile', icon: '📱', color: '#4ade80', keywords: ['mobile', 'ios', 'android', 'react native', 'flutter', 'swift', 'kotlin', 'capacitor', 'ionic', 'expo', 'native', 'responsive', 'tablet'] },
-    { key: 'database', label: 'Database', icon: '🗄️', color: '#2dd4bf', keywords: ['database', 'sql', 'nosql', 'postgres', 'mysql', 'mongo', 'redis', 'supabase', 'firebase', 'prisma', 'orm', 'migration', 'query', 'schema'] },
-    { key: 'devops', label: 'DevOps', icon: '🚀', color: '#818cf8', keywords: ['devops', 'deploy', 'hosting', 'docker', 'kubernetes', 'cloud', 'aws', 'azure', 'gcp', 'vercel', 'netlify', 'ci', 'cd', 'pipeline', 'linux', 'nginx', 'terraform', 'infrastructure'] },
-    { key: 'ai', label: 'AI', icon: '🧠', color: '#c084fc', keywords: ['ai', 'artificial intelligence', 'machine learning', 'ml', 'chatgpt', 'openai', 'llm', 'gpt', 'neural', 'deep learning', 'nlp', 'computer vision', 'model', 'prompt', 'copilot', 'gemini', 'claude', 'midjourney', 'stable diffusion'] },
-    { key: 'data', label: 'Data', icon: '📊', color: '#fbbf24', keywords: ['data', 'analytics', 'statistics', 'visualization', 'chart', 'graph', 'report', 'bi', 'dashboard', 'metrics', 'tracking', 'scraping', 'dataset', 'data science'] },
-    { key: 'security', label: 'Security', icon: '🔒', color: '#f87171', keywords: ['security', 'privacy', 'auth', 'authentication', 'encryption', 'password', 'vpn', 'firewall', 'hack', 'cyber', 'ssl', 'certificate', 'oauth', 'token', 'vulnerability', 'pentest'] },
-    { key: 'tools', label: 'Tools', icon: '🔧', color: '#fb923c', keywords: ['tool', 'utility', 'productivity', 'automation', 'generator', 'converter', 'editor', 'formatter', 'linter', 'debug', 'profiler', 'cli', 'terminal', 'git', 'vscode', 'ide'] },
-    { key: 'testing', label: 'Testing', icon: '🧪', color: '#a3e635', keywords: ['test', 'testing', 'jest', 'cypress', 'playwright', 'selenium', 'unit', 'integration', 'e2e', 'qa', 'mock', 'coverage', 'tdd', 'bdd'] },
-    { key: 'learning', label: 'Learning', icon: '📚', color: '#a78bfa', keywords: ['learn', 'education', 'course', 'tutorial', 'documentation', 'reference', 'guide', 'training', 'academy', 'school', 'university', 'study', 'teach', 'book', 'research', 'wiki', 'how-to', 'howto', 'cheatsheet'] },
-    { key: 'resources', label: 'Resources', icon: '📦', color: '#6ee7b7', keywords: ['resource', 'asset', 'stock', 'collection', 'inspiration', 'gallery', 'directory', 'list', 'curated', 'awesome', 'bookmark', 'link', 'bundle', 'kit', 'pack', 'library', 'template', 'boilerplate', 'starter'] },
-    { key: 'business', label: 'Business', icon: '💼', color: '#fcd34d', keywords: ['business', 'marketing', 'finance', 'sales', 'startup', 'management', 'seo', 'growth', 'brand', 'strategy', 'consulting', 'invest', 'money', 'career', 'job', 'freelance', 'entrepreneur'] },
-    { key: 'ecommerce', label: 'Shop', icon: '🛒', color: '#f97316', keywords: ['ecommerce', 'commerce', 'shop', 'store', 'retail', 'payment', 'stripe', 'shopify', 'marketplace', 'buy', 'sell', 'cart', 'checkout', 'pricing', 'saas', 'subscription'] },
-    { key: 'content', label: 'Content', icon: '📝', color: '#34d399', keywords: ['content', 'blog', 'news', 'media', 'writing', 'video', 'podcast', 'publish', 'magazine', 'newsletter', 'cms', 'wordpress', 'medium', 'substack'] },
-    { key: 'social', label: 'Social', icon: '💬', color: '#f43f5e', keywords: ['social', 'community', 'forum', 'chat', 'messaging', 'twitter', 'reddit', 'discord', 'slack', 'network', 'share', 'follow', 'feed'] },
-    { key: 'media', label: 'Media', icon: '🎬', color: '#e879f9', keywords: ['streaming', 'music', 'audio', 'youtube', 'twitch', 'spotify', 'movie', 'film', 'tv', 'anime', 'comic', 'game', 'gaming', 'entertainment'] },
-    { key: 'nocode', label: 'No-Code', icon: '🧩', color: '#67e8f9', keywords: ['nocode', 'no-code', 'low-code', 'lowcode', 'drag', 'drop', 'builder', 'webflow', 'bubble', 'airtable', 'notion', 'zapier', 'make', 'integromat', 'workflow'] },
-    { key: 'opensource', label: 'Open Src', icon: '🌐', color: '#86efac', keywords: ['open source', 'opensource', 'open-source', 'github', 'gitlab', 'contributing', 'license', 'fork', 'repo', 'community', 'free'] },
-];
-
-function matchSuperCategory(categoryName) {
-    if (!categoryName) return null;
-    const lower = categoryName.toLowerCase();
-    for (const sc of SUPER_CATEGORIES) {
-        if (sc.keywords.some(kw => lower.includes(kw))) return sc.key;
-    }
-    return null;
-}
+import { SUPER_CATEGORIES, matchSuperCategory } from '../../lib/sharedGroups';
 
 export default function Sidebar({
     isOpen = false,
     onClose,
-    excludedCategoryIds,
-    setExcludedCategoryIds,
-    excludedTagIds,
-    setExcludedTagIds,
-    excludedImportSources,
-    setExcludedImportSources,
-    excludedPricingValues,
-    setExcludedPricingValues,
-    excludedNeededValues,
-    setExcludedNeededValues,
     onGroupFilter
 }) {
-    // Ensure all excluded sets are Set instances (memoized to avoid re-creating on every render)
-    const catSet = useMemo(() => excludedCategoryIds instanceof Set ? excludedCategoryIds : new Set(excludedCategoryIds || []), [excludedCategoryIds]);
-    const tagSet = useMemo(() => excludedTagIds instanceof Set ? excludedTagIds : new Set(excludedTagIds || []), [excludedTagIds]);
-    const srcSet = useMemo(() => excludedImportSources instanceof Set ? excludedImportSources : new Set(excludedImportSources || []), [excludedImportSources]);
-    const prcSet = useMemo(() => excludedPricingValues instanceof Set ? excludedPricingValues : new Set(excludedPricingValues || []), [excludedPricingValues]);
-    const nddSet = useMemo(() => excludedNeededValues instanceof Set ? excludedNeededValues : new Set(excludedNeededValues || []), [excludedNeededValues]);
-    const router = useRouter();
     const { supabase: supabaseClient } = useAuth();
     const {
         stats,
@@ -105,16 +55,33 @@ export default function Sidebar({
         neededFilterTags,
         setNeededFilterTags,
         fetchAllSites,
-        fetchSitesPage
+        fetchSitesPage,
+        selectedGroup,
+        setSelectedGroup,
+        excludeMode,
+        setExcludeMode,
+        excludedCategoryIds,
+        setExcludedCategoryIds,
+        excludedTagIds,
+        setExcludedTagIds,
+        excludedImportSources,
+        setExcludedImportSources,
+        excludedPricingValues,
+        setExcludedPricingValues,
+        excludedNeededValues,
+        setExcludedNeededValues,
     } = useDashboard();
+
+    // Ensure all excluded sets are Set instances
+    const catSet = useMemo(() => excludedCategoryIds instanceof Set ? excludedCategoryIds : new Set(excludedCategoryIds || []), [excludedCategoryIds]);
+    const tagSet = useMemo(() => excludedTagIds instanceof Set ? excludedTagIds : new Set(excludedTagIds || []), [excludedTagIds]);
+    const srcSet = useMemo(() => excludedImportSources instanceof Set ? excludedImportSources : new Set(excludedImportSources || []), [excludedImportSources]);
+    const prcSet = useMemo(() => excludedPricingValues instanceof Set ? excludedPricingValues : new Set(excludedPricingValues || []), [excludedPricingValues]);
+    const nddSet = useMemo(() => excludedNeededValues instanceof Set ? excludedNeededValues : new Set(excludedNeededValues || []), [excludedNeededValues]);
 
     const [categoriesSearchQuery, setCategoriesSearchQuery] = useState('');
     const [tagsSearchQuery, setTagsSearchQuery] = useState('');
     const [isImportSourceOpen, setIsImportSourceOpen] = useState(false);
-    // Exclude mode (local only) — single toggle for all filter types
-    const [excludeMode, setExcludeMode] = useState(false);
-    // Super-category (group) filter
-    const [selectedSuperCategory, setSelectedSuperCategory] = useState(null);
 
     // Custom groups (persisted in Supabase user_metadata + localStorage fallback)
     // Initialize from localStorage synchronously to avoid flash of default groups
@@ -182,11 +149,11 @@ export default function Sidebar({
         if (SUPER_CATEGORIES.some(sc => sc.key === key)) {
             setHiddenAutoGroups(prev => new Set([...prev, key]));
         }
-        if (selectedSuperCategory === key) {
-            setSelectedSuperCategory(null);
+        if (selectedGroup === key) {
+            setSelectedGroup(null);
             onGroupFilter?.(null);
         }
-    }, [selectedSuperCategory, onGroupFilter]);
+    }, [selectedGroup, setSelectedGroup, onGroupFilter]);
 
     // Map categories to super-categories and compute group counts
     // Custom groups take priority: if a category is in a custom group, it belongs there
@@ -195,25 +162,26 @@ export default function Sidebar({
         const map = {};
         const customKeys = new Set(customGroups.map(g => g.key));
         (categories || []).forEach(cat => {
-            // Check custom groups first
-            const customGroup = customGroups.find(g => (g.categoryIds || []).includes(cat.id));
-            if (customGroup) {
-                map[cat.id] = customGroup.key;
-            } else {
+            const groups = [];
+            // Collect ALL custom groups that contain this category
+            customGroups.forEach(g => {
+                if ((g.categoryIds || []).includes(cat.id)) groups.push(g.key);
+            });
+            // If no custom group matched, try auto-match
+            if (groups.length === 0) {
                 const autoKey = matchSuperCategory(cat.name);
-                // Only assign to auto group if it's visible (not hidden and not overridden by custom)
                 if (autoKey && !hiddenAutoGroups.has(autoKey) && !customKeys.has(autoKey)) {
-                    map[cat.id] = autoKey;
+                    groups.push(autoKey);
                 }
-                // else: null → "Other"
             }
+            map[cat.id] = groups;
         });
         return map;
     }, [categories, customGroups, hiddenAutoGroups]);
 
     // Build object for editing an auto-matched group (pre-fill with matched categories)
     const buildAutoGroupEdit = useCallback((sc) => {
-        const matchedCatIds = (categories || []).filter(cat => categoryGroupMap[cat.id] === sc.key).map(cat => cat.id);
+        const matchedCatIds = (categories || []).filter(cat => (categoryGroupMap[cat.id] || []).includes(sc.key)).map(cat => cat.id);
         return { key: sc.key, label: sc.label, icon: sc.icon, color: sc.color, categoryIds: matchedCatIds, isCustom: true };
     }, [categories, categoryGroupMap]);
 
@@ -223,18 +191,17 @@ export default function Sidebar({
         customGroups.forEach(cg => { counts[cg.key] = 0; });
         counts._other = 0;
         (categories || []).forEach(cat => {
-            const group = categoryGroupMap[cat.id];
-            if (group && counts[group] !== undefined) counts[group] += 1;
-            else if (group) counts[group] = 1;
-            else counts._other += 1;
+            const groups = categoryGroupMap[cat.id] || [];
+            if (groups.length === 0) { counts._other += 1; }
+            else { groups.forEach(g => { if (counts[g] !== undefined) counts[g] += 1; else counts[g] = 1; }); }
         });
         return counts;
     }, [categories, categoryGroupMap, customGroups]);
 
     // Compute category IDs for currently selected group and call onGroupFilter
     const handleGroupClick = useCallback((groupKey) => {
-        const nextKey = selectedSuperCategory === groupKey ? null : groupKey;
-        setSelectedSuperCategory(nextKey);
+        const nextKey = selectedGroup === groupKey ? null : groupKey;
+        setSelectedGroup(nextKey);
         if (!nextKey) {
             onGroupFilter?.(null);
             // Go back to paginated mode
@@ -244,14 +211,14 @@ export default function Sidebar({
         // Collect all category IDs belonging to this group
         let ids;
         if (nextKey === '_other') {
-            ids = (categories || []).filter(cat => !categoryGroupMap[cat.id]).map(cat => cat.id);
+            ids = (categories || []).filter(cat => !(categoryGroupMap[cat.id] || []).length).map(cat => cat.id);
         } else {
-            ids = (categories || []).filter(cat => categoryGroupMap[cat.id] === nextKey).map(cat => cat.id);
+            ids = (categories || []).filter(cat => (categoryGroupMap[cat.id] || []).includes(nextKey)).map(cat => cat.id);
         }
         onGroupFilter?.(ids.length > 0 ? new Set(ids) : null);
         // Fetch all sites so both Sidebar count and SitesList have the full dataset
         if (ids.length > 0) fetchAllSites();
-    }, [selectedSuperCategory, categories, categoryGroupMap, onGroupFilter, fetchAllSites, fetchSitesPage]);
+    }, [selectedGroup, setSelectedGroup, categories, categoryGroupMap, onGroupFilter, fetchAllSites, fetchSitesPage]);
 
     // Visible auto groups = not hidden, not overridden by a custom group with the same key
     const visibleAutoGroups = useMemo(() => {
@@ -268,15 +235,29 @@ export default function Sidebar({
 
     // Compute the set of category IDs for the currently selected group (used for site filtering & count)
     const groupCatIds = useMemo(() => {
-        if (!selectedSuperCategory) return null;
+        if (!selectedGroup) return null;
         let ids;
-        if (selectedSuperCategory === '_other') {
-            ids = (categories || []).filter(cat => !categoryGroupMap[cat.id]).map(cat => cat.id);
+        if (selectedGroup === '_other') {
+            ids = (categories || []).filter(cat => !(categoryGroupMap[cat.id] || []).length).map(cat => cat.id);
         } else {
-            ids = (categories || []).filter(cat => categoryGroupMap[cat.id] === selectedSuperCategory).map(cat => cat.id);
+            ids = (categories || []).filter(cat => (categoryGroupMap[cat.id] || []).includes(selectedGroup)).map(cat => cat.id);
         }
         return ids.length > 0 ? new Set(ids) : null;
-    }, [selectedSuperCategory, categories, categoryGroupMap]);
+    }, [selectedGroup, categories, categoryGroupMap]);
+
+    // Sync group filter to parent when selectedGroup changes (including URL-restored value on mount)
+    const groupInitRef = useRef(false);
+    useEffect(() => {
+        if (!categories.length) return;
+        if (!groupInitRef.current && !selectedGroup) {
+            groupInitRef.current = true;
+            return;
+        }
+        groupInitRef.current = true;
+        onGroupFilter?.(groupCatIds);
+        if (groupCatIds) fetchAllSites();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedGroup, groupCatIds]);
 
     // Counts from API (loaded with categories/tags)
     const favoriteCount = stats.favorites || 0;
@@ -528,13 +509,6 @@ export default function Sidebar({
                                     key={tab.id}
                                     data-tour={`${tab.id}-tab`}
                                     onClick={() => {
-                                        // Build URL based on tab
-                                        const url = tab.id === 'settings' || tab.id === 'favorites'
-                                            ? `/dashboard/${tab.id}`
-                                            : `/dashboard/${tab.id}?page=1`;
-
-                                        router.push(url, undefined, { shallow: true });
-
                                         // Filter selectedSites when switching to favorites tab
                                         if (tab.id === 'favorites' && selectedSites.size > 0) {
                                             const favoriteSiteIds = new Set(
@@ -546,11 +520,8 @@ export default function Sidebar({
                                             setSelectedSites(favoriteSiteIds);
                                         }
 
+                                        // Just set tab — URL sync effect in DashboardContext handles the URL
                                         setActiveTab(tab.id);
-                                        setSelectedCategory(null);
-                                        setSelectedTag(null);
-                                        setNeededFilterSites('all');
-                                        setSelectedImportSource(null);
                                     }}
                                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors border
                 ${activeTab === tab.id
@@ -692,7 +663,7 @@ export default function Sidebar({
                 {(activeTab === 'sites' || activeTab === 'favorites') && (
                     <div className="p-3 sm:p-4 flex-1 overflow-y-auto  sm:max-h-none" data-tour="filters">
                         {/* Reset All Filters Button */}
-                        {(selectedCategory || selectedTag || selectedImportSource || selectedPricing || selectedSuperCategory || (neededFilterSites && neededFilterSites !== 'all') || hasExclusions) && (
+                        {(selectedCategory || selectedTag || selectedImportSource || selectedPricing || selectedGroup || (neededFilterSites && neededFilterSites !== 'all') || hasExclusions) && (
                             <button
                                 onClick={() => {
                                     setSelectedCategory(null);
@@ -706,7 +677,7 @@ export default function Sidebar({
                                     setExcludedPricingValues(new Set());
                                     setExcludedNeededValues(new Set());
                                     setExcludeMode(false);
-                                    setSelectedSuperCategory(null);
+                                    setSelectedGroup(null);
                                     onGroupFilter?.(null);
                                 }}
                                 className="w-full mb-4 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20"
@@ -799,8 +770,8 @@ export default function Sidebar({
                             >
                                 <PlusIcon className="w-3.5 h-3.5" />
                             </button>
-                            {selectedSuperCategory && (
-                                <button onClick={() => { setSelectedSuperCategory(null); onGroupFilter?.(null); }} className="text-red-400 hover:text-red-300" title="Show all categories">
+                            {selectedGroup && (
+                                <button onClick={() => { setSelectedGroup(null); onGroupFilter?.(null); }} className="text-red-400 hover:text-red-300" title="Show all categories">
                                     <CloseIcon className="w-3 h-3" />
                                 </button>
                             )}
@@ -810,7 +781,7 @@ export default function Sidebar({
                         <div className="grid grid-cols-3 gap-1 mb-5">
                             {allGroups.map(grp => {
                                 const count = superCategoryCounts[grp.key] || 0;
-                                const isActive = selectedSuperCategory === grp.key;
+                                const isActive = selectedGroup === grp.key;
                                 const editObj = grp.isCustom ? grp : buildAutoGroupEdit(grp);
                                 return (
                                     <div
@@ -849,7 +820,7 @@ export default function Sidebar({
                             {/* Other group for unmatched categories */}
                             {(() => {
                                 const count = superCategoryCounts._other || 0;
-                                const isActive = selectedSuperCategory === '_other';
+                                const isActive = selectedGroup === '_other';
                                 return count > 0 ? (
                                     <button
                                         onClick={() => handleGroupClick('_other')}
@@ -873,8 +844,8 @@ export default function Sidebar({
                         <div className="flex items-center gap-2 mb-3">
                             <FolderIcon className="w-3.5 h-3.5" />
                             <span className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider">
-                                {selectedSuperCategory
-                                    ? `${(SUPER_CATEGORIES.find(s => s.key === selectedSuperCategory)?.label || customGroups.find(g => g.key === selectedSuperCategory)?.label || 'Other')} Categories`
+                                {selectedGroup
+                                    ? `${(SUPER_CATEGORIES.find(s => s.key === selectedGroup)?.label || customGroups.find(g => g.key === selectedGroup)?.label || 'Other')} Categories`
                                     : 'Filter by Category'
                                 }
                             </span>
@@ -938,10 +909,10 @@ export default function Sidebar({
                             {categories
                                 .filter(cat => {
                                     if (!cat?.name?.toLowerCase().includes(categoriesSearchQuery.toLowerCase())) return false;
-                                    if (!selectedSuperCategory) return true;
-                                    const group = categoryGroupMap[cat.id];
-                                    if (selectedSuperCategory === '_other') return !group;
-                                    return group === selectedSuperCategory;
+                                    if (!selectedGroup) return true;
+                                    const groups = categoryGroupMap[cat.id] || [];
+                                    if (selectedGroup === '_other') return groups.length === 0;
+                                    return groups.includes(selectedGroup);
                                 })
                                 .sort((a, b) => a.name.localeCompare(b.name))
                                 .map(cat => {

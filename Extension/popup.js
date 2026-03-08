@@ -1,4 +1,9 @@
-// Debug mode - set to false in production to disable console.debug messages
+
+
+
+/* global chrome, supabase, SUPABASE_CONFIG, PRICING_OPTIONS */
+/* eslint-disable no-console, no-empty */
+
 const DEBUG_MODE = false;
 const debug = DEBUG_MODE ? console.debug.bind(console) : () => { };
 
@@ -437,16 +442,12 @@ function getStoredAuthToken() {
     return null;
 }
 
-// Async fallback that checks chrome.storage.local if localStorage is empty (used by restoreSession)
+// Async token getter — prefers chrome.storage.local (kept fresh by background refresh) over localStorage (may be stale)
 async function getStoredAuthTokenAsync() {
-    const local = getStoredAuthToken();
-    if (local) {
-        debug('getStoredAuthTokenAsync: found token in localStorage');
-        return local;
-    }
-
+    // chrome.storage.local is the source of truth — background.js updates it on every refresh,
+    // while popup localStorage can hold stale tokens whose refresh_token was already rotated out.
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        return new Promise(resolve => {
+        const chromeResult = await new Promise(resolve => {
             try {
                 chrome.storage.local.get(['supabaseAuthToken', 'supabaseSession'], (res) => {
                     debug('getStoredAuthTokenAsync: chrome.storage.local result:', res);
@@ -454,7 +455,6 @@ async function getStoredAuthTokenAsync() {
                         debug('getStoredAuthTokenAsync: found token in chrome.storage.local (auth token)');
                         resolve(res.supabaseAuthToken);
                     } else if (res && res.supabaseSession) {
-                        // Fallback: extract tokens from saved full session
                         debug('getStoredAuthTokenAsync: found full session in chrome.storage.local');
                         const s = res.supabaseSession;
                         resolve({ accessToken: s.access_token, refreshToken: s.refresh_token, expiresAt: s.expires_at, user: s.user });
@@ -467,6 +467,19 @@ async function getStoredAuthTokenAsync() {
                 resolve(null);
             }
         });
+
+        if (chromeResult) {
+            // Sync fresh tokens back to localStorage so the Supabase client stays consistent
+            try { localStorage.setItem(TOKEN_KEY, JSON.stringify(chromeResult)); } catch (e) { /* ignore */ }
+            return chromeResult;
+        }
+    }
+
+    // Fallback to localStorage (first login before background has run, or non-extension context)
+    const local = getStoredAuthToken();
+    if (local) {
+        debug('getStoredAuthTokenAsync: found token in localStorage (fallback)');
+        return local;
     }
 
     return null;
@@ -604,7 +617,7 @@ async function restoreSession() {
 }
 
 function clearAuthToken() {
-    try { localStorage.removeItem(TOKEN_KEY); } catch (e) { }
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ }
 
     // Remove from chrome.storage.local as well (if available)
     try {
@@ -631,7 +644,12 @@ if (supabaseClient) {
         } else if (session && !rememberMe) {
             // Save to sessionStorage only
             sessionStorage.setItem('supabase_session', JSON.stringify(session));
-        } else if (!session) {
+        } else if (!session && event === 'SIGNED_OUT') {
+            // Only clear on explicit sign-out. During startup the Supabase client
+            // may fail to auto-restore from stale localStorage while
+            // chrome.storage.local still holds valid tokens refreshed by
+            // background.js. Clearing here would wipe those fresh tokens before
+            // restoreSession() gets a chance to use them.
             clearAuthToken();
         }
     });
@@ -675,7 +693,7 @@ if (supabaseClient) {
 
 // Listen for token refresh messages from background script
 try {
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
         if (message.type === 'TOKEN_REFRESHED' && message.authData) {
             debug('Received refreshed token from background script');
             try {
@@ -727,7 +745,7 @@ window.debugAuthStorage = async function () {
 
 // Persist cached categories/tags to chrome.storage.local for offline use
 async function persistCachedCategories(categories) {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    if (typeof chrome !== 'undefined' && chrome && chrome.storage && chrome.storage.local) {
         try {
             await new Promise((resolve) => {
                 chrome.storage.local.set({ cachedCategories: categories }, () => {
@@ -740,7 +758,7 @@ async function persistCachedCategories(categories) {
 }
 
 async function persistCachedTags(tags) {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    if (typeof chrome !== 'undefined' && chrome && chrome.storage && chrome.storage.local) {
         try {
             await new Promise((resolve) => {
                 chrome.storage.local.set({ cachedTags: tags }, () => {
@@ -755,7 +773,7 @@ async function persistCachedTags(tags) {
 // Cache of detected site table columns (to avoid repeated calls)
 let sitesColumnsCache = null;
 let categoriesAccessDenied = false;
-let tagsAccessDenied = false;
+let _tagsAccessDenied = false;
 
 // Try to detect the columns present on the server-side `sites` table so we can
 // adapt payload keys for deployments that use different column names (e.g. `name` vs `title`)
@@ -787,14 +805,14 @@ const CACHE_MAX_AGE_DAYS = 30; // Maximum age for cached form data
 const OFFLINE_QUEUE_KEY = 'offlineSaveQueue';
 
 // Track online/offline status
-let isOnline = navigator.onLine;
+let _isOnline = navigator.onLine;
 window.addEventListener('online', () => {
-    isOnline = true;
+    _isOnline = true;
     hideOfflineIndicator();
     processOfflineQueue();
 });
 window.addEventListener('offline', () => {
-    isOnline = false;
+    _isOnline = false;
     showOfflineIndicator();
 });
 
@@ -817,7 +835,7 @@ function hideOfflineIndicator() {
 }
 
 // Offline queue management
-function addToOfflineQueue(siteData) {
+function _addToOfflineQueue(siteData) {
     try {
         const queue = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
         queue.push({ data: siteData, timestamp: Date.now() });
@@ -894,7 +912,7 @@ setTimeout(cleanupOldCache, 5000);
 // Migrate rememberMe preference to chrome.storage.local (for background script access)
 try {
     const rememberMe = localStorage.getItem('rememberMe');
-    if (rememberMe === 'true') {
+    if (rememberMe === 'true' && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         chrome.storage.local.set({ rememberMe: 'true' });
     }
 } catch (e) { /* ignore */ }
@@ -1373,7 +1391,7 @@ function loadFormFromCache(attempt = 0) {
         try {
             debug('loadFormFromCache: applying formData', formData);
             const siteNameInput = document.getElementById('siteName');
-            const urlInput = document.getElementById('url');
+            const _urlInput = document.getElementById('url');
             const pricingSelect = document.getElementById('pricing');
 
             if (siteNameInput) siteNameInput.value = formData.siteName || '';
@@ -1561,7 +1579,7 @@ async function loadCategoriesAndTags() {
                     const tmsg = String(tagErr.message || tagErr.code || '');
                     const tstatus = tagErr.status || tagErr.statusCode || null;
                     if (/row-level security|policy|permission|permission denied|42501/i.test(tmsg) || (tagErr && tagErr.code === '42501') || tstatus === 403) {
-                        tagsAccessDenied = true;
+                        _tagsAccessDenied = true;
                         debug('tags: access denied due to RLS or 403');
                     }
                 }
@@ -1617,7 +1635,7 @@ async function loadCategoriesAndTags() {
             let cacheUrl = currentTabUrl;
             if (!cacheUrl) {
                 try {
-                    const tabs = await new Promise(resolve => chrome.tabs.query({ active: true, currentWindow: true }, resolve));
+                    const tabs = await new Promise(resolve => { if (typeof chrome !== 'undefined' && chrome.tabs) { chrome.tabs.query({ active: true, currentWindow: true }, resolve); } else { resolve([]); } });
                     if (tabs && tabs[0] && tabs[0].url) {
                         cacheUrl = tabs[0].url;
                         currentTabUrl = cacheUrl;
@@ -2045,9 +2063,9 @@ function clearFormCache() {
 // DOM elements - defined lazily so we can re-query after DOM is ready
 let authSection = null;
 let loginForm = null;
-let registerForm = null;
+const _registerForm = null;
 // siteFormSection declared elsewhere; reuse the existing variable to avoid redeclaration
-siteFormSection = siteFormSection || null;
+let siteFormSection = null;
 let messageEl = null;
 
 const _requiredCriticalIds = ['authSection', 'siteFormSection', 'message'];
@@ -2059,7 +2077,7 @@ function checkDomAndInit() {
     // Re-query DOM elements
     authSection = document.getElementById('authSection');
     loginForm = document.getElementById('loginForm');
-    registerForm = document.getElementById('registerForm');
+    // registerForm = document.getElementById('registerForm'); // unused (kept _registerForm constant)
     siteFormSection = document.getElementById('siteFormSection');
     messageEl = document.getElementById('message');
 
@@ -2175,16 +2193,16 @@ setTimeout(_attachRecentSitesHandlers, 50);
 // No need to load them here before knowing if user is logged in
 
 // Reset form when tab switches (detect tab change)
-chrome.tabs.onActivated.addListener((activeInfo) => {
+if (typeof chrome !== 'undefined' && chrome.tabs && chrome.tabs.onActivated) chrome.tabs.onActivated.addListener((activeInfo) => {
     currentTabId = activeInfo.tabId;
 
     try {
         chrome.tabs.get(currentTabId, (tab) => {
 
             // Reset form before loading new tab data
-            const siteNameInput = document.getElementById('siteName');
+            const _siteNameInput = document.getElementById('siteName');
             const urlInput = document.getElementById('url');
-            const pricingSelect = document.getElementById('pricing');
+            const _pricingSelect = document.getElementById('pricing');
 
             // Don't blindly reset the form here; instead populate URL and restore the cache for the new tab
             if (urlInput) urlInput.value = tab?.url || '';
@@ -2272,7 +2290,7 @@ async function checkAuth() {
         }
 
         // If no saved session, Supabase will check IndexedDB and other sources
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        const { data: { session }, error: _error } = await supabaseClient.auth.getSession();
 
         if (session && session.user) {
             currentUser = session.user;
@@ -2325,6 +2343,7 @@ function tryPopulateUrlInput(retryCount = 3) {
     const urlInput = document.getElementById('url');
     if (!urlInput) return;
     try {
+        if (typeof chrome === 'undefined' || !chrome.tabs) { debug('tryPopulateUrlInput: chrome.tabs not available'); return; }
         debug('tryPopulateUrlInput: attempting to query active tab (retryCount=', retryCount, ')');
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             try {
@@ -2504,6 +2523,7 @@ function showSiteForm() {
     }
 
     // Get current tab ID first
+    if (typeof chrome === 'undefined' || !chrome.tabs) { debug('showSiteForm: chrome.tabs not available'); return; }
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs[0]) {
             currentTabId = tabs[0].id;
@@ -2539,7 +2559,7 @@ function showSiteForm() {
                 // Wait a tick for DOM to update
                 setTimeout(() => {
                     const cacheKey = getFormCacheKey();
-                    const cachedData = localStorage.getItem(cacheKey);
+                    const _cachedData = localStorage.getItem(cacheKey);
 
 
                     loadFormFromCache();
@@ -2861,11 +2881,11 @@ function addFormCacheListeners() {
     }
 
     // Save on checkbox change and update counts
-    categoryCheckboxes.forEach((cb, i) => {
-        cb.addEventListener('change', (e) => { saveFormToCache(); updateSelectionCounts(); });
+    categoryCheckboxes.forEach((cb, _i) => {
+        cb.addEventListener('change', (_e) => { saveFormToCache(); updateSelectionCounts(); });
     });
-    tagCheckboxes.forEach((cb, i) => {
-        cb.addEventListener('change', (e) => { saveFormToCache(); updateSelectionCounts(); });
+    tagCheckboxes.forEach((cb, _i) => {
+        cb.addEventListener('change', (_e) => { saveFormToCache(); updateSelectionCounts(); });
     });
 
     // Ensure counts reflect current state on initial attachment
@@ -2962,7 +2982,7 @@ const loginBtn = document.getElementById('loginBtn');
 if (loginBtn) {
     loginBtn.addEventListener('click', async () => {
         const emailInput = document.getElementById('loginEmail');
-        const rememberMeCheckbox = document.getElementById('rememberMe');
+        const _rememberMeCheckbox = document.getElementById('rememberMe');
         const passwordInput = document.getElementById('loginPassword');
 
         if (!emailInput || !passwordInput) {
@@ -3181,11 +3201,13 @@ if (siteForm) {
         saveBtn.classList.add('saving');
         saveBtn.textContent = 'Saving...';
 
+        let session = null; // declare here for use in both try and catch/else blocks
         try {
             // Get user_id from session
             if (!ensureSupabase()) throw new Error('Supabase not available');
 
-            const { data: { session } } = await supabaseClient.auth.getSession();
+            const { data: { session: s } } = await supabaseClient.auth.getSession();
+            session = s;
             if (!session || !session.user) {
                 showMessage('You are not signed in!', 'error');
                 saveBtn.disabled = false;
@@ -3215,7 +3237,8 @@ if (siteForm) {
 
             // Adapt payload to server-side column naming when possible (most deployments use `title`/`category`,
             // but some older setups may use `name`/`categories`). We detect columns and remap so values don't end up as null.
-            let siteData = Object.assign({}, siteDataBase);
+            const siteData = Object.assign({}, siteDataBase);
+            let response; // declare here for later scope
             try {
                 const cols = await detectSitesColumns();
                 if (cols && cols.length > 0) {
@@ -3286,7 +3309,7 @@ if (siteForm) {
 
                         // If PostgREST schema cache error (PGRST204), attempt iterative fallback
                         if (insertErr && insertErr.code === 'PGRST204' && typeof insertErr.message === 'string') {
-                            let attemptPayload = Object.assign({}, siteData);
+                            const attemptPayload = Object.assign({}, siteData);
                             let lastErr = insertErr;
                             let triedAltCategoryId = false;
                             let triedAltTagIds = false;
@@ -3309,11 +3332,11 @@ if (siteForm) {
                                     triedAltTagIds = true;
                                 } else {
                                     // Remove the missing property if present, or related fallback (e.g., base name for *_id)
-                                    if (attemptPayload.hasOwnProperty(missingCol)) {
+                                    if (Object.hasOwn(attemptPayload, missingCol)) {
                                         delete attemptPayload[missingCol];
                                     } else if (missingCol.endsWith('_id')) {
                                         const base = missingCol.replace(/_id$/, '');
-                                        if (attemptPayload.hasOwnProperty(base)) delete attemptPayload[base];
+                                        if (Object.hasOwn(attemptPayload, base)) delete attemptPayload[base];
                                     }
                                 }
 
@@ -3877,7 +3900,7 @@ if (saveCategoryBtn) saveCategoryBtn.addEventListener('click', async () => {
         if (ensureSupabase()) {
             const uid = await getSignedInUserId();
             if (!uid) { showMessage('Sign in to create category', 'error'); return; }
-            const { data: inserted, error: insertErr } = await supabaseClient.from('categories').insert([{ name, color, user_id: uid }]).select();
+            const { data: _inserted, error: insertErr } = await supabaseClient.from('categories').insert([{ name, color, user_id: uid }]).select();
             if (insertErr) {
                 console.error('Supabase insert category error', insertErr);
                 showMessage(insertErr.message || 'Error creating category', 'error');
@@ -3916,7 +3939,7 @@ if (saveTagBtn) saveTagBtn.addEventListener('click', async () => {
         if (ensureSupabase()) {
             const uid = await getSignedInUserId();
             if (!uid) { showMessage('Sign in to create tag', 'error'); return; }
-            const { data: inserted, error: insertErr } = await supabaseClient.from('tags').insert([{ name, color, user_id: uid }]).select();
+            const { data: _inserted, error: insertErr } = await supabaseClient.from('tags').insert([{ name, color, user_id: uid }]).select();
             if (insertErr) {
                 console.error('Supabase insert tag error', insertErr);
                 const imsg = String(insertErr.message || insertErr.code || 'Error creating tag');

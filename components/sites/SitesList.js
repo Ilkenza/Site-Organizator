@@ -6,15 +6,16 @@ import Pagination from '../ui/Pagination';
 import { SearchIcon, GlobeIcon } from '../ui/Icons';
 import { fetchAPI } from '../../lib/supabase';
 
-const RENDER_DELAY_MS = 500;
+const RENDER_DELAY_MS = 150;
 
-export default function SitesList({ onEdit, onDelete, excludedCategoryIds = new Set(), excludedTagIds = new Set(), excludedImportSources = new Set(), excludedPricingValues = new Set(), excludedNeededValues = new Set(), groupCategoryIds = null }) {
+export default function SitesList({ onEdit, onDelete, groupCategoryIds = null }) {
     const {
         filteredSites: rawFilteredSites, loading, searchQuery, selectedCategory, selectedTag, categories,
         currentPage, totalPages, totalSitesCount, fetchSitesPage, fetchAllSites, SITES_PAGE_SIZE,
         selectedImportSource, neededFilterSites, initialDataLoaded,
-        // For advanced search prefix parsing
-        parseSearchPrefixes
+        parseSearchPrefixes,
+        excludedCategoryIds, excludedTagIds, excludedImportSources,
+        excludedPricingValues, excludedNeededValues,
     } = useDashboard();
 
     // Client-side exclusion filter — sites use categories_array/tags_array (objects with .id)

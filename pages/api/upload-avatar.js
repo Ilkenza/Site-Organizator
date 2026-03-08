@@ -4,6 +4,24 @@ import { HTTP, getSupabaseConfig, extractToken, decodeJwt, sendError, methodGuar
 
 const BUCKET = 'avatars';
 const CT = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB
+
+// Magic bytes for image format validation
+const MAGIC = {
+    png: [0x89, 0x50, 0x4E, 0x47],
+    jpg: [0xFF, 0xD8, 0xFF],
+    jpeg: [0xFF, 0xD8, 0xFF],
+    gif: [0x47, 0x49, 0x46],
+    webp: null, // RIFF header checked separately
+};
+
+function isValidImage(buffer, ext) {
+    if (!buffer?.length) return false;
+    if (ext === 'webp') return buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46;
+    const magic = MAGIC[ext];
+    if (!magic) return false;
+    return magic.every((b, i) => buffer[i] === b);
+}
 
 export default async function handler(req, res) {
     if (!methodGuard(req, res, 'POST')) return;
@@ -25,8 +43,17 @@ export default async function handler(req, res) {
     try {
         const base64 = fileData.split(',')[1] || fileData;
         const buffer = Buffer.from(base64, 'base64');
+
+        // Validate file size
+        if (buffer.length > MAX_AVATAR_BYTES) return sendError(res, HTTP.BAD_REQUEST, `File too large (max ${MAX_AVATAR_BYTES / 1024 / 1024}MB)`);
+
         const ext = fileName.split('.').pop()?.toLowerCase() || 'png';
-        const contentType = CT[ext] || 'image/png';
+        const contentType = CT[ext];
+        if (!contentType) return sendError(res, HTTP.BAD_REQUEST, 'Unsupported file type. Allowed: png, jpg, jpeg, gif, webp');
+
+        // Validate magic bytes
+        if (!isValidImage(buffer, ext)) return sendError(res, HTTP.BAD_REQUEST, 'File content does not match declared type');
+
         const uploadName = `${userId}-${Date.now()}.${ext}`;
 
         // Upload to storage

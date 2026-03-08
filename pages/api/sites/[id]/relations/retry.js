@@ -3,12 +3,13 @@
 import { parse } from 'url';
 import { verifyUserFromAuthHeader } from '../../../helpers/auth-helpers';
 import {
-    HTTP, getSupabaseConfig, buildHeaders, restUrl, sendError, sendOk, methodGuard,
+    HTTP, getSupabaseConfig, buildHeaders, restUrl, sendError, sendOk, methodGuard, validateUUID,
 } from '../../../helpers/api-utils';
 
 export default async function handler(req, res) {
     if (!methodGuard(req, res, 'POST')) return;
     const { query: { id } } = parse(req.url, true);
+    if (!validateUUID(id)) return sendError(res, HTTP.BAD_REQUEST, 'Invalid site id format');
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const catIds = body.category_ids || body.categoryIds || [];

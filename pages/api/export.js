@@ -4,8 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import { HTTP, sendError, methodGuard, extractTokenFromReq, decodeJwt } from './helpers/api-utils';
 
 const URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const supabase = URL && KEY ? createClient(URL, KEY) : null;
+const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const supabase = URL && KEY ? createClient(URL, KEY, { auth: { autoRefreshToken: false, persistSession: false } }) : null;
 
 const PAGE = 1000, BATCH = 100;
 
@@ -42,7 +42,11 @@ function enrichSites(sites, cats, tags, sc, st) {
 }
 
 const esc = v => (v || '').replace(/"/g, '""');
-const escH = v => (v || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const escH = v => (v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const escUrl = v => {
+    const s = (v || '').trim();
+    return /^https?:\/\//i.test(s) ? s.replace(/"/g, '%22') : '';
+};
 const names = arr => (arr || []).map(x => x?.name || '').join('; ');
 
 function toCSV(sites) {
@@ -52,7 +56,7 @@ function toCSV(sites) {
 }
 
 function toHTML(sites) {
-    const rows = sites.length ? sites.map(s => `<tr><td>${escH(s.name)}</td><td><a href="${s.url}">${escH(s.url)}</a></td><td>${names(s.categories_array)}</td><td>${names(s.tags_array)}</td><td>${escH(s.description)}</td><td>${escH(s.pricing || '')}</td><td>${escH(s.use_case || '')}</td><td>${s.is_favorite ? '⭐' : ''}</td><td>${s.is_pinned ? '📌' : ''}</td><td>${s.is_needed === true ? '✅' : s.is_needed === false ? '❌' : ''}</td></tr>`).join('') : '<tr><td colspan="10">No sites</td></tr>';
+    const rows = sites.length ? sites.map(s => { const safeUrl = escUrl(s.url); return `<tr><td>${escH(s.name)}</td><td>${safeUrl ? `<a href="${safeUrl}">${escH(s.url)}</a>` : escH(s.url)}</td><td>${escH(names(s.categories_array))}</td><td>${escH(names(s.tags_array))}</td><td>${escH(s.description)}</td><td>${escH(s.pricing || '')}</td><td>${escH(s.use_case || '')}</td><td>${s.is_favorite ? '⭐' : ''}</td><td>${s.is_pinned ? '📌' : ''}</td><td>${s.is_needed === true ? '✅' : s.is_needed === false ? '❌' : ''}</td></tr>`; }).join('') : '<tr><td colspan="10">No sites</td></tr>';
     return `<!DOCTYPE html><html><head><title>Sites Export</title><style>body{font-family:Arial,sans-serif;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#4CAF50;color:#fff}tr:nth-child(even){background:#f2f2f2}a{color:#0066cc}</style></head><body><h1>Sites Export</h1><p>Exported on: ${new Date().toLocaleString()}</p><table><thead><tr><th>Name</th><th>URL</th><th>Category</th><th>Tags</th><th>Description</th><th>Pricing</th><th>Use Case</th><th>Favorite</th><th>Pinned</th><th>Needed</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
 }
 
@@ -69,10 +73,11 @@ export default async function handler(req, res) {
     try {
         const fmt = (req.query.format || 'json').toLowerCase();
         // Parse include param: which data to export (default: all)
-        const includeRaw = (req.query.include || 'sites,categories,tags').toLowerCase().split(',').map(s => s.trim());
+        const includeRaw = (req.query.include || 'sites,categories,tags,groups').toLowerCase().split(',').map(s => s.trim());
         const includeSites = includeRaw.includes('sites');
         const includeCategories = includeRaw.includes('categories');
         const includeTags = includeRaw.includes('tags');
+        const includeGroups = includeRaw.includes('groups');
 
         let sites = [], cats = [], tags = [], sc = [], st = [];
 
@@ -111,16 +116,30 @@ export default async function handler(req, res) {
             });
         }
         const ts = new Date().toISOString().split('T')[0];
-        const prefix = [includeSites && 'sites', includeCategories && 'categories', includeTags && 'tags'].filter(Boolean).join('-');
+        const prefix = [includeSites && 'sites', includeCategories && 'categories', includeTags && 'tags', includeGroups && 'groups'].filter(Boolean).join('-');
 
         if (fmt === 'csv') { res.setHeader('Content-Type', 'text/csv; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="${prefix}-export-${ts}.csv"`); return res.end(toCSV(enriched)); }
         if (fmt === 'html') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.setHeader('Content-Disposition', `attachment; filename="${prefix}-export-${ts}.html"`); return res.end(toHTML(enriched)); }
+
+        // Fetch groups from user_metadata if requested
+        let groups = null;
+        if (includeGroups) {
+            try {
+                const { data: { user } } = await supabase.auth.admin.getUserById(userId);
+                const meta = user?.user_metadata;
+                groups = {
+                    custom_groups: Array.isArray(meta?.custom_groups) ? meta.custom_groups : [],
+                    hidden_auto_groups: Array.isArray(meta?.hidden_auto_groups) ? meta.hidden_auto_groups : [],
+                };
+            } catch { groups = { custom_groups: [], hidden_auto_groups: [] }; }
+        }
 
         // JSON: build response based on what was requested
         const jsonResult = { version: '1.0', exportedAt: new Date().toISOString() };
         if (includeSites) jsonResult.sites = enriched;
         if (includeCategories) jsonResult.categories = cats;
         if (includeTags) jsonResult.tags = tags;
+        if (includeGroups && groups) jsonResult.groups = groups;
         return res.json(jsonResult);
     } catch (err) {
         console.error('Export error:', err);

@@ -1,11 +1,11 @@
 /** Sites collection — GET (paginated, filtered) + POST (create with relations) */
 
 import {
-  HTTP, configGuard, extractTokenFromReq,
-  buildHeaders, restUrl, sendError, sendOk,
+  HTTP, configGuard, extractTokenFromReq, decodeJwt,
+  buildHeaders, restUrl, sendError, sendOk, guardUUID, validateUUID,
 } from './helpers/api-utils';
 
-const POST_FIELDS = ['name', 'url', 'pricing', 'description', 'use_case', 'user_id', 'import_source', 'is_needed'];
+const POST_FIELDS = ['name', 'url', 'pricing', 'description', 'use_case', 'import_source', 'is_needed'];
 
 // Build URL variants for duplicate detection (www / no-www / trailing slash)
 function buildUrlVariants(rawUrl) {
@@ -33,7 +33,9 @@ function h(cfg, token, opts) { return buildHeaders(cfg.anonKey, token, opts); }
 
 async function fetchNames(ids, table, cfg, token) {
   if (!ids?.length) return [];
-  const p = ids.map(i => `"${i}"`).join(',');
+  const safe = ids.filter(id => validateUUID(id));
+  if (!safe.length) return [];
+  const p = safe.map(i => `"${i}"`).join(',');
   const r = await fetch(`${restUrl(cfg, table)}?id=in.(${p})&select=name`, { headers: h(cfg, token) });
   return r.ok ? (await r.json()).map(x => x.name) : [];
 }
@@ -143,7 +145,12 @@ function buildListUrl(cfg, limit, offset, f) {
   if (f.favoritesOnly) url += '&is_favorite=eq.true';
   if (f.pinnedOnly) url += '&is_pinned=eq.true';
   qf.forEach(q => { url += `&${q}`; });
-  if (f.searchQuery) { const e = encodeURIComponent(f.searchQuery); url += `&or=(name.ilike.*${e}*,url.ilike.*${e}*)`; }
+  if (f.searchQuery) {
+    // Escape PostgREST special chars in search input
+    const safe = f.searchQuery.replace(/[*(),]/g, '');
+    const e = encodeURIComponent(safe);
+    url += `&or=(name.ilike.*${e}*,url.ilike.*${e}*)`;
+  }
   if (f.descQuery) { const e = encodeURIComponent(f.descQuery); url += `&description=ilike.*${e}*`; }
   if (f.importSource) url += `&import_source=eq.${encodeURIComponent(f.importSource)}`;
   if (f.pricing) url += `&pricing=eq.${encodeURIComponent(f.pricing)}`;
@@ -223,7 +230,6 @@ async function handleGet(req, res, cfg, authKey, relKey) {
   };
 
   const url = buildListUrl(cfg, limit, offset, filters);
-  console.log('[sites GET] URL:', url.replace(/apikey=[^&]+/, 'apikey=***').replace(/Bearer [^ ]+/, 'Bearer ***'));
   let r;
   try {
     r = await fetch(url, { headers: { ...h(cfg, authKey), Prefer: 'count=exact' } });
@@ -292,12 +298,17 @@ async function handleGet(req, res, cfg, authKey, relKey) {
 async function handlePost(req, res, cfg, authKey, relKey) {
   const body = req.body || {};
   if (!body.name || !body.url || !body.pricing) return sendError(res, HTTP.BAD_REQUEST, 'Missing required fields: name, url, pricing');
-  if (!body.user_id) return sendError(res, HTTP.BAD_REQUEST, 'Missing user_id (you must be logged in)');
+
+  // Derive user_id from JWT — never trust client body
+  const jwt = decodeJwt(authKey);
+  if (!jwt?.sub) return sendError(res, HTTP.UNAUTHORIZED, 'Invalid token');
+  const userId = jwt.sub;
 
   const catNames = await fetchNames(body.category_ids, 'categories', cfg, relKey);
   const tagNames = await fetchNames(body.tag_ids, 'tags', cfg, relKey);
   const filtered = {};
   for (const k of POST_FIELDS) if (body[k] !== undefined) filtered[k] = body[k];
+  filtered.user_id = userId;
   filtered.categories = catNames;
   filtered.tags = tagNames;
 

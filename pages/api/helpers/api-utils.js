@@ -142,12 +142,26 @@ export function authGuard(req, res) {
     return token;
 }
 
+// ─── Validation Helpers ──────────────────────────────────────────────────────
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function validateUUID(id) { return typeof id === 'string' && UUID_RE.test(id); }
+
+export function guardUUID(id, res, label = 'id') {
+    if (!validateUUID(id)) { sendError(res, HTTP.BAD_REQUEST, `Invalid ${label} format`); return false; }
+    return true;
+}
+
 // ─── Batch Helpers ──────────────────────────────────────────────────────────
+
 export async function batchDelete(config, table, column, ids, headers) {
     const BATCH = 100;
+    // Validate all IDs are UUIDs to prevent injection
+    const safeIds = ids.filter(id => UUID_RE.test(id));
+    if (safeIds.length === 0) return 0;
     let total = 0;
-    for (let i = 0; i < ids.length; i += BATCH) {
-        const batch = ids.slice(i, i + BATCH);
+    for (let i = 0; i < safeIds.length; i += BATCH) {
+        const batch = safeIds.slice(i, i + BATCH);
         const inList = batch.map(id => `"${id}"`).join(',');
         const url = `${config.url}/rest/v1/${table}?${column}=in.(${inList})`;
         const r = await fetch(url, { method: 'DELETE', headers });

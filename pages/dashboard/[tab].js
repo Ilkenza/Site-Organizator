@@ -34,9 +34,8 @@ function DashboardContent() {
         activeTab,
         setActiveTab,
         fetchData,
-        _loading,
+        loading: _loading,
         error,
-        deleteSite: _deleteSite,
         addSite,
         updateSite,
         deleteCategory,
@@ -50,11 +49,8 @@ function DashboardContent() {
         sites,
         categories,
         tags,
-        selectedSites: _selectedSites,
         setSelectedSites,
-        selectedCategories: _selectedCategories,
         setSelectedCategories,
-        selectedTags: _selectedTags,
         setSelectedTags,
         setSites,
         setCategories,
@@ -102,6 +98,7 @@ function DashboardContent() {
             const { addUrl: _u, addTitle: _t, ...rest } = router.query;
             router.replace({ pathname: router.pathname, query: { ...rest, tab } }, undefined, { shallow: true });
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [router.query.addUrl]);
 
     // Listen for openAddSiteModal event from Sidebar
@@ -387,12 +384,6 @@ function DashboardContent() {
         setDangerZonePending(null);
     };
 
-    // Excluded filters for Sidebar (stateful)
-    const [excludedCategoryIds, setExcludedCategoryIds] = useState(new Set());
-    const [excludedTagIds, setExcludedTagIds] = useState(new Set());
-    const [excludedImportSources, setExcludedImportSources] = useState(new Set());
-    const [excludedPricingValues, setExcludedPricingValues] = useState(new Set());
-    const [excludedNeededValues, setExcludedNeededValues] = useState(new Set());
     // Group-based category filter (set of category IDs when a group is selected)
     const [groupCategoryIds, setGroupCategoryIds] = useState(null);
 
@@ -406,11 +397,6 @@ function DashboardContent() {
                         <SitesList
                             onEdit={handleEditSite}
                             onDelete={handleDeleteSite}
-                            excludedCategoryIds={excludedCategoryIds}
-                            excludedTagIds={excludedTagIds}
-                            excludedImportSources={excludedImportSources}
-                            excludedPricingValues={excludedPricingValues}
-                            excludedNeededValues={excludedNeededValues}
                             groupCategoryIds={groupCategoryIds}
                         />
                     </>
@@ -446,16 +432,6 @@ function DashboardContent() {
             <Sidebar
                 isOpen={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
-                excludedCategoryIds={excludedCategoryIds}
-                setExcludedCategoryIds={setExcludedCategoryIds}
-                excludedTagIds={excludedTagIds}
-                setExcludedTagIds={setExcludedTagIds}
-                excludedImportSources={excludedImportSources}
-                setExcludedImportSources={setExcludedImportSources}
-                excludedPricingValues={excludedPricingValues}
-                setExcludedPricingValues={setExcludedPricingValues}
-                excludedNeededValues={excludedNeededValues}
-                setExcludedNeededValues={setExcludedNeededValues}
                 onGroupFilter={setGroupCategoryIds}
             />
 

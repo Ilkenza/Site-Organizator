@@ -6,7 +6,12 @@
 // Configuration constants
 const CONFIG = {
     // Supabase project URL (extract domain from env)
-    SUPABASE_DOMAIN: 'skacyhzljreaitrbgbte.supabase.co',
+    SUPABASE_DOMAIN: (() => {
+        try {
+            const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+            return url.replace(/^https?:\/\//, '').split('/')[0] || 'localhost';
+        } catch { return 'localhost'; }
+    })(),
 
     // Build settings
     ESLINT_IGNORE_DURING_BUILDS: true, // TODO: Remove once all lint issues are fixed

@@ -1,6 +1,8 @@
 /** Import API — bulk site creation from JSON/CSV */
 
-import { HTTP, getSupabaseConfig, extractTokenFromReq, resolveTier, sendError, sendOk, methodGuard } from './helpers/api-utils';
+import { HTTP, getSupabaseConfig, extractTokenFromReq, resolveTier, decodeJwt, sendError, sendOk, methodGuard } from './helpers/api-utils';
+import { TIER_LIMITS } from '../../lib/tierConfig';
+import { createClient } from '@supabase/supabase-js';
 
 export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
 
@@ -66,11 +68,14 @@ export default async function handler(req, res) {
   const userToken = extractTokenFromReq(req);
   if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
 
+  // Derive userId from JWT — never trust client body
+  const jwt = decodeJwt(userToken);
+  if (!jwt?.sub) return sendError(res, HTTP.UNAUTHORIZED, 'Invalid token');
+  const userId = jwt.sub;
+
   const payload = req.body || {};
   const rows = Array.isArray(payload.rows) ? payload.rows : [];
-  const userId = payload.userId;
   if (!rows.length) return sendError(res, HTTP.BAD_REQUEST, 'No rows provided');
-  if (!userId) return sendError(res, HTTP.BAD_REQUEST, 'userId is required');
 
   const importSource = payload.importSource || 'manual';
   const createMissing = (payload.options || { createMissing: true }).createMissing;
@@ -149,9 +154,8 @@ export default async function handler(req, res) {
     await preload();
 
     // Tier limits
-    const LIMITS = { free: { sites: 1000, categories: 100, tags: 300 }, pro: { sites: 10000, categories: 500, tags: 1000 }, promax: { sites: Infinity, categories: Infinity, tags: Infinity } };
     const { tier } = resolveTier(userToken);
-    const limits = LIMITS[tier] || LIMITS.free;
+    const limits = TIER_LIMITS[tier] || TIER_LIMITS.free;
 
     // Current site count
     let currentSites = 0;
@@ -276,6 +280,38 @@ export default async function handler(req, res) {
       if (trimmedCats > 0) parts.push(`${trimmedCats} categor${trimmedCats === 1 ? 'y' : 'ies'} skipped`);
       if (trimmedTags > 0) parts.push(`${trimmedTags} tag(s) skipped`);
       report.tierMessage = `${label} plan limits: ${parts.join(', ')}. Upgrade for more.`;
+    }
+
+    // Import groups into user_metadata if provided
+    if (payload.groups && typeof payload.groups === 'object') {
+      try {
+        const SB_URL = cfg.url;
+        const SB_KEY = cfg.serviceKey;
+        if (SB_URL && SB_KEY) {
+          const adminClient = createClient(SB_URL, SB_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+          const { data: { user: existingUser } } = await adminClient.auth.admin.getUserById(userId);
+          const meta = existingUser?.user_metadata || {};
+
+          const importedGroups = Array.isArray(payload.groups.custom_groups) ? payload.groups.custom_groups : [];
+          const importedHidden = Array.isArray(payload.groups.hidden_auto_groups) ? payload.groups.hidden_auto_groups : [];
+
+          // Merge: imported groups take priority by key
+          const existingGroups = Array.isArray(meta.custom_groups) ? meta.custom_groups : [];
+          const existingHidden = Array.isArray(meta.hidden_auto_groups) ? meta.hidden_auto_groups : [];
+
+          const mergedGroupsMap = new Map(existingGroups.map(g => [g.key, g]));
+          for (const g of importedGroups) { if (g.key) mergedGroupsMap.set(g.key, g); }
+          const mergedHidden = [...new Set([...existingHidden, ...importedHidden])];
+
+          await adminClient.auth.admin.updateUserById(userId, {
+            user_metadata: { custom_groups: [...mergedGroupsMap.values()], hidden_auto_groups: mergedHidden }
+          });
+          report.groupsImported = importedGroups.length;
+        }
+      } catch (groupErr) {
+        console.warn('Groups import failed:', groupErr.message);
+        report.groupsError = groupErr.message;
+      }
     }
 
     return sendOk(res, { report });
