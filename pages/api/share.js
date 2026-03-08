@@ -12,6 +12,7 @@ import {
     sendError,
     sendOk,
     serviceHeaders,
+    guardUUID,
 } from './helpers/api-utils';
 
 function h(cfg, token, opts) {
@@ -126,6 +127,7 @@ export default async function handler(req, res) {
     if (req.method === 'DELETE') {
         const id = req.query.id;
         if (!id) return sendError(res, HTTP.BAD_REQUEST, 'Missing share id');
+        if (!guardUUID(id, res)) return;
         try {
             const url = `${restUrl(cfg, 'share_tokens')}?id=eq.${encodeURIComponent(id)}&user_id=eq.${userId}`;
             const r = await fetch(url, { method: 'DELETE', headers: h(cfg, token, { prefer: 'return=representation' }) });

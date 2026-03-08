@@ -2,15 +2,17 @@
 
 import {
   HTTP, configGuard, extractTokenFromReq, decodeJwt,
-  buildHeaders, restUrl, sendError, sendOk,
+  buildHeaders, restUrl, sendError, sendOk, guardUUID,
 } from '../helpers/api-utils';
 
 export default async function handler(req, res) {
   const cfg = configGuard(res);
   if (!cfg) return;
   const { id } = req.query;
+  if (!guardUUID(id, res)) return;
   const token = extractTokenFromReq(req);
-  const authToken = token || cfg.anonKey;
+  if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
+  const authToken = token;
   const url = `${restUrl(cfg, 'tags')}?id=eq.${id}`;
 
   if (req.method === 'GET') {
@@ -23,7 +25,6 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'PUT' || req.method === 'PATCH') {
-    if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
     try {
       const body = {};
       const raw = req.body || {};
@@ -39,7 +40,6 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
     try {
       // Check if tag is used on any site
       const checkUrl = `${restUrl(cfg, 'site_tags')}?tag_id=eq.${id}&select=site_id`;

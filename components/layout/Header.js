@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
+import { isAdminEmail } from '../../lib/adminEmails';
 import { fetchAPI } from '../../lib/supabase';
 import { TIER_COLORS, TIER_FREE } from '../../lib/tierConfig';
 import Button from '../ui/Button';
@@ -130,8 +131,7 @@ export default function Header({ onAddClick, onMenuClick }) {
     // Check if current user is an admin
     const isAdmin = useMemo(() => {
         if (!user?.email) return false;
-        const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-        return adminEmails.includes(user.email.toLowerCase());
+        return isAdminEmail(user.email);
     }, [user?.email]);
 
     const {

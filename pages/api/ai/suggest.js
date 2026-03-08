@@ -2,11 +2,11 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { HTTP, extractTokenFromReq, decodeJwt, getAdminEmails, sendError, sendOk, methodGuard } from '../helpers/api-utils';
+import { TIER_LIMITS } from '../../../lib/tierConfig';
 
 const AI_URL = 'https://models.inference.ai.azure.com/chat/completions';
 const MODEL = 'gpt-4o-mini';
 const FETCH_MS = 5000, AI_MS = 20000;
-const LIMITS = { free: 30, pro: 500, promax: Infinity };
 
 let _admin = null;
 function adminClient() {
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
     const email = (payload.email || '').toLowerCase();
     const isAdmin = getAdminEmails().includes(email);
     if (isAdmin) tier = 'promax';
-    const monthlyLimit = isAdmin ? Infinity : (LIMITS[tier] || LIMITS.free);
+    const monthlyLimit = isAdmin ? Infinity : (TIER_LIMITS[tier]?.aiSuggestsPerMonth ?? TIER_LIMITS.free.aiSuggestsPerMonth);
 
     const sb = adminClient();
     const month = currentMonth();

@@ -1,8 +1,11 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useRouter } from 'next/router';
 import { fetchAPI, supabase } from '../lib/supabase';
 import * as offlineQueue from '../lib/offlineQueue';
 import { useAuth } from './AuthContext';
-import { canAdd, getTierLimits, TIER_LABELS, TIER_FREE, TIER_PROMAX, resolveTier } from '../lib/tierConfig';
+import { canAdd, TIER_LABELS, TIER_FREE, TIER_PROMAX, resolveTier } from '../lib/tierConfig';
+import { isAdminEmail } from '../lib/adminEmails';
+import { groupKeyToLabel, groupLabelToKey } from '../lib/sharedGroups';
 
 const DashboardContext = createContext(null);
 
@@ -14,11 +17,8 @@ const SITES_PAGE_SIZE = 30; // Sites per page (matches UI display)
 // Resolve tier robustly — never trust a stale user.tier value
 function getUserTier(user) {
     if (!user) return TIER_FREE;
-    // Admin always gets promax — check both the flag AND the env var directly
     if (user.isAdmin === true) return TIER_PROMAX;
-    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-    if (user.email && adminEmails.includes(user.email.toLowerCase())) return TIER_PROMAX;
-    // Re-resolve from user_metadata (source of truth from Supabase JWT)
+    if (user.email && isAdminEmail(user.email)) return TIER_PROMAX;
     const resolved = resolveTier(user.user_metadata);
     return resolved || TIER_FREE;
 }
@@ -140,6 +140,7 @@ function dedupeById(arr) {
 
 export function DashboardProvider({ children }) {
     const { user } = useAuth();
+    const router = useRouter();
     const [sites, setSites] = useState([]);
     const [categories, setCategories] = useState([]);
     const [tags, setTags] = useState([]);
@@ -308,6 +309,7 @@ export function DashboardProvider({ children }) {
                     errors: report.errors?.length || 0,
                     categoriesCreated: report.categoriesCreated || 0,
                     tagsCreated: report.tagsCreated || 0,
+                    groupsImported: report.groupsImported || 0,
                     tierLimited: report.tierLimited || false,
                     tierMessage: report.tierMessage || null,
                     report
@@ -346,10 +348,11 @@ export function DashboardProvider({ children }) {
         setUseFoldersAsCategories(true);
     }, []);
 
-    // Filters
+    // Filters — initialized from URL query params so they persist across tab switches
+    const initQ = router?.query || {};
     // Split search into input (immediate UI) and query (debounced, triggers API)
-    const [searchInput, setSearchInput] = useState('');
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState(() => initQ.q || '');
+    const [searchQuery, setSearchQuery] = useState(() => initQ.q || '');
     const searchDebounceRef = useRef(null);
     const handleSearchInput = useCallback((value) => {
         setSearchInput(value);
@@ -363,27 +366,303 @@ export function DashboardProvider({ children }) {
         if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     }, []);
     useEffect(() => () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); }, []);
-    const [selectedCategory, setSelectedCategory] = useState(null);
-    const [selectedTag, setSelectedTag] = useState(null);
-    const [selectedImportSource, setSelectedImportSource] = useState(null); // 'bookmarks' | 'notion' | 'file' | null
-    const [selectedPricing, setSelectedPricing] = useState(null); // 'fully_free' | 'freemium' | 'free_trial' | 'paid' | null
-    const [usageFilterCategories, setUsageFilterCategories] = useState('all'); // 'all' | 'used' | 'unused'
-    const [usageFilterTags, setUsageFilterTags] = useState('all'); // 'all' | 'used' | 'unused'
-    const [neededFilterSites, setNeededFilterSites] = useState('all'); // 'all' | 'needed' | 'not_needed'
-    const [neededFilterCategories, setNeededFilterCategories] = useState('all'); // 'all' | 'needed' | 'not_needed'
-    const [neededFilterTags, setNeededFilterTags] = useState('all'); // 'all' | 'needed' | 'not_needed'
-    const [sortBy, setSortBy] = useState('created_at');
+
+    // Helper function to find category ID by name
+    const getCategoryIdByName = useCallback((name, categoriesList) => {
+        if (!name || !Array.isArray(categoriesList)) return null;
+        const found = categoriesList.find(c => c.name === name);
+        return found ? found.id : null;
+    }, []);
+
+    // Helper function to find tag ID by name
+    const getTagIdByName = useCallback((name, tagsList) => {
+        if (!name || !Array.isArray(tagsList)) return null;
+        const found = tagsList.find(t => t.name === name);
+        return found ? found.id : null;
+    }, []);
+
+    // Initialize selectedCategory and selectedTag from URL (convert name to ID)
+    const [selectedCategory, setSelectedCategory] = useState(() => {
+        // Will be properly initialized after categories load
+        return null;
+    });
+    const [selectedTag, setSelectedTag] = useState(() => {
+        // Will be properly initialized after tags load
+        return null;
+    });
+    const [selectedImportSource, setSelectedImportSource] = useState(() => initQ.source || null);
+    const [selectedPricing, setSelectedPricing] = useState(() => initQ.pricing || null);
+    const initTab = initQ.tab || 'sites';
+    const [usageFilterCategories, setUsageFilterCategories] = useState(() => (initTab === 'categories' && initQ.usage) ? initQ.usage : 'all');
+    const [usageFilterTags, setUsageFilterTags] = useState(() => (initTab === 'tags' && initQ.usage) ? initQ.usage : 'all');
+    const [neededFilterSites, setNeededFilterSites] = useState(() => ((initTab === 'sites' || initTab === 'favorites') && initQ.needed) ? initQ.needed : 'all');
+    const [neededFilterCategories, setNeededFilterCategories] = useState(() => (initTab === 'categories' && initQ.needed) ? initQ.needed : 'all');
+    const [neededFilterTags, setNeededFilterTags] = useState(() => (initTab === 'tags' && initQ.needed) ? initQ.needed : 'all');
+    const [sortBy, setSortBy] = useState(() => (initTab === 'sites' || initTab === 'favorites') ? (initQ.sort || 'created_at') : 'created_at');
 
     // Import preview state (persists across tabs)
     const [importPreview, setImportPreview] = useState(null);
     const [importSource, setImportSource] = useState(null); // 'notion' | 'bookmarks' | 'file' | null
     const [useFoldersAsCategories, setUseFoldersAsCategories] = useState(true);
-    const [sortOrder, setSortOrder] = useState('desc');
-    const [sortByCategories, setSortByCategories] = useState('name');
-    const [sortOrderCategories, setSortOrderCategories] = useState('asc');
-    const [sortByTags, setSortByTags] = useState('name');
-    const [sortOrderTags, setSortOrderTags] = useState('asc');
-    const [activeTab, setActiveTab] = useState('sites');
+    const [sortOrder, setSortOrder] = useState(() => (initTab === 'sites' || initTab === 'favorites') ? (initQ.order || 'desc') : 'desc');
+    const [sortByCategories, setSortByCategories] = useState(() => initTab === 'categories' ? (initQ.sort || 'name') : 'name');
+    const [sortOrderCategories, setSortOrderCategories] = useState(() => initTab === 'categories' ? (initQ.order || 'asc') : 'asc');
+    const [sortByTags, setSortByTags] = useState(() => initTab === 'tags' ? (initQ.sort || 'name') : 'name');
+    const [sortOrderTags, setSortOrderTags] = useState(() => initTab === 'tags' ? (initQ.order || 'asc') : 'asc');
+    const [activeTab, setActiveTab] = useState(() => initTab);
+    const [selectedGroup, setSelectedGroup] = useState(() => initQ.group ? groupLabelToKey(initQ.group) : null);
+
+    // Exclude mode state (sites/favorites only)
+    const [excludeMode, setExcludeMode] = useState(() => (initTab === 'sites' || initTab === 'favorites') && initQ.exclude === '1');
+    const [excludedCategoryIds, setExcludedCategoryIds] = useState(() => new Set());
+    const [excludedTagIds, setExcludedTagIds] = useState(() => new Set());
+    const [excludedImportSources, setExcludedImportSources] = useState(() => new Set());
+    const [excludedPricingValues, setExcludedPricingValues] = useState(() => new Set());
+    const [excludedNeededValues, setExcludedNeededValues] = useState(() => new Set());
+
+    // Per-tab filter store for sites & favorites (they share the same state vars,
+    // so we save/restore when switching between them)
+    const siteFavStoreRef = useRef({});
+    const prevTabRef = useRef(initTab);
+
+    // Keep a live snapshot ref of sites/favorites filters for the save/restore effect
+    const siteFavFiltersRef = useRef({});
+    siteFavFiltersRef.current = {
+        searchQuery, searchInput, selectedCategory, selectedTag,
+        selectedImportSource, selectedPricing, neededFilterSites,
+        sortBy, sortOrder, selectedGroup,
+        excludeMode, excludedCategoryIds, excludedTagIds,
+        excludedImportSources, excludedPricingValues, excludedNeededValues,
+    };
+
+    // Sync activeTab with URL query tab param (only when tab in URL changes)
+    useEffect(() => {
+        if (!router?.isReady) return;
+        const urlTab = router.query?.tab;
+        if (urlTab && urlTab !== activeTab) {
+            setActiveTab(urlTab);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [router?.query?.tab]);
+
+    // Save/restore filters when switching between sites <-> favorites
+    useEffect(() => {
+        if (!activeTab) return;
+        const prev = prevTabRef.current;
+        if (prev === activeTab) return;
+
+        const isSitesFav = (t) => t === 'sites' || t === 'favorites';
+
+        // Only save/restore when switching between sites and favorites
+        if (isSitesFav(prev) && isSitesFav(activeTab)) {
+            // Save leaving tab's filters (from live ref)
+            siteFavStoreRef.current[prev] = { ...siteFavFiltersRef.current };
+
+            // Restore entering tab's filters (or defaults)
+            const stored = siteFavStoreRef.current[activeTab];
+            if (stored) {
+                setSearchQuery(stored.searchQuery ?? '');
+                setSearchInput(stored.searchInput ?? '');
+                setSelectedCategory(stored.selectedCategory ?? null);
+                setSelectedTag(stored.selectedTag ?? null);
+                setSelectedImportSource(stored.selectedImportSource ?? null);
+                setSelectedPricing(stored.selectedPricing ?? null);
+                setNeededFilterSites(stored.neededFilterSites ?? 'all');
+                setSortBy(stored.sortBy ?? 'created_at');
+                setSortOrder(stored.sortOrder ?? 'desc');
+                setSelectedGroup(stored.selectedGroup ?? null);
+                setExcludeMode(stored.excludeMode ?? false);
+                setExcludedCategoryIds(stored.excludedCategoryIds ?? new Set());
+                setExcludedTagIds(stored.excludedTagIds ?? new Set());
+                setExcludedImportSources(stored.excludedImportSources ?? new Set());
+                setExcludedPricingValues(stored.excludedPricingValues ?? new Set());
+                setExcludedNeededValues(stored.excludedNeededValues ?? new Set());
+            } else {
+                setSearchQuery('');
+                setSearchInput('');
+                setSelectedCategory(null);
+                setSelectedTag(null);
+                setSelectedImportSource(null);
+                setSelectedPricing(null);
+                setNeededFilterSites('all');
+                setSortBy('created_at');
+                setSortOrder('desc');
+                setSelectedGroup(null);
+                setExcludeMode(false);
+                setExcludedCategoryIds(new Set());
+                setExcludedTagIds(new Set());
+                setExcludedImportSources(new Set());
+                setExcludedPricingValues(new Set());
+                setExcludedNeededValues(new Set());
+            }
+        }
+
+        prevTabRef.current = activeTab;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
+
+    // Sync filter/sort state to URL query params (shallow, no page reload)
+    // Only write params relevant to the active tab — each tab has its own filters
+    const urlSyncRef = useRef(null);
+    useEffect(() => {
+        if (!router?.isReady) return;
+        if (urlSyncRef.current) clearTimeout(urlSyncRef.current);
+        urlSyncRef.current = setTimeout(() => {
+            const tab = activeTab || 'sites';
+            const params = { tab };
+
+            // Sites / Favorites tab filters
+            if (tab === 'sites' || tab === 'favorites') {
+                if (searchQuery) params.q = searchQuery;
+                if (selectedCategory) {
+                    if (selectedCategory === 'uncategorized') {
+                        params.category = 'uncategorized';
+                    } else {
+                        const categoryName = categories.find(c => c.id === selectedCategory)?.name;
+                        if (categoryName) params.category = categoryName;
+                    }
+                }
+                if (selectedTag) {
+                    if (selectedTag === 'untagged' || selectedTag === 'uncategorized') {
+                        params.tag = selectedTag;
+                    } else {
+                        const tagName = tags.find(t => t.id === selectedTag)?.name;
+                        if (tagName) params.tag = tagName;
+                    }
+                }
+                if (selectedImportSource) params.source = selectedImportSource;
+                if (selectedPricing) params.pricing = selectedPricing;
+                if (neededFilterSites !== 'all') params.needed = neededFilterSites;
+                if (selectedGroup) params.group = groupKeyToLabel(selectedGroup);
+                if (excludeMode) {
+                    params.exclude = '1';
+                    // Excluded categories (convert IDs to names)
+                    if (excludedCategoryIds.size > 0) {
+                        const names = [...excludedCategoryIds].map(id => {
+                            if (id === 'all' || id === 'uncategorized') return id;
+                            return categories.find(c => c.id === id)?.name || null;
+                        }).filter(Boolean);
+                        if (names.length) params.xcat = names.join(',');
+                    }
+                    // Excluded tags (convert IDs to names)
+                    if (excludedTagIds.size > 0) {
+                        const names = [...excludedTagIds].map(id => {
+                            if (id === 'all' || id === 'untagged' || id === 'uncategorized') return id;
+                            return tags.find(t => t.id === id)?.name || null;
+                        }).filter(Boolean);
+                        if (names.length) params.xtag = names.join(',');
+                    }
+                    if (excludedImportSources.size > 0) params.xsrc = [...excludedImportSources].join(',');
+                    if (excludedPricingValues.size > 0) params.xprc = [...excludedPricingValues].join(',');
+                    if (excludedNeededValues.size > 0) params.xndd = [...excludedNeededValues].join(',');
+                }
+                params.sort = sortBy;
+                params.order = sortOrder;
+            }
+
+            // Categories tab filters
+            if (tab === 'categories') {
+                if (usageFilterCategories !== 'all') params.usage = usageFilterCategories;
+                if (neededFilterCategories !== 'all') params.needed = neededFilterCategories;
+                params.sort = sortByCategories;
+                params.order = sortOrderCategories;
+            }
+
+            // Tags tab filters
+            if (tab === 'tags') {
+                if (usageFilterTags !== 'all') params.usage = usageFilterTags;
+                if (neededFilterTags !== 'all') params.needed = neededFilterTags;
+                params.sort = sortByTags;
+                params.order = sortOrderTags;
+            }
+
+            // Preserve page param if present
+            if (router.query?.page) params.page = router.query.page;
+
+            // Only update if params actually changed
+            const currentParams = { ...router.query };
+            const changed = Object.keys(params).some(k => String(params[k]) !== String(currentParams[k]))
+                || Object.keys(currentParams).some(k => k !== 'addUrl' && k !== 'addTitle' && !(k in params));
+            if (changed) {
+                router.replace({ pathname: router.pathname, query: params }, undefined, { shallow: true });
+            }
+        }, 150); // Small debounce to batch rapid changes
+        return () => { if (urlSyncRef.current) clearTimeout(urlSyncRef.current); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchQuery, selectedCategory, selectedTag, selectedImportSource, selectedPricing,
+        neededFilterSites, usageFilterCategories, usageFilterTags, neededFilterCategories,
+        neededFilterTags, sortBy, sortOrder, sortByCategories, sortOrderCategories,
+        sortByTags, sortOrderTags, activeTab, categories, tags, selectedGroup,
+        excludeMode, excludedCategoryIds, excludedTagIds, excludedImportSources,
+        excludedPricingValues, excludedNeededValues]);
+
+    // Initialize filters from URL on first load (convert category/tag names to IDs)
+    // Only load params for the current tab — each tab has its own URL params
+    const initLoadedRef = useRef(false);
+    useEffect(() => {
+        if (!router?.isReady || initLoadedRef.current || !categories.length || !tags.length) return;
+        initLoadedRef.current = true;
+
+        const query = router.query;
+        const currentTab = query?.tab || 'sites';
+
+        if (currentTab === 'sites' || currentTab === 'favorites') {
+            if (query.category) {
+                if (query.category === 'uncategorized') {
+                    setSelectedCategory('uncategorized');
+                } else {
+                    const catId = getCategoryIdByName(query.category, categories);
+                    if (catId) setSelectedCategory(catId);
+                }
+            }
+            if (query.tag) {
+                if (query.tag === 'untagged' || query.tag === 'uncategorized') {
+                    setSelectedTag(query.tag);
+                } else {
+                    const tagId = getTagIdByName(query.tag, tags);
+                    if (tagId) setSelectedTag(tagId);
+                }
+            }
+            if (query.source) setSelectedImportSource(query.source);
+            if (query.pricing) setSelectedPricing(query.pricing);
+            if (query.needed) setNeededFilterSites(query.needed);
+            if (query.q) { setSearchQuery(query.q); setSearchInput(query.q); }
+            if (query.group) setSelectedGroup(groupLabelToKey(query.group));
+            if (query.exclude === '1') {
+                setExcludeMode(true);
+                if (query.xcat) {
+                    const ids = query.xcat.split(',').map(n => {
+                        if (n === 'all' || n === 'uncategorized') return n;
+                        return getCategoryIdByName(n, categories) || null;
+                    }).filter(Boolean);
+                    if (ids.length) setExcludedCategoryIds(new Set(ids));
+                }
+                if (query.xtag) {
+                    const ids = query.xtag.split(',').map(n => {
+                        if (n === 'all' || n === 'untagged' || n === 'uncategorized') return n;
+                        return getTagIdByName(n, tags) || null;
+                    }).filter(Boolean);
+                    if (ids.length) setExcludedTagIds(new Set(ids));
+                }
+                if (query.xsrc) setExcludedImportSources(new Set(query.xsrc.split(',')));
+                if (query.xprc) setExcludedPricingValues(new Set(query.xprc.split(',')));
+                if (query.xndd) setExcludedNeededValues(new Set(query.xndd.split(',')));
+            }
+            if (query.sort) setSortBy(query.sort);
+            if (query.order) setSortOrder(query.order);
+        } else if (currentTab === 'categories') {
+            if (query.sort) setSortByCategories(query.sort);
+            if (query.order) setSortOrderCategories(query.order);
+            if (query.usage) setUsageFilterCategories(query.usage);
+            if (query.needed) setNeededFilterCategories(query.needed);
+        } else if (currentTab === 'tags') {
+            if (query.sort) setSortByTags(query.sort);
+            if (query.order) setSortOrderTags(query.order);
+            if (query.usage) setUsageFilterTags(query.usage);
+            if (query.needed) setNeededFilterTags(query.needed);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [router?.isReady, categories.length, tags.length]);
 
     // Multi-select state
     const [selectedSites, setSelectedSites] = useState(new Set());
@@ -395,18 +674,22 @@ export function DashboardProvider({ children }) {
     const hadUserRef = useRef(false);
     const clearDataTimeoutRef = useRef(null);
 
+    // Toast notification timer ref
+    const toastTimerRef = useRef(null);
+
     // Show toast notification
     const showToast = useCallback((message, type = 'info', duration = TOAST_DURATION) => {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ message, type, id: Date.now() });
-        setTimeout(() => setToast(null), duration);
+        toastTimerRef.current = setTimeout(() => { setToast(null); toastTimerRef.current = null; }, duration);
     }, []);
 
     // Toggle favorite site - updates sites table
     const toggleFavorite = useCallback(async (siteId) => {
-        try {
-            const site = sites.find(s => s.id === siteId);
-            if (!site) return;
+        const site = sites.find(s => s.id === siteId);
+        if (!site) return;
 
+        try {
             // Update local sites state
             setSites(prev => prev.map(s =>
                 s.id === siteId ? { ...s, is_favorite: !s.is_favorite } : s
@@ -440,10 +723,10 @@ export function DashboardProvider({ children }) {
 
     // Toggle pinned site - updates sites table
     const togglePinned = useCallback(async (siteId) => {
-        try {
-            const site = sites.find(s => s.id === siteId);
-            if (!site) return;
+        const site = sites.find(s => s.id === siteId);
+        if (!site) return;
 
+        try {
             // Update local sites state
             setSites(prev => prev.map(s =>
                 s.id === siteId ? { ...s, is_pinned: !s.is_pinned } : s
@@ -492,7 +775,7 @@ export function DashboardProvider({ children }) {
         const prefixes = {};
         // Extract quoted or unquoted prefix values
         const prefixPattern = /\b(cat|tag|fav|pin|price|desc|needed):(?:"([^"]*)"|([^\s]*))/gi;
-        let text = raw.replace(prefixPattern, (_, key, quoted, unquoted) => {
+        const text = raw.replace(prefixPattern, (_, key, quoted, unquoted) => {
             const val = (quoted ?? unquoted).trim();
             const k = key.toLowerCase();
             if (!prefixes[k]) prefixes[k] = [];
@@ -1080,7 +1363,7 @@ export function DashboardProvider({ children }) {
             showToast(`Failed to add site: ${err.message}`, 'error');
             throw err;
         }
-    }, [user, showToast, fetchData, fetchSitesPage, currentPage, refreshCatTagCounts]);
+    }, [user, showToast, fetchData, fetchSitesPage, currentPage, refreshCatTagCounts, stats]);
 
     const updateSite = useCallback(async (id, siteData) => {
         try {
@@ -1224,7 +1507,7 @@ export function DashboardProvider({ children }) {
             showToast(`Failed to add category: ${err.message}`, 'error');
             throw err;
         }
-    }, [categories, showToast]);
+    }, [categories, showToast, user, stats]);
 
     const updateCategory = useCallback(async (id, categoryData) => {
         try {
@@ -1325,7 +1608,7 @@ export function DashboardProvider({ children }) {
             showToast(`Failed to add tag: ${err.message}`, 'error');
             throw err;
         }
-    }, [tags, showToast]);
+    }, [tags, showToast, user, stats]);
 
     const updateTag = useCallback(async (id, tagData) => {
         try {
@@ -1396,7 +1679,7 @@ export function DashboardProvider({ children }) {
 
     // Sorted and filtered tags
     const filteredTags = useMemo(() => sortItems(tags, sortByTags, sortOrderTags), [tags, sortByTags, sortOrderTags]);
-    const value = {
+    const value = useMemo(() => ({
         // Data
         sites,
         setSites,
@@ -1466,6 +1749,22 @@ export function DashboardProvider({ children }) {
         setSortOrderTags,
         activeTab,
         setActiveTab,
+        selectedGroup,
+        setSelectedGroup,
+
+        // Exclude mode
+        excludeMode,
+        setExcludeMode,
+        excludedCategoryIds,
+        setExcludedCategoryIds,
+        excludedTagIds,
+        setExcludedTagIds,
+        excludedImportSources,
+        setExcludedImportSources,
+        excludedPricingValues,
+        setExcludedPricingValues,
+        excludedNeededValues,
+        setExcludedNeededValues,
 
         // Multi-select
         selectedSites,
@@ -1527,7 +1826,27 @@ export function DashboardProvider({ children }) {
         pendingChanges,
         syncing,
         syncOfflineChanges
-    };
+    }), [
+        sites, filteredCategories, filteredTags, stats, loading, error, initialDataLoaded,
+        filteredSites, toast, showToast, currentPage, totalSitesCount, totalPages,
+        fetchSitesPage, fetchAllSites, crossFilterCounts, crossFilterReady,
+        searchQuery, searchInput, handleSearchInput, clearSearch, parseSearchPrefixes,
+        selectedCategory, selectedTag, selectedImportSource, selectedPricing,
+        usageFilterCategories, usageFilterTags, neededFilterSites, neededFilterCategories,
+        neededFilterTags, sortBy, sortOrder, sortByCategories, sortOrderCategories,
+        sortByTags, sortOrderTags, activeTab, selectedGroup,
+        excludeMode, excludedCategoryIds, excludedTagIds, excludedImportSources,
+        excludedPricingValues, excludedNeededValues,
+        selectedSites, selectedCategories,
+        selectedTags, multiSelectMode, toggleFavorite, togglePinned, fetchData,
+        addSite, updateSite, deleteSite, addCategory, updateCategory, deleteCategory,
+        addTag, updateTag, deleteTag, failedRelationUpdates, retrySiteRelations,
+        checkingLinks, linkCheckResult, linkCheckError, linkCheckProgress,
+        runLinkCheck, cancelLinkCheck, importPreview, importSource, useFoldersAsCategories,
+        clearImportPreview, importing, importProgress, importResult, importError,
+        runImport, cancelImport, clearImportResult, isOnline, pendingChanges, syncing,
+        syncOfflineChanges
+    ]);
 
     return (
         <DashboardContext.Provider value={value}>

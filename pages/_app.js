@@ -166,7 +166,7 @@ export default function App({ Component, pageProps }) {
         <meta name="apple-mobile-web-app-title" content={APP_CONFIG.NAME} />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="theme-color" content={APP_CONFIG.THEME_COLOR} />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
 
         {/* PWA Manifest */}
         <link rel="manifest" href={APP_CONFIG.MANIFEST_PATH} />

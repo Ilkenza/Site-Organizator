@@ -1,5 +1,7 @@
 // Background service worker for Site Organizer
 // Handles periodic token refresh to keep session alive
+/* global chrome */
+/* eslint-disable no-console */
 
 const SUPABASE_CONFIG = {
     url: 'https://skacyhzljreaitrbgbte.supabase.co',
@@ -49,7 +51,7 @@ async function refreshTokenIfNeeded() {
     try {
         // Check if Remember Me is enabled
         const { rememberMe } = await chrome.storage.local.get('rememberMe');
-        if (!rememberMe && rememberMe !== 'true') {
+        if (rememberMe !== 'true') {
             console.log('[background] Remember Me not enabled, skipping token refresh');
             return;
         }
@@ -144,7 +146,7 @@ async function refreshTokenIfNeeded() {
 }
 
 // Also save rememberMe preference to chrome.storage.local when set in popup
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'SET_REMEMBER_ME') {
         chrome.storage.local.set({ rememberMe: message.value ? 'true' : 'false' });
         console.log('[background] Remember Me preference saved:', message.value);

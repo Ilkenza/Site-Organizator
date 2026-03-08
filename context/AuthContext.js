@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase, fetchAPI } from '../lib/supabase';
 import { resolveTier, hasFeature, TIER_PRO } from '../lib/tierConfig';
+import { isAdminEmail } from '../lib/adminEmails';
 
 const AuthContext = createContext({});
 
@@ -81,12 +82,6 @@ async function fetchProfileViaAPI() {
     }
 }
 
-// Helper to check if an email is an admin
-function isAdminEmail(email) {
-    if (!email) return false;
-    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-    return adminEmails.includes(email.toLowerCase());
-}
 
 // Helper to create user object with profile data
 function createUserWithProfile(baseUser, profile) {
@@ -226,14 +221,7 @@ export function AuthProvider({ children }) {
 
                     // Don't block users based on AAL - let login page handle MFA flow
                     // Just log for debugging
-                    try {
-                        const factorsResult = await supabase.auth.mfa.listFactors();
-                        const totpFactor = factorsResult?.data?.totp?.find(f => f.status === 'verified');
-                        const hasMFA = !!totpFactor;
-                        const currentAAL = getTokenAAL(session.access_token);
-                    } catch (err) {
-                        // Could not check MFA status
-                    }
+
 
                     // Check if user already has REAL profile data (from localStorage)
                     const hasProfileData = !!session.user.avatarUrl || !!session.user.displayName;

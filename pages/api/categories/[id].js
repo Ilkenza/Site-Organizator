@@ -2,20 +2,21 @@
 
 import {
   HTTP, configGuard, extractTokenFromReq, decodeJwt,
-  buildHeaders, restUrl, sendError, sendOk,
+  buildHeaders, restUrl, sendError, sendOk, guardUUID,
 } from '../helpers/api-utils';
 
 export default async function handler(req, res) {
   const cfg = configGuard(res);
   if (!cfg) return;
   const { id } = req.query;
+  if (!guardUUID(id, res)) return;
   const token = extractTokenFromReq(req);
-  const authToken = token || cfg.anonKey;
+  if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
+  const authToken = token;
   const h = (opts) => buildHeaders(cfg.anonKey, authToken, opts);
   const url = `${restUrl(cfg, 'categories')}?id=eq.${id}`;
 
   if (req.method === 'PUT' || req.method === 'PATCH') {
-    if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
     try {
       const raw = req.body || {};
       const body = {};
@@ -31,7 +32,6 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
     try {
       // Check if category is used on any site
       const checkUrl = `${restUrl(cfg, 'site_categories')}?category_id=eq.${id}&select=site_id`;

@@ -2,7 +2,7 @@
 
 import {
   HTTP, configGuard, extractTokenFromReq,
-  buildHeaders, restUrl, sendError, sendOk, methodGuard, decodeJwt,
+  buildHeaders, restUrl, sendError, sendOk, methodGuard, decodeJwt, validateUUID,
 } from './helpers/api-utils';
 
 function h(cfg, token, opts) { return buildHeaders(cfg.anonKey, token, opts); }
@@ -22,6 +22,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const { siteId } = req.body || {};
     if (!siteId) return sendError(res, HTTP.BAD_REQUEST, 'siteId required');
+    if (!validateUUID(siteId)) return sendError(res, HTTP.BAD_REQUEST, 'Invalid siteId format');
 
     const r = await fetch(
       `${restUrl(cfg, 'sites')}?id=eq.${siteId}&user_id=eq.${userId}`,

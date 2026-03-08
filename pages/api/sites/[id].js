@@ -2,7 +2,7 @@
 
 import {
   HTTP, configGuard, extractTokenFromReq, decodeJwt,
-  buildHeaders, restUrl, sendError, sendOk,
+  buildHeaders, restUrl, sendError, sendOk, guardUUID, validateUUID,
 } from '../helpers/api-utils';
 
 const ALLOWED = ['name', 'url', 'pricing', 'description', 'use_case', 'is_needed'];
@@ -15,7 +15,9 @@ const pick = (body) => {
 
 async function fetchNames(ids, table, cfg, token) {
   if (!ids?.length) return [];
-  const p = ids.map(i => `"${i}"`).join(',');
+  const safe = ids.filter(i => validateUUID(i));
+  if (!safe.length) return [];
+  const p = safe.map(i => `"${i}"`).join(',');
   const r = await fetch(`${restUrl(cfg, table)}?id=in.(${p})&select=name`, { headers: buildHeaders(cfg.anonKey, token) });
   return r.ok ? (await r.json()).map(x => x.name) : [];
 }
@@ -61,6 +63,7 @@ export default async function handler(req, res) {
   const cfg = configGuard(res);
   if (!cfg) return;
   const { id } = req.query;
+  if (!guardUUID(id, res)) return;
   const token = extractTokenFromReq(req);
   if (!token) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
   const authToken = token;

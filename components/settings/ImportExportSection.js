@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
-import { SpinnerIcon, TextLinesIcon, BookmarkIcon, DocumentIcon, UploadIcon, DownloadIcon, ArrowLeftIcon, CheckCircleIcon, FolderIcon, TagIcon, GlobeIcon, WarningIcon } from '../ui/Icons';
+import { SpinnerIcon, TextLinesIcon, BookmarkIcon, DocumentIcon, UploadIcon, DownloadIcon, ArrowLeftIcon, CheckCircleIcon, FolderIcon, TagIcon, GlobeIcon, WarningIcon, CollectionIcon } from '../ui/Icons';
 import { useDashboard } from '../../context/DashboardContext';
 
 export default function ImportExportSection({ user, fetchData, showToast }) {
     const [importMessage, setImportMessage] = useState(null);
     const [showDuplicates, setShowDuplicates] = useState(false);
     const [exporting, setExporting] = useState(false);
-    const [exportingFormat, setExportingFormat] = useState(null);
+    const [_exportingFormat, setExportingFormat] = useState(null);
     // Export modal state
     const [exportModalFormat, setExportModalFormat] = useState(null); // null = closed, 'json'|'csv'|'html' = open
-    const [exportIncludes, setExportIncludes] = useState({ sites: true, categories: true, tags: true });
+    const [exportIncludes, setExportIncludes] = useState({ sites: true, categories: true, tags: true, groups: true });
     const toggleExportInclude = (key) => setExportIncludes(prev => ({ ...prev, [key]: !prev[key] }));
-    const hasAnyExportInclude = exportIncludes.sites || exportIncludes.categories || exportIncludes.tags;
+    const hasAnyExportInclude = exportIncludes.sites || exportIncludes.categories || exportIncludes.tags || exportIncludes.groups;
 
     // Import state from context (persists across tab changes)
     const {
@@ -72,7 +72,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
             return;
         }
 
-        await runImport(importPreview.sites, { useFoldersAsCategories, importSource: importSource || undefined });
+        await runImport(importPreview.sites, { useFoldersAsCategories, importSource: importSource || undefined, groups: importPreview.groups || null });
     };
 
     // Handle import result changes
@@ -94,6 +94,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                     errors: importResult.errors,
                     categoriesCreated: importResult.categoriesCreated || 0,
                     tagsCreated: importResult.tagsCreated || 0,
+                    groupsImported: importResult.groupsImported || 0,
                     tierMessage: importResult.tierMessage
                 });
             } else {
@@ -104,7 +105,8 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                     updated: importResult.updated,
                     errors: importResult.errors,
                     categoriesCreated: importResult.categoriesCreated || 0,
-                    tagsCreated: importResult.tagsCreated || 0
+                    tagsCreated: importResult.tagsCreated || 0,
+                    groupsImported: importResult.groupsImported || 0
                 });
             }
             setImportPreview(null);
@@ -124,7 +126,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                 text: `❌ No sites imported. ${importResult.errors} error(s) occurred.`
             });
         }
-    }, [importResult, fetchData]);
+    }, [importResult, fetchData, setImportPreview, setImportSource]);
 
     useEffect(() => {
         if (importError) {
@@ -149,7 +151,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                     ].map(({ fmt, icon }) => (
                         <button
                             key={fmt}
-                            onClick={() => { setExportModalFormat(fmt); setExportIncludes({ sites: true, categories: true, tags: true }); }}
+                            onClick={() => { setExportModalFormat(fmt); setExportIncludes({ sites: true, categories: true, tags: true, groups: true }); }}
                             disabled={exporting}
                             className="flex-1 xs:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-[#1E4976] border border-[#2A5A8A] text-[#6CBBFB] rounded-lg hover:bg-[#2A5A8A] hover:text-[#8DD0FF] disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
                         >
@@ -175,14 +177,15 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                     { key: 'sites', label: 'Sites', desc: 'All your saved sites with details', icon: <GlobeIcon className="w-5 h-5" /> },
                                     { key: 'categories', label: 'Categories', desc: 'Include category data in sites & as list', icon: <FolderIcon className="w-5 h-5" /> },
                                     { key: 'tags', label: 'Tags', desc: 'Include tag data in sites & as list', icon: <TagIcon className="w-5 h-5" /> },
+                                    { key: 'groups', label: 'Groups', desc: 'Sidebar category groups & layout', icon: <CollectionIcon className="w-5 h-5" /> },
                                 ].map(({ key, label, desc, icon }) => (
                                     <button
                                         key={key}
                                         type="button"
                                         onClick={() => toggleExportInclude(key)}
                                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left ${exportIncludes[key]
-                                                ? 'bg-app-accent/10 border-app-accent/40'
-                                                : 'bg-app-bg-light border-app-border hover:border-app-accent/30'
+                                            ? 'bg-app-accent/10 border-app-accent/40'
+                                            : 'bg-app-bg-light border-app-border hover:border-app-accent/30'
                                             }`}
                                     >
                                         <span className={exportIncludes[key] ? 'text-app-accent' : 'text-app-text-muted'}>{icon}</span>
@@ -191,8 +194,8 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                             <p className="text-[10px] text-app-text-muted leading-tight">{desc}</p>
                                         </div>
                                         <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${exportIncludes[key]
-                                                ? 'bg-app-accent border-app-accent'
-                                                : 'border-app-border'
+                                            ? 'bg-app-accent border-app-accent'
+                                            : 'border-app-border'
                                             }`}>
                                             {exportIncludes[key] && (
                                                 <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -206,7 +209,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
 
                             {/* Filename preview */}
                             <div className="text-[10px] text-app-text-muted mb-4 bg-app-bg-light rounded px-2.5 py-1.5 border border-app-border font-mono truncate">
-                                {[exportIncludes.sites && 'sites', exportIncludes.categories && 'categories', exportIncludes.tags && 'tags'].filter(Boolean).join('-') || '...'}-export-{new Date().toISOString().split('T')[0]}.{exportModalFormat}
+                                {[exportIncludes.sites && 'sites', exportIncludes.categories && 'categories', exportIncludes.tags && 'tags', exportIncludes.groups && 'groups'].filter(Boolean).join('-') || '...'}-export-{new Date().toISOString().split('T')[0]}.{exportModalFormat}
                             </div>
 
                             <div className="flex gap-2">
@@ -351,6 +354,9 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                         </div>
                         <p className="text-sm text-app-text-secondary mb-3">
                             <strong>{importPreview.uniqueCount || importPreview.sites?.length || 0}</strong> site{(importPreview.uniqueCount || importPreview.sites?.length) !== 1 ? 's' : ''} ready to import
+                            {importPreview.groups?.custom_groups?.length > 0 && (
+                                <span className="text-app-text-muted text-xs ml-1">(+ {importPreview.groups.custom_groups.length} group{importPreview.groups.custom_groups.length !== 1 ? 's' : ''})</span>
+                            )}
                             {importPreview.duplicates > 0 && (
                                 <>
                                     <span className="text-app-text-muted text-xs ml-1">({importPreview.duplicates} duplicate{importPreview.duplicates !== 1 ? 's' : ''} removed)</span>
@@ -501,6 +507,14 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                             <TagIcon className="w-4 h-4 text-cyan-400 flex-shrink-0" />
                                             <span className="text-app-text-secondary">
                                                 <span className="font-semibold text-cyan-400">{importMessage.tagsCreated}</span> tag{importMessage.tagsCreated !== 1 ? 's' : ''} created
+                                            </span>
+                                        </div>
+                                    )}
+                                    {importMessage.groupsImported > 0 && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <CollectionIcon className="w-4 h-4 text-orange-400 flex-shrink-0" />
+                                            <span className="text-app-text-secondary">
+                                                <span className="font-semibold text-orange-400">{importMessage.groupsImported}</span> group{importMessage.groupsImported !== 1 ? 's' : ''} imported
                                             </span>
                                         </div>
                                     )}
