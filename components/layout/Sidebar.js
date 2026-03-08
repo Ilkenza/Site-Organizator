@@ -4,19 +4,18 @@ import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
 import { CollectionIcon, CloseIcon, GlobeIcon, FolderIcon, TagIcon, StarIcon, SettingsIcon, PinSimpleIcon, UploadIcon, ChevronDownIcon, PlusIcon, BookmarkIcon, TextLinesIcon, DocumentIcon, FilterIcon, ListBulletIcon, CheckCircleIcon, BanIcon, EditIcon, TrashIcon } from '../ui/Icons';
 import GroupModal from './GroupModal';
+import { ConfirmModal } from '../ui/Modal';
 import { SUPER_CATEGORIES, matchSuperCategory } from '../../lib/sharedGroups';
 
 const GROUP_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6'];
 
-function NoteGroupsSection({ noteGroups, addNoteGroup, updateNoteGroup, deleteNoteGroup }) {
+function NoteGroupsSection({ noteGroups, addNoteGroup, updateNoteGroup, onDeleteGroup }) {
     const [newGroupName, setNewGroupName] = useState('');
     const [newGroupColor, setNewGroupColor] = useState('#6366f1');
     const [showNewGroup, setShowNewGroup] = useState(false);
     const [editingGroupId, setEditingGroupId] = useState(null);
     const [editName, setEditName] = useState('');
     const [creating, setCreating] = useState(false);
-    const [groupToDelete, setGroupToDelete] = useState(null);
-    const [deleting, setDeleting] = useState(false);
 
     const handleCreate = async () => {
         if (!newGroupName.trim() || creating) return;
@@ -67,7 +66,7 @@ function NoteGroupsSection({ noteGroups, addNoteGroup, updateNoteGroup, deleteNo
                             <EditIcon className="w-3 h-3" />
                         </button>
                         <button
-                            onClick={() => setGroupToDelete(g)}
+                            onClick={() => onDeleteGroup(g)}
                             className="p-0.5 text-app-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                             title="Delete"
                         >
@@ -120,49 +119,6 @@ function NoteGroupsSection({ noteGroups, addNoteGroup, updateNoteGroup, deleteNo
                 </button>
             )}
 
-            {/* Delete Group Confirmation */}
-            {groupToDelete && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setGroupToDelete(null)}>
-                    <div className="bg-app-bg-card border border-app-border rounded-xl p-4 mx-4 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
-                        <h4 className="text-sm font-semibold text-app-text-primary mb-2">Delete Group</h4>
-                        {(groupToDelete.note_count || 0) > 0 ? (
-                            <>
-                                <p className="text-xs text-app-text-secondary mb-3">
-                                    Cannot delete &quot;{groupToDelete.name}&quot; because it has {groupToDelete.note_count} note{groupToDelete.note_count !== 1 ? 's' : ''}. Move or remove all notes from this group first.
-                                </p>
-                                <div className="flex justify-end">
-                                    <button onClick={() => setGroupToDelete(null)} className="px-3 py-1.5 text-xs font-medium text-app-text-secondary hover:text-app-text-primary rounded-lg border border-app-border hover:bg-app-bg-light transition-colors">
-                                        OK
-                                    </button>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <p className="text-xs text-app-text-secondary mb-3">
-                                    Are you sure you want to delete &quot;{groupToDelete.name}&quot;? This action cannot be undone.
-                                </p>
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setGroupToDelete(null)} className="px-3 py-1.5 text-xs font-medium text-app-text-secondary hover:text-app-text-primary rounded-lg border border-app-border hover:bg-app-bg-light transition-colors">
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={async () => {
-                                            setDeleting(true);
-                                            try { await deleteNoteGroup(groupToDelete.id); } catch { }
-                                            setDeleting(false);
-                                            setGroupToDelete(null);
-                                        }}
-                                        disabled={deleting}
-                                        className="px-3 py-1.5 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg hover:bg-red-500/20 disabled:opacity-50 transition-colors"
-                                    >
-                                        {deleting ? 'Deleting...' : 'Delete'}
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
@@ -254,6 +210,8 @@ export default function Sidebar({
         try { const s = localStorage.getItem('siteorg_custom_groups'); return s ? JSON.parse(s) : []; } catch { return []; }
     });
     const [groupModalOpen, setGroupModalOpen] = useState(false);
+    const [noteGroupToDelete, setNoteGroupToDelete] = useState(null);
+    const [deletingNoteGroup, setDeletingNoteGroup] = useState(false);
     const [editingGroup, setEditingGroup] = useState(null);
     // Hidden auto-matched groups (persisted in Supabase user_metadata + localStorage fallback)
     const [hiddenAutoGroups, setHiddenAutoGroups] = useState(() => {
@@ -1443,7 +1401,7 @@ export default function Sidebar({
                         noteGroups={noteGroups}
                         addNoteGroup={addNoteGroup}
                         updateNoteGroup={updateNoteGroup}
-                        deleteNoteGroup={deleteNoteGroup}
+                        onDeleteGroup={setNoteGroupToDelete}
                     />
                 )}
             </aside>
@@ -1459,6 +1417,31 @@ export default function Sidebar({
                     setGroupModalOpen(false);
                     setEditingGroup(null);
                 }}
+            />
+
+            <ConfirmModal
+                isOpen={!!noteGroupToDelete}
+                onClose={() => setNoteGroupToDelete(null)}
+                onConfirm={async () => {
+                    if ((noteGroupToDelete?.note_count || 0) > 0) {
+                        setNoteGroupToDelete(null);
+                        return;
+                    }
+                    setDeletingNoteGroup(true);
+                    try { await deleteNoteGroup(noteGroupToDelete.id); } catch { }
+                    setDeletingNoteGroup(false);
+                    setNoteGroupToDelete(null);
+                }}
+                title="Delete Group"
+                message={
+                    (noteGroupToDelete?.note_count || 0) > 0
+                        ? `Cannot delete "${noteGroupToDelete?.name}" because it has ${noteGroupToDelete?.note_count} note${noteGroupToDelete?.note_count !== 1 ? 's' : ''}. Move or remove all notes from this group first.`
+                        : `Are you sure you want to delete "${noteGroupToDelete?.name}"? This action cannot be undone.`
+                }
+                confirmText={(noteGroupToDelete?.note_count || 0) > 0 ? 'OK' : 'Delete'}
+                cancelText={(noteGroupToDelete?.note_count || 0) > 0 ? null : 'Cancel'}
+                variant="danger"
+                loading={deletingNoteGroup}
             />
         </>
     );

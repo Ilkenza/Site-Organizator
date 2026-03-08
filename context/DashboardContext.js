@@ -146,6 +146,32 @@ export function DashboardProvider({ children }) {
     const [tags, setTags] = useState([]);
     const [notes, setNotes] = useState([]);
     const [noteGroups, setNoteGroups] = useState([]);
+    // Notes tab filter/sort state (persists across tab switches, synced to URL)
+    const [notesFilter, setNotesFilter] = useState(() => {
+        if (typeof window === 'undefined') return { search: '', group: null, sortBy: 'created_at', sortOrder: 'desc', page: 1 };
+        const params = new URLSearchParams(window.location.search);
+        return {
+            search: params.get('nq') || '',
+            group: params.get('ngroup') || null,
+            sortBy: params.get('nsort') || 'created_at',
+            sortOrder: params.get('norder') || 'desc',
+            page: parseInt(params.get('npage'), 10) || 1,
+        };
+    });
+    // Sync notesFilter to URL when on notes tab
+    useEffect(() => {
+        if (router.query.tab !== 'notes') return;
+        const query = { ...router.query };
+        const { search, group, sortBy: sb, sortOrder: so, page } = notesFilter;
+        if (search) query.nq = search; else delete query.nq;
+        if (group) query.ngroup = group; else delete query.ngroup;
+        if (sb !== 'created_at') query.nsort = sb; else delete query.nsort;
+        if (so !== 'desc') query.norder = so; else delete query.norder;
+        if (page > 1) query.npage = String(page); else delete query.npage;
+        router.replace({ pathname: router.pathname, query }, undefined, { shallow: true });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [notesFilter, router.query.tab]);
+
     const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0, notes: 0, noteGroups: 0 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -1979,6 +2005,10 @@ export function DashboardProvider({ children }) {
         updateNoteGroup,
         deleteNoteGroup,
 
+        // Notes filter state
+        notesFilter,
+        setNotesFilter,
+
         // Offline-first
         isOnline,
         pendingChanges,
@@ -2004,7 +2034,8 @@ export function DashboardProvider({ children }) {
         clearImportPreview, importing, importProgress, importResult, importError,
         runImport, cancelImport, clearImportResult, isOnline, pendingChanges, syncing,
         syncOfflineChanges, notes, noteGroups, fetchNotes, addNote, updateNote, deleteNote,
-        fetchNoteGroups, addNoteGroup, updateNoteGroup, deleteNoteGroup
+        fetchNoteGroups, addNoteGroup, updateNoteGroup, deleteNoteGroup,
+        notesFilter, setNotesFilter
     ]);
 
     return (
