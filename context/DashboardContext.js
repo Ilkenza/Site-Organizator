@@ -144,7 +144,9 @@ export function DashboardProvider({ children }) {
     const [sites, setSites] = useState([]);
     const [categories, setCategories] = useState([]);
     const [tags, setTags] = useState([]);
-    const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0 });
+    const [notes, setNotes] = useState([]);
+    const [noteGroups, setNoteGroups] = useState([]);
+    const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0, notes: 0, noteGroups: 0 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [failedRelationUpdates, setFailedRelationUpdates] = useState({}); // { [siteId]: { categoryIds, tagIds, warnings } }
@@ -872,7 +874,8 @@ export function DashboardProvider({ children }) {
             const [sitesRes, categoriesRes, tagsRes, favRes, uncatRes, untagRes, totalRes,
                 manualRes, bookmarksRes, notionRes, fileRes,
                 pFullyFreeRes, pFreemiumRes, pFreeTrialRes, pPaidRes,
-                neededRes, notNeededRes] = await Promise.all([
+                neededRes, notNeededRes,
+                notesRes, noteGroupsRes] = await Promise.all([
                     fetchAPI(`/sites?${buildSitesQuery(1)}`),
                     fetchAPI('/categories'),
                     fetchAPI('/tags'),
@@ -894,7 +897,10 @@ export function DashboardProvider({ children }) {
                     fetchAPI('/sites?pricing=paid&limit=1&page=1').catch(() => null),
                     // Needed counts
                     fetchAPI('/sites?needed=needed&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?needed=not_needed&limit=1&page=1').catch(() => null)
+                    fetchAPI('/sites?needed=not_needed&limit=1&page=1').catch(() => null),
+                    // Notes & Note Groups
+                    fetchAPI('/notes?limit=5000').catch(() => null),
+                    fetchAPI('/note-groups').catch(() => null)
                 ]);
 
             const categoriesData = dedupeById(Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []));
@@ -908,6 +914,12 @@ export function DashboardProvider({ children }) {
             setSites(sitesData);
             setTotalSitesCount(totalCount);
             setCurrentPage(1);
+
+            // Notes & Note Groups
+            const notesData = Array.isArray(notesRes?.data) ? notesRes.data : (Array.isArray(notesRes) ? notesRes : []);
+            const noteGroupsData = Array.isArray(noteGroupsRes?.data) ? noteGroupsRes.data : (Array.isArray(noteGroupsRes) ? noteGroupsRes : []);
+            setNotes(notesData);
+            setNoteGroups(noteGroupsData);
 
             // Sidebar counts
             const favoritesCount = favRes?.totalCount ?? 0;
@@ -937,7 +949,9 @@ export function DashboardProvider({ children }) {
                 neededCounts: {
                     needed: neededRes?.totalCount ?? 0,
                     not_needed: notNeededRes?.totalCount ?? 0
-                }
+                },
+                notes: notesData.length,
+                noteGroups: noteGroupsData.length
             });
         } catch (err) {
             setError(err.message);
@@ -1667,6 +1681,136 @@ export function DashboardProvider({ children }) {
         }
     }, [showToast]);
 
+    // ── Notes CRUD ──────────────────────────────────────────────────────────
+    const fetchNotes = useCallback(async (params = {}) => {
+        try {
+            const q = new URLSearchParams();
+            if (params.q) q.set('q', params.q);
+            if (params.group_id) q.set('group_id', params.group_id);
+            if (params.sort_by) q.set('sort_by', params.sort_by);
+            if (params.sort_order) q.set('sort_order', params.sort_order);
+            q.set('limit', '5000');
+            const res = await fetchAPI(`/notes?${q.toString()}`);
+            const data = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+            setNotes(data);
+            setStats(prev => ({ ...prev, notes: res?.totalCount ?? data.length }));
+            return data;
+        } catch (err) {
+            console.error('Failed to fetch notes:', err);
+            return [];
+        }
+    }, []);
+
+    const addNote = useCallback(async (noteData) => {
+        if (!user) throw new Error('Must be logged in');
+        const tier = getUserTier(user);
+        const check = canAdd(tier, 'notes', stats.notes);
+        if (!check.allowed) {
+            const msg = `Note limit reached (${stats.notes}/${check.limit})`;
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
+        try {
+            const res = await fetchAPI('/notes', { method: 'POST', body: JSON.stringify(noteData) });
+            const newNote = res?.data || res;
+            setNotes(prev => [newNote, ...prev]);
+            setStats(prev => ({ ...prev, notes: prev.notes + 1 }));
+            showToast(`Note "${newNote.name}" created`, 'success');
+            return newNote;
+        } catch (err) {
+            showToast(`Failed to add note: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [user, showToast, stats.notes]);
+
+    const updateNote = useCallback(async (id, noteData) => {
+        try {
+            const res = await fetchAPI(`/notes/${id}`, { method: 'PUT', body: JSON.stringify(noteData) });
+            const updated = res?.data || res;
+            setNotes(prev => prev.map(n => n.id === id ? updated : n));
+            showToast(`Note "${updated.name}" updated`, 'success');
+            return updated;
+        } catch (err) {
+            showToast(`Failed to update note: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
+    const deleteNote = useCallback(async (id) => {
+        try {
+            await fetchAPI(`/notes/${id}`, { method: 'DELETE' });
+            setNotes(prev => prev.filter(n => n.id !== id));
+            setStats(prev => ({ ...prev, notes: prev.notes - 1 }));
+            showToast('Note deleted', 'success');
+        } catch (err) {
+            showToast(`Failed to delete note: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
+    // ── Note Groups CRUD ──────────────────────────────────────────────────
+    const fetchNoteGroups = useCallback(async () => {
+        try {
+            const res = await fetchAPI('/note-groups');
+            const data = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+            setNoteGroups(data);
+            setStats(prev => ({ ...prev, noteGroups: data.length }));
+            return data;
+        } catch (err) {
+            console.error('Failed to fetch note groups:', err);
+            return [];
+        }
+    }, []);
+
+    const addNoteGroup = useCallback(async (groupData) => {
+        if (!user) throw new Error('Must be logged in');
+        const tier = getUserTier(user);
+        const check = canAdd(tier, 'noteGroups', stats.noteGroups);
+        if (!check.allowed) {
+            const msg = `Note group limit reached (${stats.noteGroups}/${check.limit})`;
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
+        try {
+            const res = await fetchAPI('/note-groups', { method: 'POST', body: JSON.stringify(groupData) });
+            const newGroup = res?.data || res;
+            setNoteGroups(prev => prev.some(g => g.id === newGroup.id) ? prev : [...prev, newGroup]);
+            setStats(prev => ({ ...prev, noteGroups: prev.noteGroups + 1 }));
+            showToast(`Group "${newGroup.name}" created`, 'success');
+            return newGroup;
+        } catch (err) {
+            showToast(`Failed to add group: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [user, showToast, stats.noteGroups]);
+
+    const updateNoteGroup = useCallback(async (id, groupData) => {
+        try {
+            const res = await fetchAPI(`/note-groups/${id}`, { method: 'PUT', body: JSON.stringify(groupData) });
+            const updated = res?.data || res;
+            setNoteGroups(prev => prev.map(g => g.id === id ? updated : g));
+            showToast(`Group "${updated.name}" updated`, 'success');
+            return updated;
+        } catch (err) {
+            showToast(`Failed to update group: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
+    const deleteNoteGroup = useCallback(async (id) => {
+        try {
+            await fetchAPI(`/note-groups/${id}`, { method: 'DELETE' });
+            setNoteGroups(prev => prev.filter(g => g.id !== id));
+            // Unlink notes from the deleted group in local state
+            setNotes(prev => prev.map(n => n.group_id === id ? { ...n, group_id: null, note_groups: null } : n));
+            setStats(prev => ({ ...prev, noteGroups: prev.noteGroups - 1 }));
+            showToast('Group deleted', 'success');
+        } catch (err) {
+            showToast(`Failed to delete group: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
     // Sites are already filtered and sorted by the server
     // Only apply pinned-first ordering on the current page
     const filteredSites = useMemo(() =>
@@ -1821,6 +1965,20 @@ export function DashboardProvider({ children }) {
         cancelImport,
         clearImportResult,
 
+        // Notes
+        notes,
+        setNotes,
+        noteGroups,
+        setNoteGroups,
+        fetchNotes,
+        addNote,
+        updateNote,
+        deleteNote,
+        fetchNoteGroups,
+        addNoteGroup,
+        updateNoteGroup,
+        deleteNoteGroup,
+
         // Offline-first
         isOnline,
         pendingChanges,
@@ -1845,7 +2003,8 @@ export function DashboardProvider({ children }) {
         runLinkCheck, cancelLinkCheck, importPreview, importSource, useFoldersAsCategories,
         clearImportPreview, importing, importProgress, importResult, importError,
         runImport, cancelImport, clearImportResult, isOnline, pendingChanges, syncing,
-        syncOfflineChanges
+        syncOfflineChanges, notes, noteGroups, fetchNotes, addNote, updateNote, deleteNote,
+        fetchNoteGroups, addNoteGroup, updateNoteGroup, deleteNoteGroup
     ]);
 
     return (

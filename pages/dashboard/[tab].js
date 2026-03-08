@@ -22,6 +22,8 @@ const CategoriesList = dynamic(() => import('../../components/categories/Categor
 const CategoryModal = dynamic(() => import('../../components/categories/CategoryModal'), { ssr: false });
 const TagsList = dynamic(() => import('../../components/tags/TagsList'));
 const TagModal = dynamic(() => import('../../components/tags/TagModal'), { ssr: false });
+const NotesList = dynamic(() => import('../../components/notes/NotesList'));
+const NoteModal = dynamic(() => import('../../components/notes/NoteModal'), { ssr: false });
 const SettingsPanel = dynamic(() => import('../../components/settings/SettingsPanel'));
 const CommandMenu = dynamic(() => import('../../components/ui/CommandMenu'), { ssr: false });
 const OnboardingTour = dynamic(() => import('../../components/ui/OnboardingTour'), { ssr: false });
@@ -55,11 +57,13 @@ function DashboardContent() {
         setSites,
         setCategories,
         setTags,
+        setNotes,
+        deleteNote,
     } = useDashboard();
 
     // Sync activeTab with URL
     useEffect(() => {
-        if (tab && ['sites', 'categories', 'tags', 'favorites', 'settings'].includes(tab)) {
+        if (tab && ['sites', 'categories', 'tags', 'favorites', 'notes', 'settings'].includes(tab)) {
             setActiveTab(tab);
         }
     }, [tab, setActiveTab]);
@@ -72,6 +76,8 @@ function DashboardContent() {
     const [editingSite, setEditingSite] = useState(null);
     const [editingCategory, setEditingCategory] = useState(null);
     const [editingTag, setEditingTag] = useState(null);
+    const [noteModalOpen, setNoteModalOpen] = useState(false);
+    const [editingNote, setEditingNote] = useState(null);
     const [commandMenuOpen, setCommandMenuOpen] = useState(false);
     const [undoToast, setUndoToast] = useState(null);
     const pendingDeleteRef = useRef(null);
@@ -149,8 +155,10 @@ function DashboardContent() {
                     } else if (activeTab === 'tags') {
                         setEditingTag(null);
                         setTagModalOpen(true);
+                    } else if (activeTab === 'notes') {
+                        setEditingNote(null);
+                        setNoteModalOpen(true);
                     }
-                    // Do nothing in settings tab
                 }
             }
 
@@ -224,7 +232,21 @@ function DashboardContent() {
                 setEditingTag(null);
                 setTagModalOpen(true);
                 break;
+            case 'notes':
+                setEditingNote(null);
+                setNoteModalOpen(true);
+                break;
         }
+    };
+
+    // Note handlers
+    const handleEditNote = (note) => {
+        setEditingNote(note);
+        setNoteModalOpen(true);
+    };
+
+    const handleDeleteNote = (note) => {
+        setDeleteConfirm({ open: true, type: 'note', item: note });
     };
 
     // Site handlers
@@ -268,13 +290,14 @@ function DashboardContent() {
         }
 
         const itemName = item?.name || item?.url || 'Item';
-        const typeLabel = type === 'site' ? 'Site' : type === 'category' ? 'Category' : 'Tag';
+        const typeLabel = type === 'site' ? 'Site' : type === 'category' ? 'Category' : type === 'tag' ? 'Tag' : 'Note';
 
         // Optimistic: remove from UI immediately
         switch (type) {
             case 'site': setSites(prev => prev.filter(s => s.id !== item.id)); break;
             case 'category': setCategories(prev => prev.filter(c => c.id !== item.id)); break;
             case 'tag': setTags(prev => prev.filter(t => t.id !== item.id)); break;
+            case 'note': setNotes(prev => prev.filter(n => n.id !== item.id)); break;
         }
 
         // Store pending delete info
@@ -294,6 +317,7 @@ function DashboardContent() {
                         break;
                     case 'category': await deleteCategory(item.id); break;
                     case 'tag': await deleteTag(item.id); break;
+                    case 'note': await deleteNote(item.id); break;
                 }
             } catch (err) {
                 // Restore item to UI since API delete failed (deduplicate)
@@ -301,6 +325,7 @@ function DashboardContent() {
                     case 'site': setSites(prev => prev.some(s => s.id === item.id) ? prev : [item, ...prev]); break;
                     case 'category': setCategories(prev => prev.some(c => c.id === item.id) ? prev : [...prev, item]); break;
                     case 'tag': setTags(prev => prev.some(t => t.id === item.id) ? prev : [...prev, item]); break;
+                    case 'note': setNotes(prev => prev.some(n => n.id === item.id) ? prev : [item, ...prev]); break;
                 }
             }
         }, 5000);
@@ -317,6 +342,7 @@ function DashboardContent() {
                     case 'site': setSites(prev => prev.some(s => s.id === item.id) ? prev : [item, ...prev]); break;
                     case 'category': setCategories(prev => prev.some(c => c.id === item.id) ? prev : [...prev, item]); break;
                     case 'tag': setTags(prev => prev.some(t => t.id === item.id) ? prev : [...prev, item]); break;
+                    case 'note': setNotes(prev => prev.some(n => n.id === item.id) ? prev : [item, ...prev]); break;
                 }
                 setUndoToast(null);
                 showToast(`Restored "${itemName}"`, 'info');
@@ -407,6 +433,8 @@ function DashboardContent() {
                 return <CategoriesList onEdit={handleEditCategory} onDelete={handleDeleteCategory} />;
             case 'tags':
                 return <TagsList onEdit={handleEditTag} onDelete={handleDeleteTag} />;
+            case 'notes':
+                return <NotesList onEdit={handleEditNote} onDelete={handleDeleteNote} />;
             case 'settings':
                 return (
                     <ErrorBoundary>
@@ -499,6 +527,15 @@ function DashboardContent() {
                     setEditingTag(null);
                 }}
                 tag={editingTag}
+            />
+
+            <NoteModal
+                isOpen={noteModalOpen}
+                onClose={() => {
+                    setNoteModalOpen(false);
+                    setEditingNote(null);
+                }}
+                note={editingNote}
             />
 
             <ConfirmModal
