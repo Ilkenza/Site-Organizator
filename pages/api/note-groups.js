@@ -1,0 +1,94 @@
+/** Note Groups collection — GET all, POST create */
+
+import {
+  HTTP, configGuard, extractTokenFromReq, resolveTier, isDuplicate, decodeJwt,
+  buildHeaders, restUrl, sendError, sendOk,
+} from './helpers/api-utils';
+import { TIER_LIMITS } from '../../lib/tierConfig';
+
+const ALLOWED = ['name', 'color'];
+const pick = (body) => Object.fromEntries(ALLOWED.filter(k => body[k] !== undefined).map(k => [k, body[k]]));
+
+async function lookupByName(cfg, name, token) {
+  if (!name) return null;
+  try {
+    const r = await fetch(`${restUrl(cfg, 'note_groups')}?select=*&name=eq.${encodeURIComponent(name)}`, { headers: buildHeaders(cfg.anonKey, token) });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return rows?.[0] || null;
+  } catch { return null; }
+}
+
+async function checkTierLimit(cfg, userToken, res) {
+  const { tier } = resolveTier(userToken);
+  const limit = TIER_LIMITS[tier]?.noteGroups ?? TIER_LIMITS.free.noteGroups;
+  if (limit === Infinity) return false;
+  try {
+    const r = await fetch(`${restUrl(cfg, 'note_groups')}?select=id&limit=${limit + 1}`, { headers: buildHeaders(cfg.anonKey, userToken) });
+    if (r.ok) {
+      const rows = await r.json();
+      if (rows.length >= limit) {
+        sendError(res, HTTP.FORBIDDEN, `Note group limit reached (${rows.length}/${limit}).`);
+        return true;
+      }
+    }
+  } catch { /* allow on failure */ }
+  return false;
+}
+
+export default async function handler(req, res) {
+  const cfg = configGuard(res);
+  if (!cfg) return;
+  const userToken = extractTokenFromReq(req);
+
+  if (req.method === 'POST') {
+    if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
+    if (await checkTierLimit(cfg, userToken, res)) return;
+
+    try {
+      const body = req.body || {};
+      if (body.name) {
+        const existing = await lookupByName(cfg, body.name, userToken);
+        if (existing) return sendOk(res, { data: existing });
+      }
+
+      // Set user_id from JWT for RLS
+      const jwt = decodeJwt(userToken);
+      if (!jwt?.sub) return sendError(res, HTTP.UNAUTHORIZED, 'Invalid token');
+      const payload = { ...pick(body), user_id: jwt.sub };
+
+      const r = await fetch(restUrl(cfg, 'note_groups'), {
+        method: 'POST',
+        headers: buildHeaders(cfg.anonKey, userToken, { contentType: true, prefer: 'return=representation' }),
+        body: JSON.stringify(payload),
+      });
+      const text = await r.text();
+      if (!r.ok) {
+        if (body.name && isDuplicate(text)) {
+          const existing = await lookupByName(cfg, body.name, cfg.serviceKey);
+          if (existing) return sendOk(res, { data: existing });
+        }
+        return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: text });
+      }
+      const created = JSON.parse(text);
+      return res.status(HTTP.CREATED).json({ success: true, data: Array.isArray(created) ? created[0] : created });
+    } catch (err) {
+      return sendError(res, HTTP.INTERNAL_ERROR, err.message);
+    }
+  }
+
+  if (req.method === 'GET') {
+    if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
+    try {
+      const r = await fetch(`${restUrl(cfg, 'note_groups')}?select=*,notes(count)&order=name.asc`, { headers: buildHeaders(cfg.anonKey, userToken) });
+      if (!r.ok) return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: await r.text() });
+      const raw = await r.json();
+      const data = raw.map(({ notes: n, ...rest }) => ({ ...rest, note_count: n?.[0]?.count ?? 0 }));
+      return sendOk(res, { data });
+    } catch (err) {
+      return sendError(res, HTTP.INTERNAL_ERROR, err.message);
+    }
+  }
+
+  return sendError(res, HTTP.METHOD_NOT_ALLOWED, 'Method not allowed');
+}
