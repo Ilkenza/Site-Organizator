@@ -1,7 +1,7 @@
 /** Categories collection — GET all, POST create */
 
 import {
-  HTTP, configGuard, extractTokenFromReq, resolveTier, isDuplicate,
+  HTTP, configGuard, extractTokenFromReq, resolveTier, isDuplicate, decodeJwt,
   buildHeaders, restUrl, sendError, sendOk,
 } from './helpers/api-utils';
 import { TIER_LIMITS } from '../../lib/tierConfig';
@@ -56,10 +56,15 @@ export default async function handler(req, res) {
         if (existing) return sendOk(res, { data: existing });
       }
 
+      // Set user_id from JWT for RLS
+      const jwt = decodeJwt(userToken);
+      if (!jwt?.sub) return sendError(res, HTTP.UNAUTHORIZED, 'Invalid token');
+      const payload = { ...pick(body), user_id: jwt.sub };
+
       const r = await fetch(restUrl(cfg, 'categories'), {
         method: 'POST',
         headers: buildHeaders(cfg.anonKey, userToken, { contentType: true, prefer: 'return=representation' }),
-        body: JSON.stringify(pick(body)),
+        body: JSON.stringify(payload),
       });
       const text = await r.text();
       if (!r.ok) {
