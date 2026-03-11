@@ -16,6 +16,7 @@ function NoteGroupsSection({ noteGroups, addNoteGroup, updateNoteGroup, onDelete
     const [editingGroupId, setEditingGroupId] = useState(null);
     const [editName, setEditName] = useState('');
     const [creating, setCreating] = useState(false);
+    const [expandedGroupId, setExpandedGroupId] = useState(null);
 
     const handleCreate = async () => {
         if (!newGroupName.trim() || creating) return;
@@ -34,6 +35,15 @@ function NoteGroupsSection({ noteGroups, addNoteGroup, updateNoteGroup, onDelete
         setEditingGroupId(null);
     };
 
+    const handleGroupTap = (g) => {
+        // On mobile, first tap shows actions, second tap or desktop click edits
+        if (expandedGroupId === g.id) {
+            setExpandedGroupId(null);
+        } else {
+            setExpandedGroupId(g.id);
+        }
+    };
+
     return (
         <div className="p-3 sm:p-4 border-t border-app-border">
             <h3 className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -41,70 +51,98 @@ function NoteGroupsSection({ noteGroups, addNoteGroup, updateNoteGroup, onDelete
                 My Note Groups
             </h3>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5 sm:space-y-1 max-h-48 sm:max-h-64 overflow-y-auto pr-0.5 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
                 {noteGroups.map(g => (
-                    <div key={g.id} className="flex items-center gap-2 group px-2 py-1.5 rounded-lg hover:bg-app-bg-light transition-colors">
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: g.color || '#6366f1' }} />
-                        {editingGroupId === g.id ? (
-                            <input
-                                className="flex-1 text-xs bg-app-bg-light border border-app-accent/50 rounded px-1.5 py-0.5 text-app-text-primary focus:outline-none"
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleRename(g.id); if (e.key === 'Escape') setEditingGroupId(null); }}
-                                onBlur={() => handleRename(g.id)}
-                                autoFocus
-                            />
-                        ) : (
-                            <span className="flex-1 text-xs text-app-text-secondary truncate">{g.name}</span>
+                    <div key={g.id}>
+                        <div
+                            className="flex items-center gap-2 group px-2 py-2 sm:py-1.5 rounded-lg hover:bg-app-bg-light active:bg-app-bg-light transition-colors cursor-pointer"
+                            onClick={() => handleGroupTap(g)}
+                        >
+                            <span className="w-3 h-3 sm:w-2.5 sm:h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: g.color || '#6366f1' }} />
+                            {editingGroupId === g.id ? (
+                                <input
+                                    className="flex-1 text-sm sm:text-xs bg-app-bg-light border border-app-accent/50 rounded px-2 py-1 sm:px-1.5 sm:py-0.5 text-app-text-primary focus:outline-none"
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleRename(g.id); if (e.key === 'Escape') setEditingGroupId(null); }}
+                                    onBlur={() => handleRename(g.id)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    autoFocus
+                                />
+                            ) : (
+                                <span className="flex-1 text-sm sm:text-xs text-app-text-secondary truncate">{g.name}</span>
+                            )}
+                            <span className="text-[11px] sm:text-[10px] text-app-text-muted">{g.note_count || 0}</span>
+                            {/* Desktop: hover actions */}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setEditingGroupId(g.id); setEditName(g.name); setExpandedGroupId(null); }}
+                                className="hidden sm:block p-0.5 text-app-text-muted hover:text-app-accent opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Rename"
+                            >
+                                <EditIcon className="w-3 h-3" />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onDeleteGroup(g); setExpandedGroupId(null); }}
+                                className="hidden sm:block p-0.5 text-app-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Delete"
+                            >
+                                <TrashIcon className="w-3 h-3" />
+                            </button>
+                            {/* Mobile: chevron indicator */}
+                            <ChevronDownIcon className={`w-3.5 h-3.5 sm:hidden text-app-text-muted transition-transform ${expandedGroupId === g.id ? 'rotate-180' : ''}`} />
+                        </div>
+                        {/* Mobile: expanded action bar */}
+                        {expandedGroupId === g.id && (
+                            <div className="flex items-center gap-2 px-2 py-1.5 ml-5 sm:hidden">
+                                <button
+                                    onClick={() => { setEditingGroupId(g.id); setEditName(g.name); setExpandedGroupId(null); }}
+                                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-app-accent bg-app-accent/10 border border-app-accent/20 rounded-md active:bg-app-accent/20"
+                                >
+                                    <EditIcon className="w-3 h-3" />
+                                    Rename
+                                </button>
+                                <button
+                                    onClick={() => { onDeleteGroup(g); setExpandedGroupId(null); }}
+                                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-md active:bg-red-500/20"
+                                >
+                                    <TrashIcon className="w-3 h-3" />
+                                    Delete
+                                </button>
+                            </div>
                         )}
-                        <span className="text-[10px] text-app-text-muted">{g.note_count || 0}</span>
-                        <button
-                            onClick={() => { setEditingGroupId(g.id); setEditName(g.name); }}
-                            className="p-0.5 text-app-text-muted hover:text-app-accent opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Rename"
-                        >
-                            <EditIcon className="w-3 h-3" />
-                        </button>
-                        <button
-                            onClick={() => onDeleteGroup(g)}
-                            className="p-0.5 text-app-text-muted hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Delete"
-                        >
-                            <TrashIcon className="w-3 h-3" />
-                        </button>
                     </div>
                 ))}
 
                 {noteGroups.length === 0 && !showNewGroup && (
-                    <p className="text-xs text-app-text-muted px-2 py-1">No groups yet</p>
+                    <p className="text-sm sm:text-xs text-app-text-muted px-2 py-1">No groups yet</p>
                 )}
             </div>
 
             {showNewGroup ? (
-                <div className="mt-2 p-2 bg-app-bg-card border border-app-border rounded-lg space-y-2">
+                <div className="mt-2 p-2.5 sm:p-2 bg-app-bg-card border border-app-border rounded-lg space-y-2.5 sm:space-y-2">
                     <input
                         type="text"
                         value={newGroupName}
                         onChange={(e) => setNewGroupName(e.target.value)}
                         placeholder="Group name..."
-                        className="w-full px-2 py-1.5 text-xs bg-app-bg-light border border-app-border rounded text-app-text-primary placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-app-accent"
+                        className="w-full px-3 py-2 sm:px-2 sm:py-1.5 text-sm sm:text-xs bg-app-bg-light border border-app-border rounded text-app-text-primary placeholder:text-app-text-muted focus:outline-none focus:ring-1 focus:ring-app-accent"
                         onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setShowNewGroup(false); }}
                         autoFocus
                     />
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5 sm:gap-1">
                         {GROUP_COLORS.map(c => (
                             <button key={c} type="button" onClick={() => setNewGroupColor(c)}
-                                className={`w-4 h-4 rounded-full border-2 transition-transform ${newGroupColor === c ? 'border-white scale-125' : 'border-transparent'}`}
+                                className={`w-6 h-6 sm:w-4 sm:h-4 rounded-full border-2 transition-transform ${newGroupColor === c ? 'border-white scale-110 sm:scale-125' : 'border-transparent'}`}
                                 style={{ backgroundColor: c }} />
                         ))}
                     </div>
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-2 sm:gap-1.5">
                         <button onClick={handleCreate} disabled={!newGroupName.trim() || creating}
-                            className="flex-1 px-2 py-1 text-xs font-medium bg-app-accent/20 text-app-accent border border-app-accent/30 rounded hover:bg-app-accent/30 disabled:opacity-50 transition-colors">
+                            className="flex-1 px-3 py-2 sm:px-2 sm:py-1 text-sm sm:text-xs font-medium bg-app-accent/20 text-app-accent border border-app-accent/30 rounded hover:bg-app-accent/30 disabled:opacity-50 transition-colors">
                             {creating ? 'Creating...' : 'Create'}
                         </button>
                         <button onClick={() => { setShowNewGroup(false); setNewGroupName(''); }}
-                            className="px-2 py-1 text-xs text-app-text-secondary hover:text-app-text-primary transition-colors">
+                            className="px-3 py-2 sm:px-2 sm:py-1 text-sm sm:text-xs text-app-text-secondary hover:text-app-text-primary transition-colors">
                             Cancel
                         </button>
                     </div>
@@ -112,9 +150,9 @@ function NoteGroupsSection({ noteGroups, addNoteGroup, updateNoteGroup, onDelete
             ) : (
                 <button
                     onClick={() => setShowNewGroup(true)}
-                    className="w-full mt-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5 bg-app-accent/10 text-app-accent border border-app-accent/30 hover:bg-app-accent/20"
+                    className="w-full mt-2 px-3 py-2.5 sm:py-2 rounded-lg text-sm sm:text-xs font-medium transition-colors flex items-center justify-center gap-1.5 bg-app-accent/10 text-app-accent border border-app-accent/30 hover:bg-app-accent/20 active:bg-app-accent/20"
                 >
-                    <PlusIcon className="w-3.5 h-3.5" />
+                    <PlusIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                     New Group
                 </button>
             )}
@@ -905,7 +943,7 @@ export default function Sidebar({
                         </div>
 
                         {/* All groups (auto-matched + custom) in a single grid */}
-                        <div className="grid grid-cols-3 gap-1 mb-5">
+                        <div className="grid grid-cols-3 gap-1.5 sm:gap-1 mb-5">
                             {allGroups.map(grp => {
                                 const count = superCategoryCounts[grp.key] || 0;
                                 const isActive = selectedGroup === grp.key;
@@ -918,7 +956,7 @@ export default function Sidebar({
                                         onClick={() => handleGroupClick(grp.key)}
                                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleGroupClick(grp.key); } }}
                                         onContextMenu={(e) => { e.preventDefault(); setEditingGroup(editObj); setGroupModalOpen(true); }}
-                                        className={`px-0.5 py-1.5 rounded-md text-[10px] font-medium transition-all flex flex-col items-center gap-0.5 border relative group/grp cursor-pointer ${isActive ? 'shadow-sm' : 'hover:shadow-md'}`}
+                                        className={`px-1 py-2.5 sm:px-0.5 sm:py-1.5 rounded-md text-[11px] sm:text-[10px] font-medium transition-all flex flex-col items-center gap-0.5 border relative group/grp cursor-pointer active:scale-95 ${isActive ? 'shadow-sm' : 'hover:shadow-md'}`}
                                         style={{
                                             backgroundColor: isActive ? `${grp.color}20` : '#1A2E4A',
                                             color: isActive ? grp.color : '#8BA4C4',
@@ -929,15 +967,15 @@ export default function Sidebar({
                                         <span className="text-sm leading-none">{grp.icon}</span>
                                         <span className="truncate w-full text-center leading-tight text-[9px]">{grp.label}</span>
                                         <span className="text-[9px] opacity-60 leading-none">{count}</span>
-                                        <span className="absolute -top-1 -right-1 hidden group-hover/grp:flex gap-0.5">
+                                        <span className={`absolute -top-1.5 -right-1.5 sm:-top-1 sm:-right-1 gap-0.5 ${isActive ? 'flex' : 'hidden group-hover/grp:flex'}`}>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); setEditingGroup(editObj); setGroupModalOpen(true); }}
-                                                className="w-3.5 h-3.5 rounded-full bg-gray-700 border border-gray-600 flex items-center justify-center text-[8px] text-gray-300 hover:bg-app-accent hover:text-white"
+                                                className="w-5 h-5 sm:w-3.5 sm:h-3.5 rounded-full bg-gray-700 border border-gray-600 flex items-center justify-center text-[10px] sm:text-[8px] text-gray-300 hover:bg-app-accent hover:text-white active:bg-app-accent active:text-white"
                                                 title="Edit"
                                             >✎</button>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleDeleteGroup(grp.key); }}
-                                                className="w-3.5 h-3.5 rounded-full bg-gray-700 border border-gray-600 flex items-center justify-center text-[8px] text-gray-300 hover:bg-red-500 hover:text-white"
+                                                className="w-5 h-5 sm:w-3.5 sm:h-3.5 rounded-full bg-gray-700 border border-gray-600 flex items-center justify-center text-[10px] sm:text-[8px] text-gray-300 hover:bg-red-500 hover:text-white active:bg-red-500 active:text-white"
                                                 title="Delete"
                                             >✕</button>
                                         </span>
