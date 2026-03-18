@@ -43,6 +43,7 @@ const STYLES = {
         header: 'flex items-center gap-2 text-sm font-medium text-violet-300',
         section: 'flex items-center gap-2 flex-wrap',
         catButton: 'px-2 py-1 text-xs bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 border border-violet-500/30 rounded-md transition-colors cursor-pointer',
+        otherCatButton: 'px-2 py-1 text-xs bg-gray-500/15 hover:bg-gray-500/25 text-gray-300 border border-gray-500/30 rounded-md transition-colors cursor-pointer',
         tagButton: 'px-2 py-1 text-xs bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/30 rounded-md transition-colors cursor-pointer',
         newButton: 'px-2 py-1 text-xs bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-md transition-colors cursor-pointer flex items-center gap-1',
         pricingButton: 'px-2 py-1 text-xs bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-md transition-colors cursor-pointer',
@@ -203,7 +204,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                 body: JSON.stringify({
                     url: formData.url.trim(),
                     name: formData.name?.trim() || '',
-                    categories: categories.map(c => ({ id: c.id, name: c.name })),
+                    categories: categories.map(c => ({ id: c.id, name: c.name, is_needed: c.is_needed })),
                     tags: tags.map(t => ({ id: t.id, name: t.name }))
                 })
             });
@@ -245,9 +246,9 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
     const applyAllAiSuggestions = useCallback(async () => {
         if (!aiResult) return;
 
-        // Apply existing categories
+        // Apply existing categories (needed + other)
         const newCatIds = [...formData.categoryIds];
-        (aiResult.existingCategories || []).forEach(name => {
+        [...(aiResult.neededCategories || []), ...(aiResult.otherCategories || [])].forEach(name => {
             const match = categories.find(c => c.name?.toLowerCase() === name.toLowerCase());
             if (match && !newCatIds.includes(match.id)) newCatIds.push(match.id);
         });
@@ -752,7 +753,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                     >
                         {aiLoading ? (
                             <>
-                                <SpinnerIcon className="w-4 h-4" />
+                                <SpinnerIcon className="w-4 h-4 animate-spin" />
                                 Analyzing site...
                             </>
                         ) : (
@@ -790,11 +791,11 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                             </button>
                         </div>
 
-                        {/* Existing categories */}
-                        {aiResult.existingCategories?.length > 0 && (
+                        {/* Needed categories (priority) */}
+                        {aiResult.neededCategories?.length > 0 && (
                             <div className={STYLES.ai.section}>
                                 <span className={STYLES.ai.label}>📂 Categories:</span>
-                                {aiResult.existingCategories.map(name => {
+                                {aiResult.neededCategories.map(name => {
                                     const match = categories.find(c => c.name?.toLowerCase() === name.toLowerCase());
                                     const isApplied = match && formData.categoryIds.includes(match.id);
                                     return (
@@ -804,6 +805,28 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                                             onClick={() => applyAiCategory(name)}
                                             disabled={isApplied}
                                             className={`${STYLES.ai.catButton} ${isApplied ? 'opacity-40 cursor-default' : ''}`}
+                                        >
+                                            {isApplied && '✓ '}{name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {/* Other existing categories (not is_needed) */}
+                        {aiResult.otherCategories?.length > 0 && (
+                            <div className={STYLES.ai.section}>
+                                <span className={STYLES.ai.label}>📁 Other:</span>
+                                {aiResult.otherCategories.map(name => {
+                                    const match = categories.find(c => c.name?.toLowerCase() === name.toLowerCase());
+                                    const isApplied = match && formData.categoryIds.includes(match.id);
+                                    return (
+                                        <button
+                                            key={name}
+                                            type="button"
+                                            onClick={() => applyAiCategory(name)}
+                                            disabled={isApplied}
+                                            className={`${STYLES.ai.otherCatButton} ${isApplied ? 'opacity-40 cursor-default' : ''}`}
                                         >
                                             {isApplied && '✓ '}{name}
                                         </button>
@@ -825,7 +848,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                                             setAiResult(prev => prev ? {
                                                 ...prev,
                                                 newCategories: prev.newCategories.filter(n => n !== name),
-                                                existingCategories: [...(prev.existingCategories || []), capitalize(name)]
+                                                otherCategories: [...(prev.otherCategories || []), capitalize(name)]
                                             } : null);
                                         }}
                                         className={STYLES.ai.newButton}

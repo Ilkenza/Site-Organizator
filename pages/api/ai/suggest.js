@@ -1,11 +1,11 @@
-/** AI-powered category/tag suggestions via GitHub Models GPT-4o-mini */
+/** AI-powered category/tag suggestions via GitHub Models GPT-4o */
 
 import { createClient } from '@supabase/supabase-js';
 import { HTTP, extractTokenFromReq, decodeJwt, getAdminEmails, sendError, sendOk, methodGuard } from '../helpers/api-utils';
 import { TIER_LIMITS } from '../../../lib/tierConfig';
 
 const AI_URL = 'https://models.inference.ai.azure.com/chat/completions';
-const MODEL = 'gpt-4o-mini';
+const MODEL = 'gpt-4o';
 const FETCH_MS = 5000, AI_MS = 20000;
 
 let _admin = null;
@@ -94,15 +94,22 @@ export default async function handler(req, res) {
         const normUrl = url.startsWith('http') ? url : `https://${url}`;
         const pageMeta = await fetchMeta(normUrl);
 
-        const catNames = categories.slice(0, 30).map(c => c.name).join(', ');
+        const allCats = categories.slice(0, 50);
+        const neededCats = categories.filter(c => c.is_needed === true);
+        const neededSet = new Set(neededCats.map(c => c.name.toLowerCase()));
+        const allCatNames = allCats.map(c => c.name).join(', ');
+        const neededCatNames = neededCats.length > 0 ? neededCats.map(c => c.name).join(', ') : '';
         const tagNames = tags.slice(0, 50).map(t => t.name).join(', ');
-        const prompt = `Classify this website for a bookmark manager. Return JSON only.\n\nURL: ${normUrl}\nName: ${name || ''}\nTitle: ${(pageMeta.title || '').slice(0, 100)}\nDesc: ${(pageMeta.description || '').slice(0, 150)}\n\nExisting categories: ${catNames || '(none)'}\nExisting tags: ${tagNames || '(none)'}\n\nReturn JSON: {"existingCategories":["max 3 from above"],"newCategories":["max 2 new if needed, Capitalized"],"existingTags":["max 5 from above"],"newTags":["max 3 new if needed, lowercase"],"pricing":"fully_free|freemium|free_trial|paid","confidence":0.0-1.0}`;
+        const prompt = `Classify this website for a bookmark manager. Return JSON only.\n\nURL: ${normUrl}\nName: ${name || ''}\nTitle: ${(pageMeta.title || '').slice(0, 100)}\nDesc: ${(pageMeta.description || '').slice(0, 150)}\n\nAll categories: ${allCatNames || '(none)'}${neededCatNames ? `\nPriority categories (prefer these when they fit): ${neededCatNames}` : ''}\nExisting tags (prefer these): ${tagNames || '(none)'}\n\nRules:\n- existingCategories: pick 1-3 from the categories above ONLY. Never invent new category names.${neededCatNames ? ' Prefer priority categories when they fit.' : ''}\n- newCategories: suggest 1-2 new Capitalized category names ONLY if none of the existing categories fit well.\n- existingTags: pick 1-5 from existing tags that fit this website.\n- newTags: ONLY if no existing tag fits at all, suggest 1-3 new lowercase tags. Prefer existing tags.\n\nReturn JSON: {"existingCategories":["from categories above only"],"newCategories":["only if needed, Capitalized"],"existingTags":["from existing tags"],"newTags":["only if absolutely needed, lowercase"],"pricing":"fully_free|freemium|free_trial|paid","confidence":0.0-1.0}`;
 
         const ai = await callAI(GITHUB_TOKEN, prompt);
 
+        const allCatNameSet = new Set(allCats.map(c => c.name.toLowerCase()));
+        const validExisting = (ai.existingCategories || []).filter(n => allCatNameSet.has(n.toLowerCase()));
         const result = {
-            existingCategories: (ai.existingCategories || []).slice(0, 3),
-            newCategories: (ai.newCategories || []).slice(0, 2),
+            neededCategories: validExisting.filter(n => neededSet.has(n.toLowerCase())).slice(0, 3),
+            otherCategories: validExisting.filter(n => !neededSet.has(n.toLowerCase())).slice(0, 3),
+            newCategories: (ai.newCategories || []).filter(n => !allCatNameSet.has(n.toLowerCase())).slice(0, 2),
             existingTags: (ai.existingTags || []).slice(0, 8),
             newTags: (ai.newTags || []).slice(0, 5),
             pricing: ['fully_free', 'freemium', 'free_trial', 'paid'].includes(ai.pricing) ? ai.pricing : null,

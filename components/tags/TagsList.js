@@ -325,19 +325,6 @@ export default function TagsList({ onEdit, onDelete }) {
                                                     {tag.created_at ? new Date(tag.created_at).toLocaleDateString() : 'N/A'}
                                                 </p>
                                             </div>
-                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${tag.is_needed
-                                                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                                : 'bg-app-bg-secondary text-app-text-muted border-app-border'
-                                                }`}
-                                                title={tag.is_needed ? 'Needed' : 'Not needed'}
-                                            >
-                                                {tag.is_needed ? (
-                                                    <CheckCircleFilledIcon className="w-3 h-3" />
-                                                ) : (
-                                                    <BanIcon className="w-3 h-3" />
-                                                )}
-                                                {tag.is_needed ? 'Needed' : 'Not needed'}
-                                            </span>
                                             {/* Actions - visible on mobile, hover on tablet+ */}
                                             <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
                                                 <button
@@ -364,10 +351,25 @@ export default function TagsList({ onEdit, onDelete }) {
                                         </div>
                                     </div>
 
-                                    {/* Site count */}
-                                    <div className="flex items-center gap-1 text-xs text-app-text-muted">
-                                        <LinkIcon className="w-3.5 h-3.5" />
-                                        <span>{siteCount} {siteCount === 1 ? 'site' : 'sites'}</span>
+                                    {/* Site count + Needed badge */}
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1 text-xs text-app-text-muted">
+                                            <LinkIcon className="w-3.5 h-3.5" />
+                                            <span>{siteCount} {siteCount === 1 ? 'site' : 'sites'}</span>
+                                        </div>
+                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${tag.is_needed
+                                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                            : 'bg-app-bg-secondary text-app-text-muted border-app-border'
+                                            }`}
+                                            title={tag.is_needed ? 'Needed' : 'Not needed'}
+                                        >
+                                            {tag.is_needed ? (
+                                                <CheckCircleFilledIcon className="w-3 h-3" />
+                                            ) : (
+                                                <BanIcon className="w-3 h-3" />
+                                            )}
+                                            {tag.is_needed ? 'Needed' : 'Not needed'}
+                                        </span>
                                     </div>
                                 </div>
                             );
