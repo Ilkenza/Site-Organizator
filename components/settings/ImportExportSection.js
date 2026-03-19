@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { SpinnerIcon, TextLinesIcon, BookmarkIcon, DocumentIcon, UploadIcon, DownloadIcon, ArrowLeftIcon, CheckCircleIcon, FolderIcon, TagIcon, GlobeIcon, WarningIcon, CollectionIcon } from '../ui/Icons';
+import { SpinnerIcon, TextLinesIcon, BookmarkIcon, DocumentIcon, UploadIcon, DownloadIcon, ArrowLeftIcon, CheckCircleIcon, FolderIcon, TagIcon, GlobeIcon, WarningIcon, CollectionIcon, SparklesIcon } from '../ui/Icons';
 import { useDashboard } from '../../context/DashboardContext';
+import AiImportPreviewModal from './AiImportPreviewModal';
 
 export default function ImportExportSection({ user, fetchData, showToast }) {
     const [importMessage, setImportMessage] = useState(null);
@@ -20,7 +21,8 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
         importPreview, setImportPreview,
         importSource, setImportSource,
         useFoldersAsCategories, setUseFoldersAsCategories,
-        clearImportPreview
+        clearImportPreview,
+        categories, tags
     } = useDashboard();
 
     // Export
@@ -73,6 +75,78 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
         }
 
         await runImport(importPreview.sites, { useFoldersAsCategories, importSource: importSource || undefined, groups: importPreview.groups || null });
+    };
+
+    // AI Import state (local only)
+    const [aiImportSites, setAiImportSites] = useState(null);
+    const [aiImportModalOpen, setAiImportModalOpen] = useState(false);
+    const [aiImporting, setAiImporting] = useState(false);
+    const [aiExistingSites, setAiExistingSites] = useState([]);
+    const [aiLoading, setAiLoading] = useState(false);
+
+    const handleAiFileSelect = async (file) => {
+        if (!file) return;
+        setAiLoading(true);
+        try {
+            const { parseImportFile } = await import('../../lib/exportImport.js');
+            const { fetchAPI } = await import('../../lib/supabase.js');
+            const [data, sitesRes] = await Promise.all([
+                parseImportFile(file, 'auto'),
+                fetchAPI('/sites?limit=9999&page=1').catch(() => [])
+            ]);
+            const allSites = Array.isArray(sitesRes) ? sitesRes : (sitesRes?.data || []);
+            if (data?.sites?.length) {
+                setAiExistingSites(allSites);
+                setAiImportSites(data.sites);
+                setAiImportModalOpen(true);
+            } else {
+                setImportMessage({ type: 'error', text: 'No sites found in the AI suggestions file.' });
+            }
+        } catch (err) {
+            console.error('AI import parse error:', err);
+            setImportMessage({ type: 'error', text: `Failed to parse AI file: ${err.message}` });
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
+    const handleAiImportConfirm = async (selectedSites) => {
+        if (!selectedSites?.length) return;
+        setAiImporting(true);
+        try {
+            const { importSites } = await import('../../lib/exportImport.js');
+            const result = await importSites(selectedSites, user?.id, null, { importSource: 'ai-suggestions' });
+            const report = result?.result?.report || {};
+            const created = Array.isArray(report.created) ? report.created.length : (report.created || 0);
+            const updated = Array.isArray(report.updated) ? report.updated.length : (report.updated || 0);
+            const errors = Array.isArray(report.errors) ? report.errors.length : (report.errors || 0);
+
+            const total = created + updated;
+            if (total > 0) {
+                showToast?.(`AI Import: ${total} site${total !== 1 ? 's' : ''} edited`, 'success');
+                setImportMessage({
+                    type: 'success',
+                    detail: true,
+                    created,
+                    updated,
+                    errors,
+                    categoriesCreated: report.categoriesCreated || 0,
+                    tagsCreated: report.tagsCreated || 0,
+                    groupsImported: 0
+                });
+                setTimeout(() => fetchData(), 500);
+            } else if (errors > 0) {
+                showToast?.(`AI Import failed with ${errors} error(s)`, 'error');
+                setImportMessage({ type: 'error', text: `AI import failed with ${errors} error(s).` });
+            }
+            setAiImportModalOpen(false);
+            setAiImportSites(null);
+        } catch (err) {
+            console.error('AI import error:', err);
+            setImportMessage({ type: 'error', text: `AI import error: ${err.message}` });
+        } finally {
+            setAiImporting(false);
+        }
     };
 
     // Handle import result changes
@@ -248,7 +322,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                 {/* Import source buttons */}
                 {!importPreview ? (
                     <div className="space-y-4">
-                        <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 xs:grid-cols-3 gap-3">
                             {/* Import from Notion */}
                             <div className="relative">
                                 <input
@@ -296,6 +370,39 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                                     </div>
                                     <span className="text-sm font-semibold text-app-text-primary">Import from Bookmarks</span>
                                     <span className="text-[10px] text-app-text-muted text-center">Chrome, Firefox, Edge, Safari — export bookmarks as HTML</span>
+                                </label>
+                            </div>
+
+                            {/* AI Import */}
+                            <div className="relative">
+                                <input
+                                    type="file"
+                                    accept=".json,.csv"
+                                    onChange={(e) => {
+                                        handleAiFileSelect(e.target.files?.[0]);
+                                        e.target.value = '';
+                                    }}
+                                    className="hidden"
+                                    id="import-ai-input"
+                                    disabled={aiLoading}
+                                />
+                                <label
+                                    htmlFor="import-ai-input"
+                                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed transition-all duration-200 group ${aiLoading ? 'border-purple-500/50 bg-purple-500/5 cursor-wait' : 'border-app-border hover:border-purple-500/50 hover:bg-purple-500/5 cursor-pointer'}`}
+                                >
+                                    <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        {aiLoading ? (
+                                            <SpinnerIcon className="w-7 h-7 text-purple-400 animate-spin" />
+                                        ) : (
+                                            <SparklesIcon className="w-7 h-7 text-purple-400" />
+                                        )}
+                                    </div>
+                                    <span className="text-sm font-semibold text-app-text-primary">
+                                        {aiLoading ? 'Loading...' : 'AI Import'}
+                                    </span>
+                                    <span className="text-[10px] text-app-text-muted text-center">
+                                        {aiLoading ? 'Parsing file & fetching your sites' : 'Import AI-suggested sites with categories & tags (JSON/CSV)'}
+                                    </span>
                                 </label>
                             </div>
                         </div>
@@ -573,6 +680,24 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                     </div>
                 )}
             </div>
+
+            {/* AI Import Preview Modal */}
+            <AiImportPreviewModal
+                isOpen={aiImportModalOpen}
+                onClose={() => {
+                    if (!aiImporting) {
+                        setAiImportModalOpen(false);
+                        setAiImportSites(null);
+                        setAiExistingSites([]);
+                    }
+                }}
+                sites={aiImportSites || []}
+                existingCategories={categories}
+                existingTags={tags}
+                existingSites={aiExistingSites}
+                onConfirm={handleAiImportConfirm}
+                importing={aiImporting}
+            />
         </>
     );
 }
