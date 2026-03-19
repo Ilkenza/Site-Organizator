@@ -80,11 +80,10 @@ function ItemPicker({ items, allExisting, existingNames, onToggle, onAdd, icon: 
                             key={name}
                             type="button"
                             onClick={() => onToggle(name)}
-                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-md border transition-colors cursor-pointer ${
-                                isExisting
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-md border transition-colors cursor-pointer ${isExisting
                                     ? `${activeColor} hover:opacity-80`
                                     : `${newColor} border-dashed hover:opacity-80`
-                            }`}
+                                }`}
                             title={isExisting ? name : `${name} (new — will be created on import)`}
                         >
                             {!isExisting && <PlusIcon className="w-2.5 h-2.5" />}
@@ -385,8 +384,19 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                     <Badge size="xs" color={PRICING_COLORS[currentSite.pricing] || 'gray'}>
                                                         {PRICING_LABELS[currentSite.pricing] || currentSite.pricing || 'Freemium'}
                                                     </Badge>
-                                                    {currentSite.description && <span className="text-[10px] text-app-text-muted line-clamp-1">{currentSite.description}</span>}
                                                 </div>
+                                                {currentSite.description && (
+                                                    <div className="flex items-start gap-1.5">
+                                                        <span className="text-[10px] text-app-text-muted uppercase flex-shrink-0 mt-px">Desc:</span>
+                                                        <span className="text-[10px] text-app-text-muted line-clamp-2">{currentSite.description}</span>
+                                                    </div>
+                                                )}
+                                                {currentSite.use_case && (
+                                                    <div className="flex items-start gap-1.5">
+                                                        <span className="text-[10px] text-app-text-muted uppercase flex-shrink-0 mt-px">Use:</span>
+                                                        <span className="text-[10px] text-app-text-muted line-clamp-2">{currentSite.use_case}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
