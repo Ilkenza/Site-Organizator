@@ -127,9 +127,10 @@ export default async function handler(req, res) {
     const out = {};
     for (let i = 0; i < unique.length; i += 50) {
       const batch = unique.slice(i, i + 50);
-      const inList = batch.map(u => `"${encodeURIComponent(u)}"`).join(',');
+      // PostgREST in.() expects quoted values; encode the whole filter param, not individual values
+      const inList = batch.map(u => `"${u.replace(/"/g, '\\"')}"`).join(',');
       try {
-        const r = await fetch(rest(`sites?select=*&url=in.(${inList})&user_id=eq.${userId}`), { headers: hdr(KEY) });
+        const r = await fetch(rest(`sites?select=*&user_id=eq.${userId}&url=in.(${encodeURIComponent(inList)})`), { headers: hdr(KEY) });
         if (r.ok) (await r.json() || []).forEach(s => { if (s?.url) out[s.url.trim()] = s; });
       } catch { }
     }
@@ -238,13 +239,29 @@ export default async function handler(req, res) {
       const updatedSites = [];
       for (const { nr, existingSite, ...ctx } of toUpdate) {
         try {
-          const patch = { name: nr.name || existingSite.name, pricing: nr.pricing || existingSite.pricing, is_favorite: nr.is_favorite, is_pinned: nr.is_pinned };
-          if (nr.description) patch.description = nr.description;
-          if (nr.use_case) patch.use_case = nr.use_case;
-          if (nr.is_needed !== null) patch.is_needed = nr.is_needed;
-          const r = await fetch(rest(`sites?id=eq.${existingSite.id}&user_id=eq.${userId}`), { method: 'PATCH', headers: hdr(KEY, 'return=representation'), body: JSON.stringify(patch) });
-          if (!r.ok) { report.errors.push({ row: nr._i, error: `Update failed: ${await r.text()}` }); }
-          else { const u = (await r.json())?.[0]; if (u) { updatedSites.push({ site: u, cats: ctx.cats, tags: ctx.tags }); report.updated = report.updated || []; report.updated.push({ row: nr._i, site: u }); } }
+          let patch;
+          if (importSource === 'ai-suggestions') {
+            // AI import: only update metadata, never touch name/favorite/pinned
+            patch = {};
+            if (nr.description) patch.description = nr.description;
+            if (nr.use_case) patch.use_case = nr.use_case;
+            if (nr.pricing && nr.pricing !== 'freemium') patch.pricing = nr.pricing;
+          } else {
+            patch = { name: nr.name || existingSite.name, pricing: nr.pricing || existingSite.pricing, is_favorite: nr.is_favorite, is_pinned: nr.is_pinned };
+            if (nr.description) patch.description = nr.description;
+            if (nr.use_case) patch.use_case = nr.use_case;
+            if (nr.is_needed !== null) patch.is_needed = nr.is_needed;
+          }
+          const hasPatch = Object.keys(patch).length > 0;
+          if (hasPatch) {
+            const r = await fetch(rest(`sites?id=eq.${existingSite.id}&user_id=eq.${userId}`), { method: 'PATCH', headers: hdr(KEY, 'return=representation'), body: JSON.stringify(patch) });
+            if (!r.ok) { report.errors.push({ row: nr._i, error: `Update failed: ${await r.text()}` }); continue; }
+            const u = (await r.json())?.[0];
+            if (u) { updatedSites.push({ site: u, cats: ctx.cats, tags: ctx.tags }); report.updated = report.updated || []; report.updated.push({ row: nr._i, site: u }); }
+          } else {
+            // No field changes but still re-attach categories/tags
+            updatedSites.push({ site: existingSite, cats: ctx.cats, tags: ctx.tags }); report.updated = report.updated || []; report.updated.push({ row: nr._i, site: existingSite });
+          }
         } catch (e) { report.errors.push({ row: nr._i, error: e.message }); }
       }
 
