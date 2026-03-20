@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import Modal from '../ui/Modal';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
-import { SparklesIcon, GlobeIcon, EditIcon, TrashIcon, PlusIcon, CloseIcon, CheckmarkIcon, FolderIcon, TagIcon } from '../ui/Icons';
+import { SparklesIcon, GlobeIcon, EditIcon, TrashIcon, PlusIcon, CloseIcon, CheckmarkIcon, FolderIcon, TagIcon, CheckCircleFilledIcon, BanIcon } from '../ui/Icons';
 
 function normalizeArray(val) {
     if (!val) return [];
@@ -24,7 +24,7 @@ function buildItem(s, i, urlMap) {
     const importTags = normalizeArray(s.tags || s.tags_array || s.tag);
     const urlKey = (s.url || '').trim().toLowerCase().replace(/\/+$/, '');
     const existing = urlKey ? urlMap.get(urlKey) : null;
-    const base = { ...s, _id: i, _selected: true, categories: importCats, tags: importTags };
+    const base = { ...s, _id: i, _selected: true, is_needed: s.is_needed !== undefined ? s.is_needed : true, categories: importCats, tags: importTags };
     if (!existing) return base;
     const curCats = (existing.categories_array || []).map(c => c.name).filter(Boolean);
     const curTags = (existing.tags_array || []).map(t => t.name).filter(Boolean);
@@ -33,12 +33,15 @@ function buildItem(s, i, urlMap) {
     const tagMap = new Map(); curTags.forEach(t => tagMap.set(t.toLowerCase(), t)); importTags.forEach(t => tagMap.set(t.toLowerCase(), t));
     return {
         ...base,
+        is_needed: s.is_needed !== undefined ? s.is_needed : (existing.is_needed !== undefined ? existing.is_needed : true),
         categories: [...catMap.values()],
         tags: [...tagMap.values()],
         _currentCats: curCats, _currentTags: curTags,
         _importCats: importCats, _importTags: importTags,
         _currentDesc: existing.description || '', _currentUseCase: existing.use_case || '', _currentPricing: existing.pricing || 'freemium',
         _importDesc: s.description || '', _importUseCase: s.use_case || '', _importPricing: s.pricing || 'freemium',
+        _currentNeeded: existing.is_needed !== undefined ? existing.is_needed : true,
+        _importNeeded: s.is_needed !== undefined ? s.is_needed : true,
         description: s.description || existing.description || '',
         use_case: s.use_case || existing.use_case || '',
         pricing: s.pricing && s.pricing !== 'freemium' ? s.pricing : (existing.pricing || s.pricing || 'freemium'),
@@ -311,7 +314,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
     }, [editSnapshot]);
 
     const handleConfirm = () => {
-        const toImport = items.filter(s => s._selected).map(({ _id, _selected, _currentCats, _currentTags, _importCats, _importTags, _currentDesc, _currentUseCase, _currentPricing, _importDesc, _importUseCase, _importPricing, ...rest }) => rest);
+        const toImport = items.filter(s => s._selected).map(({ _id, _selected, _currentCats, _currentTags, _importCats, _importTags, _currentDesc, _currentUseCase, _currentPricing, _importDesc, _importUseCase, _importPricing, _currentNeeded, _importNeeded, ...rest }) => rest);
         onConfirm(toImport);
     };
 
@@ -361,12 +364,53 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
-                                                <div className="flex items-center gap-1.5">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
                                                     <div className="font-medium text-sm text-app-text-primary truncate">{site.name || site.title || '-'}</div>
                                                     {currentSite ? (
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/25 flex-shrink-0">EXISTS</span>
                                                     ) : (
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 flex-shrink-0">NEW</span>
+                                                    )}
+                                                    {currentSite && site._currentNeeded !== undefined && site._importNeeded !== undefined && site._currentNeeded !== site._importNeeded ? (
+                                                        <>
+                                                            <button type="button" onClick={() => setFieldValue(site._id, 'is_needed', site._currentNeeded)}
+                                                                className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer flex-shrink-0 ${
+                                                                    site.is_needed === site._currentNeeded
+                                                                        ? (site._currentNeeded ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-app-bg-secondary text-app-text-muted border-app-border')
+                                                                        : 'border-app-border/30 text-app-text-muted/50 hover:border-app-border/60'
+                                                                }`}
+                                                                title={`Current: ${site._currentNeeded ? 'Needed' : 'Not needed'}`}
+                                                            >
+                                                                <span className="text-[8px] font-bold px-0.5 rounded border bg-gray-500/20 text-gray-300 border-gray-500/30 leading-none">C</span>
+                                                                {site._currentNeeded ? <CheckCircleFilledIcon className="w-3 h-3" /> : <BanIcon className="w-3 h-3" />}
+                                                                {site._currentNeeded ? 'Needed' : 'Not needed'}
+                                                            </button>
+                                                            <button type="button" onClick={() => setFieldValue(site._id, 'is_needed', site._importNeeded)}
+                                                                className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer flex-shrink-0 ${
+                                                                    site.is_needed === site._importNeeded
+                                                                        ? (site._importNeeded ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-app-bg-secondary text-app-text-muted border-app-border')
+                                                                        : 'border-app-border/30 text-app-text-muted/50 hover:border-app-border/60'
+                                                                }`}
+                                                                title={`Import: ${site._importNeeded ? 'Needed' : 'Not needed'}`}
+                                                            >
+                                                                <span className="text-[8px] font-bold px-0.5 rounded border bg-purple-500/20 text-purple-300 border-purple-500/30 leading-none">I</span>
+                                                                {site._importNeeded ? <CheckCircleFilledIcon className="w-3 h-3" /> : <BanIcon className="w-3 h-3" />}
+                                                                {site._importNeeded ? 'Needed' : 'Not needed'}
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <button type="button" onClick={() => setFieldValue(site._id, 'is_needed', !site.is_needed)}
+                                                            className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer flex-shrink-0 ${
+                                                                site.is_needed
+                                                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                                                                    : 'bg-app-bg-secondary text-app-text-muted border-app-border hover:bg-app-bg-light'
+                                                            }`}
+                                                            title={`Click to mark as ${site.is_needed ? 'not needed' : 'needed'}`}
+                                                        >
+                                                            {currentSite && site._currentNeeded !== undefined && <span className="text-[8px] font-bold px-0.5 rounded border bg-blue-500/20 text-blue-300 border-blue-500/30 leading-none">C+I</span>}
+                                                            {site.is_needed ? <CheckCircleFilledIcon className="w-3 h-3" /> : <BanIcon className="w-3 h-3" />}
+                                                            {site.is_needed ? 'Needed' : 'Not needed'}
+                                                        </button>
                                                     )}
                                                 </div>
                                                 <a href={site.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-app-accent hover:underline max-w-full truncate" title={site.url} onClick={e => e.stopPropagation()}>
