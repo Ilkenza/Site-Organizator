@@ -115,7 +115,9 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
         setAiImporting(true);
         try {
             const { importSites } = await import('../../lib/exportImport.js');
-            const result = await importSites(selectedSites, user?.id, null, { importSource: 'ai-suggestions' });
+            const result = await importSites(selectedSites, user?.id, null, {
+                importSource: 'ai-suggestions',
+            });
             const report = result?.result?.report || {};
             const created = Array.isArray(report.created) ? report.created.length : (report.created || 0);
             const updated = Array.isArray(report.updated) ? report.updated.length : (report.updated || 0);
@@ -322,7 +324,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                 {/* Import source buttons */}
                 {!importPreview ? (
                     <div className="space-y-4">
-                        <div className="grid grid-cols-1 xs:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             {/* Import from Notion */}
                             <div className="relative">
                                 <input

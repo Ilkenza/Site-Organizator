@@ -56,6 +56,7 @@ function normRow(row, idx) {
     is_pinned: parseBool(row.is_pinned),
     is_needed: row.is_needed === true || row.is_needed === 'true' || row.is_needed === 'Yes' ? true : row.is_needed === false || row.is_needed === 'false' || row.is_needed === 'No' ? false : null,
     created_at: row.created_at || row.createdAt || null,
+    mergeMode: row.mergeMode === true || row.mergeMode === 'true' ? true : row.mergeMode === false || row.mergeMode === 'false' ? false : undefined,
   };
 }
 
@@ -78,6 +79,8 @@ export default async function handler(req, res) {
   if (!rows.length) return sendError(res, HTTP.BAD_REQUEST, 'No rows provided');
 
   const importSource = payload.importSource || 'manual';
+  const globalMergeMode = payload.mergeMode === true;
+  const perSiteMerge = payload.perSiteMerge === true;
   const createMissing = (payload.options || { createMissing: true }).createMissing;
   const chunkSize = Math.max(50, Number(payload.chunkSize) || CHUNK);
 
@@ -257,10 +260,10 @@ export default async function handler(req, res) {
             const r = await fetch(rest(`sites?id=eq.${existingSite.id}&user_id=eq.${userId}`), { method: 'PATCH', headers: hdr(KEY, 'return=representation'), body: JSON.stringify(patch) });
             if (!r.ok) { report.errors.push({ row: nr._i, error: `Update failed: ${await r.text()}` }); continue; }
             const u = (await r.json())?.[0];
-            if (u) { updatedSites.push({ site: u, cats: ctx.cats, tags: ctx.tags }); report.updated = report.updated || []; report.updated.push({ row: nr._i, site: u }); }
+            if (u) { updatedSites.push({ site: u, cats: ctx.cats, tags: ctx.tags, rowMerge: nr.mergeMode }); report.updated = report.updated || []; report.updated.push({ row: nr._i, site: u }); }
           } else {
             // No field changes but still re-attach categories/tags
-            updatedSites.push({ site: existingSite, cats: ctx.cats, tags: ctx.tags }); report.updated = report.updated || []; report.updated.push({ row: nr._i, site: existingSite });
+            updatedSites.push({ site: existingSite, cats: ctx.cats, tags: ctx.tags, rowMerge: nr.mergeMode }); report.updated = report.updated || []; report.updated.push({ row: nr._i, site: existingSite });
           }
         } catch (e) { report.errors.push({ row: nr._i, error: e.message }); }
       }
@@ -274,11 +277,29 @@ export default async function handler(req, res) {
         report.created.push({ row: toCreate[k]?.nr?._i, site });
       });
 
-      for (const { site, cats, tags } of updatedSites) {
+      for (const { site, cats, tags, rowMerge } of updatedSites) {
         if (!site?.id) continue;
-        try { await fetch(rest(`site_categories?site_id=eq.${site.id}`), { method: 'DELETE', headers: hdr(REL_KEY) }); await fetch(rest(`site_tags?site_id=eq.${site.id}`), { method: 'DELETE', headers: hdr(REL_KEY) }); } catch { }
-        cats?.forEach(c => sc.push({ site_id: site.id, category_id: c.id }));
-        tags?.forEach(t => st.push({ site_id: site.id, tag_id: t.id }));
+        // Determine merge mode: per-site flag takes priority, then global, then default (replace)
+        const useMerge = perSiteMerge ? (rowMerge === true) : globalMergeMode;
+        if (useMerge) {
+          // Merge: fetch existing junction IDs and only add new ones
+          let existingCatIds = new Set(), existingTagIds = new Set();
+          try {
+            const cr = await fetch(rest(`site_categories?site_id=eq.${site.id}&select=category_id`), { headers: hdr(REL_KEY) });
+            if (cr.ok) (await cr.json()).forEach(r => existingCatIds.add(r.category_id));
+          } catch { }
+          try {
+            const tr = await fetch(rest(`site_tags?site_id=eq.${site.id}&select=tag_id`), { headers: hdr(REL_KEY) });
+            if (tr.ok) (await tr.json()).forEach(r => existingTagIds.add(r.tag_id));
+          } catch { }
+          cats?.filter(c => !existingCatIds.has(c.id)).forEach(c => sc.push({ site_id: site.id, category_id: c.id }));
+          tags?.filter(t => !existingTagIds.has(t.id)).forEach(t => st.push({ site_id: site.id, tag_id: t.id }));
+        } else {
+          // Replace: delete all existing, then re-attach
+          try { await fetch(rest(`site_categories?site_id=eq.${site.id}`), { method: 'DELETE', headers: hdr(REL_KEY) }); await fetch(rest(`site_tags?site_id=eq.${site.id}`), { method: 'DELETE', headers: hdr(REL_KEY) }); } catch { }
+          cats?.forEach(c => sc.push({ site_id: site.id, category_id: c.id }));
+          tags?.forEach(t => st.push({ site_id: site.id, tag_id: t.id }));
+        }
       }
 
       try { await attachRels('site_categories', sc); } catch { }
