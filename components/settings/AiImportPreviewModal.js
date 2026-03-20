@@ -391,6 +391,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                             const allCatsMap = new Map();
                                             (site._currentCats || []).forEach(c => allCatsMap.set(c.toLowerCase(), c));
                                             (site._importCats || []).forEach(c => allCatsMap.set(c.toLowerCase(), c));
+                                            (site.categories || []).forEach(c => allCatsMap.set(c.toLowerCase(), c));
                                             const allCats = [...allCatsMap.values()];
 
                                             const curTagSet = new Set((site._currentTags || []).map(t => t.toLowerCase()));
@@ -398,6 +399,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                             const allTagsMap = new Map();
                                             (site._currentTags || []).forEach(t => allTagsMap.set(t.toLowerCase(), t));
                                             (site._importTags || []).forEach(t => allTagsMap.set(t.toLowerCase(), t));
+                                            (site.tags || []).forEach(t => allTagsMap.set(t.toLowerCase(), t));
                                             const allTags = [...allTagsMap.values()];
 
                                             const diffDesc = site._currentDesc !== site._importDesc && (site._currentDesc || site._importDesc);
