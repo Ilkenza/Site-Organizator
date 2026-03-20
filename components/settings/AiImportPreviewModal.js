@@ -2,13 +2,47 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import Modal from '../ui/Modal';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
-import { SparklesIcon, GlobeIcon, EditIcon, TrashIcon, PlusIcon, CloseIcon, CheckmarkIcon, FolderIcon, TagIcon, SearchIcon } from '../ui/Icons';
+import { SparklesIcon, GlobeIcon, EditIcon, TrashIcon, PlusIcon, CloseIcon, CheckmarkIcon, FolderIcon, TagIcon } from '../ui/Icons';
 
 function normalizeArray(val) {
     if (!val) return [];
     if (Array.isArray(val)) return val.map(v => typeof v === 'string' ? v : v?.name || '').filter(Boolean);
     if (typeof val === 'string') return val.split(/[;,]/).map(s => s.trim()).filter(Boolean);
     return [];
+}
+
+function buildUrlMap(sites) {
+    const map = new Map();
+    for (const s of (sites || [])) {
+        if (s.url) map.set(s.url.trim().toLowerCase().replace(/\/+$/, ''), s);
+    }
+    return map;
+}
+
+function buildItem(s, i, urlMap) {
+    const importCats = normalizeArray(s.categories || s.categories_array || s.category);
+    const importTags = normalizeArray(s.tags || s.tags_array || s.tag);
+    const urlKey = (s.url || '').trim().toLowerCase().replace(/\/+$/, '');
+    const existing = urlKey ? urlMap.get(urlKey) : null;
+    const base = { ...s, _id: i, _selected: true, categories: importCats, tags: importTags };
+    if (!existing) return base;
+    const curCats = (existing.categories_array || []).map(c => c.name).filter(Boolean);
+    const curTags = (existing.tags_array || []).map(t => t.name).filter(Boolean);
+    // Case-insensitive union preserving casing (import wins)
+    const catMap = new Map(); curCats.forEach(c => catMap.set(c.toLowerCase(), c)); importCats.forEach(c => catMap.set(c.toLowerCase(), c));
+    const tagMap = new Map(); curTags.forEach(t => tagMap.set(t.toLowerCase(), t)); importTags.forEach(t => tagMap.set(t.toLowerCase(), t));
+    return {
+        ...base,
+        categories: [...catMap.values()],
+        tags: [...tagMap.values()],
+        _currentCats: curCats, _currentTags: curTags,
+        _importCats: importCats, _importTags: importTags,
+        _currentDesc: existing.description || '', _currentUseCase: existing.use_case || '', _currentPricing: existing.pricing || 'freemium',
+        _importDesc: s.description || '', _importUseCase: s.use_case || '', _importPricing: s.pricing || 'freemium',
+        description: s.description || existing.description || '',
+        use_case: s.use_case || existing.use_case || '',
+        pricing: s.pricing && s.pricing !== 'freemium' ? s.pricing : (existing.pricing || s.pricing || 'freemium'),
+    };
 }
 
 const PRICING_OPTIONS = [
@@ -20,11 +54,10 @@ const PRICING_OPTIONS = [
 const PRICING_LABELS = Object.fromEntries(PRICING_OPTIONS.map(p => [p.value, p.label]));
 const PRICING_COLORS = Object.fromEntries(PRICING_OPTIONS.map(p => [p.value, p.color]));
 
-const EMPTY_SITE = { name: '', url: '', categories: [], tags: [], description: '', use_case: '', pricing: 'freemium' };
 const INPUT = 'w-full px-2 py-1 text-xs bg-app-bg-secondary border border-app-border rounded text-app-text-primary placeholder-app-text-muted focus:outline-none focus:ring-1 focus:ring-purple-500/50';
 
 /* ── Tag/Category badge picker with autocomplete dropdown ── */
-function ItemPicker({ items, allExisting, existingNames, onToggle, onAdd, icon: Icon, activeColor, newColor, label }) {
+function ItemPicker({ items, allExisting, existingNames, onToggle, onAdd, icon: Icon, activeColor, newColor, label, currentSet, importSet, originImportClass }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
     const wrapRef = useRef(null);
@@ -71,21 +104,31 @@ function ItemPicker({ items, allExisting, existingNames, onToggle, onAdd, icon: 
                 <Icon className="w-3 h-3 text-app-text-muted" />
                 <span className="text-[10px] text-app-text-muted uppercase tracking-wider">{label}</span>
             </div>
-            <div className="flex flex-wrap items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1.5">
                 {/* Selected items */}
                 {items.map((name) => {
-                    const isExisting = existingNames.has(name.toLowerCase());
+                    const key = name.toLowerCase();
+                    const isExisting = existingNames.has(key);
+                    const hasOrigin = currentSet && importSet;
+                    const inCur = hasOrigin && currentSet.has(key);
+                    const inImp = hasOrigin && importSet.has(key);
+                    let originLabel, originClass;
+                    if (hasOrigin) {
+                        originLabel = inCur && inImp ? 'C+I' : inCur ? 'C' : 'I';
+                        originClass = inCur && inImp ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : inCur ? 'bg-gray-500/20 text-gray-300 border-gray-500/30' : (originImportClass || 'bg-purple-500/20 text-purple-300 border-purple-500/30');
+                    }
                     return (
                         <button
                             key={name}
                             type="button"
                             onClick={() => onToggle(name)}
-                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-md border transition-colors cursor-pointer ${isExisting
+                            className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border transition-colors cursor-pointer ${isExisting
                                     ? `${activeColor} hover:opacity-80`
                                     : `${newColor} border-dashed hover:opacity-80`
                                 }`}
                             title={isExisting ? name : `${name} (new — will be created on import)`}
                         >
+                            {hasOrigin && <span className={`text-[8px] font-bold px-1 py-px rounded border leading-none ${originClass}`}>{originLabel}</span>}
                             {!isExisting && <PlusIcon className="w-2.5 h-2.5" />}
                             {name}
                             <CloseIcon className="w-2.5 h-2.5 opacity-50 hover:opacity-100" />
@@ -159,25 +202,16 @@ function ItemPicker({ items, allExisting, existingNames, onToggle, onAdd, icon: 
 }
 
 export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSites, existingCategories = [], existingTags = [], existingSites = [], onConfirm, importing }) {
-    const [items, setItems] = useState(() => (initialSites || []).map((s, i) => ({
-        ...s,
-        _id: i,
-        _selected: true,
-        categories: normalizeArray(s.categories || s.categories_array || s.category),
-        tags: normalizeArray(s.tags || s.tags_array || s.tag),
-    })));
+    const [items, setItems] = useState(() => {
+        const urlMap = buildUrlMap(existingSites);
+        return (initialSites || []).map((s, i) => buildItem(s, i, urlMap));
+    });
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState(null);
-    const [nextId, setNextId] = useState(initialSites?.length || 0);
+    const [editSnapshot, setEditSnapshot] = useState(null);
 
     // Build URL → existing site lookup map
-    const sitesByUrl = useMemo(() => {
-        const map = new Map();
-        for (const s of existingSites) {
-            if (s.url) map.set(s.url.trim().toLowerCase().replace(/\/+$/, ''), s);
-        }
-        return map;
-    }, [existingSites]);
+    const sitesByUrl = useMemo(() => buildUrlMap(existingSites), [existingSites]);
 
     // Existing names sets for lookup + sorted name lists for dropdown
     const existingCatNames = useMemo(() => new Set((existingCategories || []).map(c => (c.name || '').toLowerCase())), [existingCategories]);
@@ -188,14 +222,8 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
     // Reset when sites prop changes
     const siteCount = initialSites?.length || 0;
     useMemo(() => {
-        setItems((initialSites || []).map((s, i) => ({
-            ...s,
-            _id: i,
-            _selected: true,
-            categories: normalizeArray(s.categories || s.categories_array || s.category),
-            tags: normalizeArray(s.tags || s.tags_array || s.tag),
-        })));
-        setNextId(siteCount);
+        const urlMap = buildUrlMap(existingSites);
+        setItems((initialSites || []).map((s, i) => buildItem(s, i, urlMap)));
         setEditingId(null);
     }, [siteCount]);
 
@@ -204,6 +232,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
 
     const toggleAll = () => setItems(prev => prev.map(s => ({ ...s, _selected: !allSelected })));
     const toggleOne = (id) => setItems(prev => prev.map(s => s._id === id ? { ...s, _selected: !s._selected } : s));
+    const setFieldValue = useCallback((id, field, value) => setItems(prev => prev.map(s => s._id === id ? { ...s, [field]: value } : s)), []);
 
     const removeSite = useCallback((id) => {
         setItems(prev => prev.filter(s => s._id !== id));
@@ -251,6 +280,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
 
     const startEdit = useCallback((site) => {
         setEditingId(site._id);
+        setEditSnapshot({ ...site, categories: [...site.categories], tags: [...site.tags] });
         setEditForm({
             name: site.name || site.title || '',
             url: site.url || '',
@@ -268,20 +298,20 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
         }));
         setEditingId(null);
         setEditForm(null);
+        setEditSnapshot(null);
     }, [editForm, editingId]);
 
-    const cancelEdit = () => { setEditingId(null); setEditForm(null); };
-
-    const addSite = useCallback(() => {
-        const id = nextId;
-        setNextId(id + 1);
-        const newSite = { ...EMPTY_SITE, _id: id, _selected: true, categories: [], tags: [] };
-        setItems(prev => [...prev, newSite]);
-        startEdit(newSite);
-    }, [nextId, startEdit]);
+    const cancelEdit = useCallback(() => {
+        if (editSnapshot) {
+            setItems(prev => prev.map(s => s._id === editSnapshot._id ? editSnapshot : s));
+        }
+        setEditingId(null);
+        setEditForm(null);
+        setEditSnapshot(null);
+    }, [editSnapshot]);
 
     const handleConfirm = () => {
-        const toImport = items.filter(s => s._selected).map(({ _id, _selected, ...rest }) => rest);
+        const toImport = items.filter(s => s._selected).map(({ _id, _selected, _currentCats, _currentTags, _importCats, _importTags, _currentDesc, _currentUseCase, _currentPricing, _importDesc, _importUseCase, _importPricing, ...rest }) => rest);
         onConfirm(toImport);
     };
 
@@ -311,24 +341,22 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                 </div>
 
                 {/* List */}
-                <div className="border border-app-border rounded-lg overflow-y-auto max-h-[60vh] divide-y divide-app-border/50">
+                <div className="border border-app-border rounded-lg overflow-y-auto max-h-[55vh] sm:max-h-[60vh] divide-y divide-app-border/50">
                     {items.map((site) => {
                         const isEditing = editingId === site._id;
                         const pricing = site.pricing || 'freemium';
                         const urlKey = (site.url || '').trim().toLowerCase().replace(/\/+$/, '');
                         const currentSite = urlKey ? sitesByUrl.get(urlKey) : null;
-                        const currentCats = currentSite?.categories_array?.map(c => c.name).filter(Boolean) || [];
-                        const currentTags = currentSite?.tags_array?.map(t => t.name).filter(Boolean) || [];
 
                         return (
                             <div key={site._id} className={`transition-colors ${site._selected ? '' : 'opacity-40'}`}>
                                 {/* Main row */}
-                                <div className="flex items-start gap-3 px-3 py-2.5">
+                                <div className="flex items-start gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5">
                                     <input
                                         type="checkbox"
                                         checked={site._selected}
                                         onChange={() => toggleOne(site._id)}
-                                        className="w-3.5 h-3.5 mt-1 rounded border-app-border bg-app-bg-secondary cursor-pointer accent-purple-500 flex-shrink-0"
+                                        className="w-4 h-4 sm:w-3.5 sm:h-3.5 mt-1 rounded border-app-border bg-app-bg-secondary cursor-pointer accent-purple-500 flex-shrink-0"
                                     />
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-2">
@@ -341,70 +369,207 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 flex-shrink-0">NEW</span>
                                                     )}
                                                 </div>
-                                                <a href={site.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-app-accent hover:underline truncate" title={site.url} onClick={e => e.stopPropagation()}>
+                                                <a href={site.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] text-app-accent hover:underline max-w-full truncate" title={site.url} onClick={e => e.stopPropagation()}>
                                                     <GlobeIcon className="w-3 h-3 flex-shrink-0" />
-                                                    {site.url?.replace(/^https?:\/\//, '').slice(0, 50)}
+                                                    <span className="truncate">{site.url?.replace(/^https?:\/\//, '').slice(0, 50)}</span>
                                                 </a>
                                             </div>
-                                            <div className="flex items-center gap-1 flex-shrink-0">
-                                                <button type="button" onClick={() => isEditing ? cancelEdit() : startEdit(site)} className={`p-1 rounded transition-colors ${isEditing ? 'text-purple-400 bg-purple-500/10' : 'text-app-text-muted hover:text-app-accent'}`} title="Edit">
-                                                    <EditIcon className="w-3.5 h-3.5" />
+                                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                                                <button type="button" onClick={() => isEditing ? cancelEdit() : startEdit(site)} className={`p-1.5 sm:p-1 rounded transition-colors ${isEditing ? 'text-purple-400 bg-purple-500/10' : 'text-app-text-muted hover:text-app-accent'}`} title="Edit">
+                                                    <EditIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                                                 </button>
-                                                <button type="button" onClick={() => removeSite(site._id)} className="p-1 text-app-text-muted hover:text-red-400 rounded transition-colors" title="Remove">
-                                                    <TrashIcon className="w-3.5 h-3.5" />
+                                                <button type="button" onClick={() => removeSite(site._id)} className="p-1.5 sm:p-1 text-app-text-muted hover:text-red-400 rounded transition-colors" title="Remove">
+                                                    <TrashIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                                                 </button>
                                             </div>
                                         </div>
 
-                                        {/* Current data (for existing sites) */}
-                                        {!isEditing && currentSite && (
-                                            <div className="mt-1.5 px-2 py-1.5 rounded bg-app-bg-secondary/50 border border-app-border/50 space-y-1">
-                                                <span className="text-[10px] text-app-text-muted uppercase tracking-wider">Current</span>
-                                                {currentCats.length > 0 && (
-                                                    <div className="flex flex-wrap items-center gap-1">
-                                                        <FolderIcon className="w-3 h-3 text-app-text-muted flex-shrink-0" />
-                                                        {currentCats.map((cat, i) => (
-                                                            <span key={`cc${i}`} className="inline-flex items-center px-1.5 py-0.5 text-[10px] rounded-md border border-app-border/60 text-app-text-muted bg-app-bg-secondary">
-                                                                {cat}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                {currentTags.length > 0 && (
-                                                    <div className="flex flex-wrap items-center gap-1">
-                                                        <TagIcon className="w-3 h-3 text-app-text-muted flex-shrink-0" />
-                                                        {currentTags.map((tag, i) => (
-                                                            <span key={`ct${i}`} className="inline-flex items-center px-1.5 py-0.5 text-[10px] rounded-md border border-app-border/60 text-app-text-muted bg-app-bg-secondary">
-                                                                {tag}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                <div className="flex flex-wrap items-center gap-1.5">
-                                                    <Badge size="xs" color={PRICING_COLORS[currentSite.pricing] || 'gray'}>
-                                                        {PRICING_LABELS[currentSite.pricing] || currentSite.pricing || 'Freemium'}
-                                                    </Badge>
-                                                </div>
-                                                {currentSite.description && (
-                                                    <div className="flex items-start gap-1.5">
-                                                        <span className="text-[10px] text-app-text-muted uppercase flex-shrink-0 mt-px">Desc:</span>
-                                                        <span className="text-[10px] text-app-text-muted line-clamp-2">{currentSite.description}</span>
-                                                    </div>
-                                                )}
-                                                {currentSite.use_case && (
-                                                    <div className="flex items-start gap-1.5">
-                                                        <span className="text-[10px] text-app-text-muted uppercase flex-shrink-0 mt-px">Use:</span>
-                                                        <span className="text-[10px] text-app-text-muted line-clamp-2">{currentSite.use_case}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
+                                        {/* ── Unified merge view for EXISTING sites ── */}
+                                        {!isEditing && currentSite && (() => {
+                                            const curCatSet = new Set((site._currentCats || []).map(c => c.toLowerCase()));
+                                            const impCatSet = new Set((site._importCats || []).map(c => c.toLowerCase()));
+                                            const allCatsMap = new Map();
+                                            (site._currentCats || []).forEach(c => allCatsMap.set(c.toLowerCase(), c));
+                                            (site._importCats || []).forEach(c => allCatsMap.set(c.toLowerCase(), c));
+                                            const allCats = [...allCatsMap.values()];
 
-                                        {/* Categories & Tags — read-only badges in view mode */}
-                                        {!isEditing && (
-                                            <div className={`space-y-1 mt-1.5 ${currentSite ? 'px-2 py-1.5 rounded bg-purple-500/5 border border-purple-500/15' : ''}`}>
-                                                {currentSite && <span className="text-[10px] text-purple-300 uppercase tracking-wider">Import</span>}
-                                                {/* Categories row */}
+                                            const curTagSet = new Set((site._currentTags || []).map(t => t.toLowerCase()));
+                                            const impTagSet = new Set((site._importTags || []).map(t => t.toLowerCase()));
+                                            const allTagsMap = new Map();
+                                            (site._currentTags || []).forEach(t => allTagsMap.set(t.toLowerCase(), t));
+                                            (site._importTags || []).forEach(t => allTagsMap.set(t.toLowerCase(), t));
+                                            const allTags = [...allTagsMap.values()];
+
+                                            const diffDesc = site._currentDesc !== site._importDesc && (site._currentDesc || site._importDesc);
+                                            const diffUse = site._currentUseCase !== site._importUseCase && (site._currentUseCase || site._importUseCase);
+                                            const diffPricing = site._currentPricing !== site._importPricing;
+
+                                            return (
+                                                <div className="mt-1.5 space-y-0 px-1.5 sm:px-2 py-1.5 sm:py-2 rounded bg-app-bg-secondary/30 border border-app-border/50">
+                                                    {/* Categories — toggleable */}
+                                                    {allCats.length > 0 && (
+                                                        <div className="space-y-1.5 pb-2.5">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <FolderIcon className="w-3 h-3 text-purple-400" />
+                                                                <span className="text-[10px] text-app-text-muted uppercase tracking-wider">Categories</span>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {allCats.map(cat => {
+                                                                    const key = cat.toLowerCase();
+                                                                    const selected = site.categories.some(c => c.toLowerCase() === key);
+                                                                    const inCur = curCatSet.has(key);
+                                                                    const inImp = impCatSet.has(key);
+                                                                    const isNew = !existingCatNames.has(key);
+                                                                    const originLabel = inCur && inImp ? 'C+I' : inCur ? 'C' : 'I';
+                                                                    const originClass = inCur && inImp ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : inCur ? 'bg-gray-500/20 text-gray-300 border-gray-500/30' : 'bg-purple-500/20 text-purple-300 border-purple-500/30';
+                                                                    return (
+                                                                        <button key={cat} type="button" onClick={() => toggleSiteCat(site._id, cat)}
+                                                                            className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border transition-all cursor-pointer ${
+                                                                                selected
+                                                                                    ? (isNew ? `${CAT_NEW} border-dashed` : CAT_ACTIVE)
+                                                                                    : 'border-app-border/30 text-app-text-muted/40 line-through opacity-50'
+                                                                            }`}
+                                                                            title={`${cat} (${inCur && inImp ? 'current + import' : inCur ? 'current' : 'import'}) — click to ${selected ? 'remove' : 'add'}`}
+                                                                        >
+                                                                            <span className={`text-[8px] font-bold px-1 py-px rounded border leading-none ${originClass}`}>{originLabel}</span>
+                                                                            {isNew && <PlusIcon className="w-2.5 h-2.5" />}
+                                                                            {cat}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Tags — toggleable */}
+                                                    {allTags.length > 0 && (
+                                                        <div className={`space-y-1.5 pb-2.5 ${allCats.length > 0 ? 'pt-2.5 border-t border-app-border/30' : ''}`}>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <TagIcon className="w-3 h-3 text-teal-400" />
+                                                                <span className="text-[10px] text-app-text-muted uppercase tracking-wider">Tags</span>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {allTags.map(tag => {
+                                                                    const key = tag.toLowerCase();
+                                                                    const selected = site.tags.some(t => t.toLowerCase() === key);
+                                                                    const inCur = curTagSet.has(key);
+                                                                    const inImp = impTagSet.has(key);
+                                                                    const isNew = !existingTagNames.has(key);
+                                                                    const originLabel = inCur && inImp ? 'C+I' : inCur ? 'C' : 'I';
+                                                                    const originClass = inCur && inImp ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : inCur ? 'bg-gray-500/20 text-gray-300 border-gray-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30';
+                                                                    return (
+                                                                        <button key={tag} type="button" onClick={() => toggleSiteTag(site._id, tag)}
+                                                                            className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border transition-all cursor-pointer ${
+                                                                                selected
+                                                                                    ? (isNew ? `${TAG_NEW} border-dashed` : TAG_ACTIVE)
+                                                                                    : 'border-app-border/30 text-app-text-muted/40 line-through opacity-50'
+                                                                            }`}
+                                                                            title={`${tag} (${inCur && inImp ? 'current + import' : inCur ? 'current' : 'import'}) — click to ${selected ? 'remove' : 'add'}`}
+                                                                        >
+                                                                            <span className={`text-[8px] font-bold px-1 py-px rounded border leading-none ${originClass}`}>{originLabel}</span>
+                                                                            {isNew && <PlusIcon className="w-2.5 h-2.5" />}
+                                                                            {tag}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Pricing picker */}
+                                                    <div className={`space-y-1.5 pb-2.5 ${(allCats.length > 0 || allTags.length > 0) ? 'pt-2.5 border-t border-app-border/30' : ''}`}>
+                                                        <span className="text-[10px] text-app-text-muted uppercase tracking-wider">Pricing</span>
+                                                        {diffPricing ? (
+                                                            <div className="flex flex-col sm:flex-row gap-1.5">
+                                                                <button type="button" onClick={() => setFieldValue(site._id, 'pricing', site._currentPricing)}
+                                                                    className={`px-2 py-1 sm:py-0.5 text-[10px] rounded border transition-colors ${site.pricing === site._currentPricing ? 'bg-app-bg-secondary border-app-border text-app-text-primary' : 'border-app-border/30 text-app-text-muted hover:border-app-border/60'}`}>
+                                                                    <span className="text-[9px] text-app-text-muted mr-1">Current:</span>{PRICING_LABELS[site._currentPricing] || site._currentPricing}
+                                                                </button>
+                                                                <button type="button" onClick={() => setFieldValue(site._id, 'pricing', site._importPricing)}
+                                                                    className={`px-2 py-1 sm:py-0.5 text-[10px] rounded border transition-colors ${site.pricing === site._importPricing ? 'bg-purple-500/10 border-purple-500/30 text-purple-200' : 'border-app-border/30 text-app-text-muted hover:border-app-border/60'}`}>
+                                                                    <span className="text-[9px] text-purple-300/70 mr-1">Import:</span>{PRICING_LABELS[site._importPricing] || site._importPricing}
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <Badge size="xs" color={PRICING_COLORS[pricing] || 'gray'}>{PRICING_LABELS[pricing] || pricing}</Badge>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Description picker */}
+                                                    {diffDesc ? (
+                                                        <div className="space-y-1.5 pb-2.5 pt-2.5 border-t border-app-border/30">
+                                                            <span className="text-[10px] text-app-text-muted uppercase tracking-wider">Description</span>
+                                                            <div className="space-y-1">
+                                                                {site._currentDesc && (
+                                                                    <button type="button" onClick={() => setFieldValue(site._id, 'description', site._currentDesc)}
+                                                                        className={`w-full text-left px-2 py-1.5 sm:py-1 text-[11px] rounded border transition-colors ${site.description === site._currentDesc ? 'bg-app-bg-secondary border-app-border text-app-text-primary' : 'border-app-border/30 text-app-text-muted hover:border-app-border/60'}`}>
+                                                                        <span className="text-[9px] uppercase text-app-text-muted mr-1">Current:</span>
+                                                                        <span className="line-clamp-2">{site._currentDesc}</span>
+                                                                    </button>
+                                                                )}
+                                                                {site._importDesc && (
+                                                                    <button type="button" onClick={() => setFieldValue(site._id, 'description', site._importDesc)}
+                                                                        className={`w-full text-left px-2 py-1.5 sm:py-1 text-[11px] rounded border transition-colors ${site.description === site._importDesc ? 'bg-purple-500/10 border-purple-500/30 text-purple-200' : 'border-app-border/30 text-app-text-muted hover:border-app-border/60'}`}>
+                                                                        <span className="text-[9px] uppercase text-purple-300/70 mr-1">Import:</span>
+                                                                        <span className="line-clamp-2">{site._importDesc}</span>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : site.description ? (
+                                                        <div className="flex items-start gap-1.5 pb-2.5 pt-2.5 border-t border-app-border/30">
+                                                            <span className="text-[10px] text-app-text-muted uppercase flex-shrink-0 mt-px">Desc:</span>
+                                                            <span className="text-[11px] text-app-text-secondary line-clamp-2">{site.description}</span>
+                                                        </div>
+                                                    ) : null}
+
+                                                    {/* Use Case picker */}
+                                                    {diffUse ? (
+                                                        <div className="space-y-1.5 pb-2.5 pt-2.5 border-t border-app-border/30">
+                                                            <span className="text-[10px] text-app-text-muted uppercase tracking-wider">Use Case</span>
+                                                            <div className="space-y-1">
+                                                                {site._currentUseCase && (
+                                                                    <button type="button" onClick={() => setFieldValue(site._id, 'use_case', site._currentUseCase)}
+                                                                        className={`w-full text-left px-2 py-1.5 sm:py-1 text-[11px] rounded border transition-colors ${site.use_case === site._currentUseCase ? 'bg-app-bg-secondary border-app-border text-app-text-primary' : 'border-app-border/30 text-app-text-muted hover:border-app-border/60'}`}>
+                                                                        <span className="text-[9px] uppercase text-app-text-muted mr-1">Current:</span>
+                                                                        <span className="line-clamp-2">{site._currentUseCase}</span>
+                                                                    </button>
+                                                                )}
+                                                                {site._importUseCase && (
+                                                                    <button type="button" onClick={() => setFieldValue(site._id, 'use_case', site._importUseCase)}
+                                                                        className={`w-full text-left px-2 py-1.5 sm:py-1 text-[11px] rounded border transition-colors ${site.use_case === site._importUseCase ? 'bg-purple-500/10 border-purple-500/30 text-purple-200' : 'border-app-border/30 text-app-text-muted hover:border-app-border/60'}`}>
+                                                                        <span className="text-[9px] uppercase text-purple-300/70 mr-1">Import:</span>
+                                                                        <span className="line-clamp-2">{site._importUseCase}</span>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : site.use_case ? (
+                                                        <div className="flex items-start gap-1.5 pb-2.5 pt-2.5 border-t border-app-border/30">
+                                                            <span className="text-[10px] text-app-text-muted uppercase flex-shrink-0 mt-px">Use:</span>
+                                                            <span className="text-[11px] text-app-text-secondary line-clamp-2">{site.use_case}</span>
+                                                        </div>
+                                                    ) : null}
+
+                                                    {/* Legend */}
+                                                    <div className="flex items-center gap-4 pt-2.5 border-t border-app-border/30">
+                                                        <span className="inline-flex items-center gap-1.5 text-[10px] text-app-text-muted">
+                                                            <span className="text-[8px] font-bold px-1 py-px rounded border bg-gray-500/20 text-gray-300 border-gray-500/30 leading-none">C</span>current
+                                                        </span>
+                                                        <span className="inline-flex items-center gap-1.5 text-[10px] text-app-text-muted">
+                                                            <span className="text-[8px] font-bold px-1 py-px rounded border bg-purple-500/20 text-purple-300 border-purple-500/30 leading-none">I</span>import
+                                                        </span>
+                                                        <span className="inline-flex items-center gap-1.5 text-[10px] text-app-text-muted">
+                                                            <span className="text-[8px] font-bold px-1 py-px rounded border bg-blue-500/20 text-blue-300 border-blue-500/30 leading-none">C+I</span>both
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* ── Simple view for NEW sites ── */}
+                                        {!isEditing && !currentSite && (
+                                            <div className="space-y-1 mt-1.5">
                                                 {site.categories.length > 0 && (
                                                     <div className="flex flex-wrap items-center gap-1">
                                                         <FolderIcon className="w-3 h-3 text-purple-400 flex-shrink-0" />
@@ -418,7 +583,6 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                         })}
                                                     </div>
                                                 )}
-                                                {/* Tags row */}
                                                 {site.tags.length > 0 && (
                                                     <div className="flex flex-wrap items-center gap-1">
                                                         <TagIcon className="w-3 h-3 text-teal-400 flex-shrink-0" />
@@ -432,11 +596,8 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                         })}
                                                     </div>
                                                 )}
-                                                {/* Pricing + description + use_case */}
                                                 <div className="flex flex-wrap items-center gap-1.5">
-                                                    <Badge size="xs" color={PRICING_COLORS[pricing] || 'gray'}>
-                                                        {PRICING_LABELS[pricing] || pricing}
-                                                    </Badge>
+                                                    <Badge size="xs" color={PRICING_COLORS[pricing] || 'gray'}>{PRICING_LABELS[pricing] || pricing}</Badge>
                                                 </div>
                                                 {site.description && (
                                                     <div className="flex items-start gap-1.5">
@@ -457,7 +618,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
 
                                 {/* Edit form (text fields only — cats/tags are always inline above) */}
                                 {isEditing && editForm && (
-                                    <div className="px-3 pb-3 pt-0 space-y-2 bg-purple-500/5 border-t border-purple-500/10">
+                                    <div className="px-2 sm:px-3 pb-3 pt-0 space-y-2 bg-purple-500/5 border-t border-purple-500/10">
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
                                             <div>
                                                 <label className="text-[10px] text-app-text-muted uppercase mb-0.5 block">Name</label>
@@ -496,6 +657,9 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                 activeColor={CAT_ACTIVE}
                                                 newColor={CAT_NEW}
                                                 label="Categories"
+                                                currentSet={site._currentCats ? new Set(site._currentCats.map(c => c.toLowerCase())) : null}
+                                                importSet={site._importCats ? new Set(site._importCats.map(c => c.toLowerCase())) : null}
+                                                originImportClass="bg-purple-500/20 text-purple-300 border-purple-500/30"
                                             />
                                             <ItemPicker
                                                 items={site.tags}
@@ -507,6 +671,9 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                 activeColor={TAG_ACTIVE}
                                                 newColor={TAG_NEW}
                                                 label="Tags"
+                                                currentSet={site._currentTags ? new Set(site._currentTags.map(t => t.toLowerCase())) : null}
+                                                importSet={site._importTags ? new Set(site._importTags.map(t => t.toLowerCase())) : null}
+                                                originImportClass="bg-teal-500/20 text-teal-300 border-teal-500/30"
                                             />
                                         </div>
                                         <div className="flex items-center justify-end gap-2 pt-1">
@@ -532,9 +699,9 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
 
                 {/* Footer */}
                 <div className="flex items-center justify-end pt-2">
-                    <div className="flex items-center gap-3">
-                        <Button variant="secondary" onClick={onClose} disabled={importing}>Cancel</Button>
-                        <Button variant="primary" onClick={handleConfirm} loading={importing} disabled={selectedCount === 0}>
+                    <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                        <Button variant="secondary" onClick={onClose} disabled={importing} className="flex-1 sm:flex-none">Cancel</Button>
+                        <Button variant="primary" onClick={handleConfirm} loading={importing} disabled={selectedCount === 0} className="flex-1 sm:flex-none">
                             Import {selectedCount} Site{selectedCount !== 1 ? 's' : ''}
                         </Button>
                     </div>
