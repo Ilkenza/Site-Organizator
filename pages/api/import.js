@@ -249,6 +249,7 @@ export default async function handler(req, res) {
             if (nr.description) patch.description = nr.description;
             if (nr.use_case) patch.use_case = nr.use_case;
             if (nr.pricing && nr.pricing !== 'freemium') patch.pricing = nr.pricing;
+            if (nr.is_needed !== null) patch.is_needed = nr.is_needed;
           } else {
             patch = { name: nr.name || existingSite.name, pricing: nr.pricing || existingSite.pricing, is_favorite: nr.is_favorite, is_pinned: nr.is_pinned };
             if (nr.description) patch.description = nr.description;
