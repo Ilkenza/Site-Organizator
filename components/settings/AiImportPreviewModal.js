@@ -126,8 +126,8 @@ function ItemPicker({ items, allExisting, existingNames, onToggle, onAdd, icon: 
                             type="button"
                             onClick={() => onToggle(name)}
                             className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border transition-colors cursor-pointer ${isExisting
-                                    ? `${activeColor} hover:opacity-80`
-                                    : `${newColor} border-dashed hover:opacity-80`
+                                ? `${activeColor} hover:opacity-80`
+                                : `${newColor} border-dashed hover:opacity-80`
                                 }`}
                             title={isExisting ? name : `${name} (new — will be created on import)`}
                         >
@@ -204,7 +204,7 @@ function ItemPicker({ items, allExisting, existingNames, onToggle, onAdd, icon: 
     );
 }
 
-export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSites, existingCategories = [], existingTags = [], existingSites = [], onConfirm, importing }) {
+export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSites, existingCategories = [], existingTags = [], existingSites = [], onConfirm, onConfirmSingle, importing }) {
     const [items, setItems] = useState(() => {
         const urlMap = buildUrlMap(existingSites);
         return (initialSites || []).map((s, i) => buildItem(s, i, urlMap));
@@ -212,6 +212,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState(null);
     const [editSnapshot, setEditSnapshot] = useState(null);
+    const [importingId, setImportingId] = useState(null);
 
     // Build URL → existing site lookup map
     const sitesByUrl = useMemo(() => buildUrlMap(existingSites), [existingSites]);
@@ -230,8 +231,9 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
         setEditingId(null);
     }, [siteCount]);
 
-    const selectedCount = items.filter(s => s._selected).length;
-    const allSelected = selectedCount === items.length && items.length > 0;
+    const selectedCount = items.filter(s => s._selected && !s._imported).length;
+    const importedCount = items.filter(s => s._imported).length;
+    const allSelected = selectedCount === items.filter(s => !s._imported).length && items.length > 0;
 
     const toggleAll = () => setItems(prev => prev.map(s => ({ ...s, _selected: !allSelected })));
     const toggleOne = (id) => setItems(prev => prev.map(s => s._id === id ? { ...s, _selected: !s._selected } : s));
@@ -313,10 +315,36 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
         setEditSnapshot(null);
     }, [editSnapshot]);
 
+    const [showConfirmClose, setShowConfirmClose] = useState(false);
+
+    const stripInternal = ({ _id, _selected, _imported, _currentCats, _currentTags, _importCats, _importTags, _currentDesc, _currentUseCase, _currentPricing, _importDesc, _importUseCase, _importPricing, _currentNeeded, _importNeeded, ...rest }) => rest;
+
     const handleConfirm = () => {
-        const toImport = items.filter(s => s._selected).map(({ _id, _selected, _currentCats, _currentTags, _importCats, _importTags, _currentDesc, _currentUseCase, _currentPricing, _importDesc, _importUseCase, _importPricing, _currentNeeded, _importNeeded, ...rest }) => rest);
-        onConfirm(toImport);
+        const toImport = items.filter(s => s._selected && !s._imported).map(stripInternal);
+        if (toImport.length) onConfirm(toImport);
     };
+
+    const handleClose = useCallback(() => {
+        const hasUnimported = items.some(s => s._selected && !s._imported);
+        if (hasUnimported) {
+            setShowConfirmClose(true);
+        } else {
+            onClose();
+        }
+    }, [items, onClose]);
+
+    const handleImportSingle = useCallback(async (siteId) => {
+        if (!onConfirmSingle || importingId) return;
+        const site = items.find(s => s._id === siteId);
+        if (!site) return;
+        setImportingId(siteId);
+        const cleaned = stripInternal(site);
+        const result = await onConfirmSingle(cleaned);
+        if (result?.success) {
+            setItems(prev => prev.map(s => s._id === siteId ? { ...s, _imported: true } : s));
+        }
+        setImportingId(null);
+    }, [items, onConfirmSingle, importingId]);
 
     if (!items.length && !initialSites?.length) return null;
 
@@ -326,7 +354,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
     const TAG_NEW = 'bg-amber-500/10 text-amber-300 border-amber-500/30';
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="AI Import Preview" size="full">
+        <Modal isOpen={isOpen} onClose={handleClose} title="AI Import Preview" size="full">
             <div className="space-y-3">
                 {/* Header */}
                 <div className="flex items-center justify-between px-1">
@@ -334,6 +362,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                         <SparklesIcon className="w-5 h-5 text-purple-400" />
                         <span className="text-sm text-app-text-secondary">
                             <strong className="text-app-text-primary">{selectedCount}</strong> of {items.length} selected
+                            {importedCount > 0 && <> · <strong className="text-emerald-400">{importedCount}</strong> imported</>}
                         </span>
                     </div>
                     <div className="flex items-center gap-3">
@@ -345,22 +374,27 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
 
                 {/* List */}
                 <div className="border border-app-border rounded-lg overflow-y-auto max-h-[55vh] sm:max-h-[60vh] divide-y divide-app-border/50">
-                    {items.map((site) => {
+                    {items.map((site, idx) => {
                         const isEditing = editingId === site._id;
                         const pricing = site.pricing || 'freemium';
                         const urlKey = (site.url || '').trim().toLowerCase().replace(/\/+$/, '');
                         const currentSite = urlKey ? sitesByUrl.get(urlKey) : null;
+                        const isSiteImporting = importingId === site._id;
 
                         return (
-                            <div key={site._id} className={`transition-colors ${site._selected ? '' : 'opacity-40'}`}>
+                            <div key={site._id} className={`transition-colors ${site._imported ? 'opacity-50' : site._selected ? '' : 'opacity-40'}`}>
                                 {/* Main row */}
                                 <div className="flex items-start gap-2 sm:gap-3 px-2 sm:px-3 py-2 sm:py-2.5">
-                                    <input
-                                        type="checkbox"
-                                        checked={site._selected}
-                                        onChange={() => toggleOne(site._id)}
-                                        className="w-4 h-4 sm:w-3.5 sm:h-3.5 mt-1 rounded border-app-border bg-app-bg-secondary cursor-pointer accent-purple-500 flex-shrink-0"
-                                    />
+                                    <div className="flex items-center gap-1.5 flex-shrink-0 mt-1">
+                                        <span className="text-[10px] text-app-text-muted font-mono w-5 text-right">{idx + 1}.</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={site._selected}
+                                            onChange={() => toggleOne(site._id)}
+                                            disabled={site._imported}
+                                            className="w-4 h-4 sm:w-3.5 sm:h-3.5 rounded border-app-border bg-app-bg-secondary cursor-pointer accent-purple-500 flex-shrink-0 disabled:opacity-30"
+                                        />
+                                    </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
@@ -374,11 +408,10 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                     {currentSite && site._currentNeeded !== undefined && site._importNeeded !== undefined && site._currentNeeded !== site._importNeeded ? (
                                                         <>
                                                             <button type="button" onClick={() => setFieldValue(site._id, 'is_needed', site._currentNeeded)}
-                                                                className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer flex-shrink-0 ${
-                                                                    site.is_needed === site._currentNeeded
+                                                                className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer flex-shrink-0 ${site.is_needed === site._currentNeeded
                                                                         ? (site._currentNeeded ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-app-bg-secondary text-app-text-muted border-app-border')
                                                                         : 'border-app-border/30 text-app-text-muted/50 hover:border-app-border/60'
-                                                                }`}
+                                                                    }`}
                                                                 title={`Current: ${site._currentNeeded ? 'Needed' : 'Not needed'}`}
                                                             >
                                                                 <span className="text-[8px] font-bold px-0.5 rounded border bg-gray-500/20 text-gray-300 border-gray-500/30 leading-none">C</span>
@@ -386,11 +419,10 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                                 {site._currentNeeded ? 'Needed' : 'Not needed'}
                                                             </button>
                                                             <button type="button" onClick={() => setFieldValue(site._id, 'is_needed', site._importNeeded)}
-                                                                className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer flex-shrink-0 ${
-                                                                    site.is_needed === site._importNeeded
+                                                                className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer flex-shrink-0 ${site.is_needed === site._importNeeded
                                                                         ? (site._importNeeded ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-app-bg-secondary text-app-text-muted border-app-border')
                                                                         : 'border-app-border/30 text-app-text-muted/50 hover:border-app-border/60'
-                                                                }`}
+                                                                    }`}
                                                                 title={`Import: ${site._importNeeded ? 'Needed' : 'Not needed'}`}
                                                             >
                                                                 <span className="text-[8px] font-bold px-0.5 rounded border bg-purple-500/20 text-purple-300 border-purple-500/30 leading-none">I</span>
@@ -400,11 +432,10 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                         </>
                                                     ) : (
                                                         <button type="button" onClick={() => setFieldValue(site._id, 'is_needed', !site.is_needed)}
-                                                            className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer flex-shrink-0 ${
-                                                                site.is_needed
+                                                            className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition-colors cursor-pointer flex-shrink-0 ${site.is_needed
                                                                     ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
                                                                     : 'bg-app-bg-secondary text-app-text-muted border-app-border hover:bg-app-bg-light'
-                                                            }`}
+                                                                }`}
                                                             title={`Click to mark as ${site.is_needed ? 'not needed' : 'needed'}`}
                                                         >
                                                             {currentSite && site._currentNeeded !== undefined && <span className="text-[8px] font-bold px-0.5 rounded border bg-blue-500/20 text-blue-300 border-blue-500/30 leading-none">C+I</span>}
@@ -419,10 +450,24 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                 </a>
                                             </div>
                                             <div className="flex items-center gap-0.5 flex-shrink-0">
-                                                <button type="button" onClick={() => isEditing ? cancelEdit() : startEdit(site)} className={`p-1.5 sm:p-1 rounded transition-colors ${isEditing ? 'text-purple-400 bg-purple-500/10' : 'text-app-text-muted hover:text-app-accent'}`} title="Edit">
+                                                {site._imported ? (
+                                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25">IMPORTED</span>
+                                                ) : (
+                                                    <button type="button" onClick={() => handleImportSingle(site._id)}
+                                                        disabled={isSiteImporting || importing || !!importingId}
+                                                        className="p-1.5 sm:p-1 rounded transition-colors text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        title="Import this site">
+                                                        {isSiteImporting ? (
+                                                            <SparklesIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5 animate-spin" />
+                                                        ) : (
+                                                            <CheckmarkIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                                                        )}
+                                                    </button>
+                                                )}
+                                                <button type="button" onClick={() => isEditing ? cancelEdit() : startEdit(site)} disabled={site._imported} className={`p-1.5 sm:p-1 rounded transition-colors ${isEditing ? 'text-purple-400 bg-purple-500/10' : 'text-app-text-muted hover:text-app-accent'} disabled:opacity-30`} title="Edit">
                                                     <EditIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                                                 </button>
-                                                <button type="button" onClick={() => removeSite(site._id)} className="p-1.5 sm:p-1 text-app-text-muted hover:text-red-400 rounded transition-colors" title="Remove">
+                                                <button type="button" onClick={() => removeSite(site._id)} disabled={site._imported} className="p-1.5 sm:p-1 text-app-text-muted hover:text-red-400 rounded transition-colors disabled:opacity-30" title="Remove">
                                                     <TrashIcon className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                                                 </button>
                                             </div>
@@ -470,11 +515,10 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                                     const originClass = inCur && inImp ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : inCur ? 'bg-gray-500/20 text-gray-300 border-gray-500/30' : 'bg-purple-500/20 text-purple-300 border-purple-500/30';
                                                                     return (
                                                                         <button key={cat} type="button" onClick={() => toggleSiteCat(site._id, cat)}
-                                                                            className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border transition-all cursor-pointer ${
-                                                                                selected
+                                                                            className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border transition-all cursor-pointer ${selected
                                                                                     ? (isNew ? `${CAT_NEW} border-dashed` : CAT_ACTIVE)
                                                                                     : 'border-app-border/30 text-app-text-muted/40 line-through opacity-50'
-                                                                            }`}
+                                                                                }`}
                                                                             title={`${cat} (${inCur && inImp ? 'current + import' : inCur ? 'current' : 'import'}) — click to ${selected ? 'remove' : 'add'}`}
                                                                         >
                                                                             <span className={`text-[8px] font-bold px-1 py-px rounded border leading-none ${originClass}`}>{originLabel}</span>
@@ -505,11 +549,10 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                                     const originClass = inCur && inImp ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : inCur ? 'bg-gray-500/20 text-gray-300 border-gray-500/30' : 'bg-teal-500/20 text-teal-300 border-teal-500/30';
                                                                     return (
                                                                         <button key={tag} type="button" onClick={() => toggleSiteTag(site._id, tag)}
-                                                                            className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border transition-all cursor-pointer ${
-                                                                                selected
+                                                                            className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border transition-all cursor-pointer ${selected
                                                                                     ? (isNew ? `${TAG_NEW} border-dashed` : TAG_ACTIVE)
                                                                                     : 'border-app-border/30 text-app-text-muted/40 line-through opacity-50'
-                                                                            }`}
+                                                                                }`}
                                                                             title={`${tag} (${inCur && inImp ? 'current + import' : inCur ? 'current' : 'import'}) — click to ${selected ? 'remove' : 'add'}`}
                                                                         >
                                                                             <span className={`text-[8px] font-bold px-1 py-px rounded border leading-none ${originClass}`}>{originLabel}</span>
@@ -746,12 +789,39 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                 {/* Footer */}
                 <div className="flex items-center justify-end pt-2">
                     <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-                        <Button variant="secondary" onClick={onClose} disabled={importing} className="flex-1 sm:flex-none">Cancel</Button>
-                        <Button variant="primary" onClick={handleConfirm} loading={importing} disabled={selectedCount === 0} className="flex-1 sm:flex-none">
-                            Import {selectedCount} Site{selectedCount !== 1 ? 's' : ''}
+                        <Button variant="secondary" onClick={handleClose} disabled={importing || !!importingId} className="flex-1 sm:flex-none">
+                            {importedCount > 0 && selectedCount === 0 ? 'Done' : 'Cancel'}
                         </Button>
+                        {selectedCount > 0 && (
+                            <Button variant="primary" onClick={handleConfirm} loading={importing} disabled={selectedCount === 0 || !!importingId} className="flex-1 sm:flex-none">
+                                Import {selectedCount} Site{selectedCount !== 1 ? 's' : ''}
+                            </Button>
+                        )}
                     </div>
                 </div>
+
+                {/* Confirm close dialog */}
+                {showConfirmClose && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <div className="bg-app-bg-secondary border border-app-border rounded-xl shadow-2xl max-w-sm w-full p-5 space-y-4">
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-semibold text-app-text-primary">Discard import?</h3>
+                                <p className="text-xs text-app-text-secondary">
+                                    You have <strong className="text-app-text-primary">{items.filter(s => s._selected && !s._imported).length}</strong> site{items.filter(s => s._selected && !s._imported).length !== 1 ? 's' : ''} that haven{"'"}t been imported yet. Are you sure you want to close without importing them?
+                                </p>
+                            </div>
+                            <div className="flex items-center justify-end gap-2">
+                                <Button variant="secondary" onClick={() => setShowConfirmClose(false)}>
+                                    Go back
+                                </Button>
+                                <Button variant="primary" onClick={() => { setShowConfirmClose(false); onClose(); }}
+                                    className="!bg-red-500/20 !text-red-300 hover:!bg-red-500/30">
+                                    Discard
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </Modal>
     );
