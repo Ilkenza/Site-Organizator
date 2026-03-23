@@ -151,6 +151,26 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
         }
     };
 
+    const handleAiImportSingle = async (site) => {
+        try {
+            const { importSites } = await import('../../lib/exportImport.js');
+            const result = await importSites([site], user?.id, null, {
+                importSource: 'ai-suggestions',
+            });
+            const report = result?.result?.report || {};
+            const created = Array.isArray(report.created) ? report.created.length : (report.created || 0);
+            const updated = Array.isArray(report.updated) ? report.updated.length : (report.updated || 0);
+            const errors = Array.isArray(report.errors) ? report.errors.length : (report.errors || 0);
+            if (created + updated > 0) {
+                setTimeout(() => fetchData(), 500);
+                return { success: true, created, updated };
+            }
+            return { success: false, error: `${errors} error(s)` };
+        } catch (err) {
+            return { success: false, error: err.message };
+        }
+    };
+
     // Handle import result changes
     useEffect(() => {
         if (!importResult) return;
@@ -698,6 +718,7 @@ export default function ImportExportSection({ user, fetchData, showToast }) {
                 existingTags={tags}
                 existingSites={aiExistingSites}
                 onConfirm={handleAiImportConfirm}
+                onConfirmSingle={handleAiImportSingle}
                 importing={aiImporting}
             />
         </>
