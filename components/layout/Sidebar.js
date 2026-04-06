@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
-import { CollectionIcon, CloseIcon, GlobeIcon, FolderIcon, TagIcon, StarIcon, SettingsIcon, PinSimpleIcon, UploadIcon, ChevronDownIcon, PlusIcon, BookmarkIcon, TextLinesIcon, DocumentIcon, FilterIcon, ListBulletIcon, CheckCircleIcon, BanIcon, EditIcon, TrashIcon } from '../ui/Icons';
+import { CollectionIcon, CloseIcon, GlobeIcon, FolderIcon, TagIcon, StarIcon, SettingsIcon, PinSimpleIcon, UploadIcon, ChevronDownIcon, PlusIcon, BookmarkIcon, TextLinesIcon, DocumentIcon, FilterIcon, ListBulletIcon, CheckCircleIcon, BanIcon, EditIcon, TrashIcon, DesktopIcon, DeviceMobileIcon } from '../ui/Icons';
 import GroupModal from './GroupModal';
 import { ConfirmModal } from '../ui/Modal';
 import { SUPER_CATEGORIES, matchSuperCategory } from '../../lib/sharedGroups';
@@ -225,6 +225,10 @@ export default function Sidebar({
         setExcludedPricingValues,
         excludedNeededValues,
         setExcludedNeededValues,
+        excludedUsedOnValues,
+        setExcludedUsedOnValues,
+        selectedUsedOn,
+        setSelectedUsedOn,
         noteGroups,
         addNoteGroup,
         updateNoteGroup,
@@ -237,6 +241,7 @@ export default function Sidebar({
     const srcSet = useMemo(() => excludedImportSources instanceof Set ? excludedImportSources : new Set(excludedImportSources || []), [excludedImportSources]);
     const prcSet = useMemo(() => excludedPricingValues instanceof Set ? excludedPricingValues : new Set(excludedPricingValues || []), [excludedPricingValues]);
     const nddSet = useMemo(() => excludedNeededValues instanceof Set ? excludedNeededValues : new Set(excludedNeededValues || []), [excludedNeededValues]);
+    const uoSet = useMemo(() => excludedUsedOnValues instanceof Set ? excludedUsedOnValues : new Set(excludedUsedOnValues || []), [excludedUsedOnValues]);
 
     const [categoriesSearchQuery, setCategoriesSearchQuery] = useState('');
     const [tagsSearchQuery, setTagsSearchQuery] = useState('');
@@ -426,10 +431,10 @@ export default function Sidebar({
     const untaggedCount = stats.untagged || 0;
 
     // Whether any site filter is active (including exclusions)
-    const hasExclusions = catSet.size > 0 || tagSet.size > 0 || srcSet.size > 0 || prcSet.size > 0 || nddSet.size > 0;
+    const hasExclusions = catSet.size > 0 || tagSet.size > 0 || srcSet.size > 0 || prcSet.size > 0 || nddSet.size > 0 || uoSet.size > 0;
     const hasGroupFilter = groupCatIds instanceof Set && groupCatIds.size > 0;
-    const totalExcluded = catSet.size + tagSet.size + srcSet.size + prcSet.size + nddSet.size;
-    const hasServerFilter = selectedCategory || selectedTag || selectedImportSource || selectedPricing || (neededFilterSites && neededFilterSites !== 'all');
+    const totalExcluded = catSet.size + tagSet.size + srcSet.size + prcSet.size + nddSet.size + uoSet.size;
+    const hasServerFilter = selectedCategory || selectedTag || selectedImportSource || selectedPricing || selectedUsedOn || (neededFilterSites && neededFilterSites !== 'all');
     // Compute visible sites after exclusions and group filter (all sites loaded via fetchAllSites when active)
     const visibleSites = useMemo(() => {
         if (!hasExclusions && !hasGroupFilter) return sites;
@@ -464,9 +469,13 @@ export default function Sidebar({
                 const needed = site.is_needed ? 'needed' : 'not_needed';
                 if (nddSet.has(needed)) return false;
             }
+            if (uoSet.size > 0) {
+                const uo = site.used_on || 'unset';
+                if (uoSet.has(uo)) return false;
+            }
             return true;
         });
-    }, [sites, catSet, tagSet, srcSet, prcSet, nddSet, hasExclusions, hasGroupFilter, groupCatIds]);
+    }, [sites, catSet, tagSet, srcSet, prcSet, nddSet, uoSet, hasExclusions, hasGroupFilter, groupCatIds]);
 
     // Per-filter counts from visible sites (after exclusions + group filter)
     const visibleCounts = useMemo(() => {
@@ -475,6 +484,7 @@ export default function Sidebar({
         const srcs = { manual: 0, bookmarks: 0, notion: 0, file: 0 };
         const prc = { fully_free: 0, freemium: 0, free_trial: 0, paid: 0 };
         let uncategorized = 0, untagged = 0, needed = 0, notNeeded = 0;
+        const uo = { desktop: 0, mobile: 0, both: 0, web: 0 };
         visibleSites.forEach(site => {
             const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
             if (catIds.length === 0) uncategorized++;
@@ -487,8 +497,9 @@ export default function Sidebar({
             const pr = site.pricing || '';
             if (Object.prototype.hasOwnProperty.call(prc, pr)) prc[pr]++;
             if (site.is_needed) needed++; else notNeeded++;
+            if (site.used_on && uo[site.used_on] !== undefined) uo[site.used_on]++;
         });
-        return { categories: cats, tags: tgs, importSources: srcs, pricing: prc, uncategorized, untagged, needed, notNeeded, total: visibleSites.length };
+        return { categories: cats, tags: tgs, importSources: srcs, pricing: prc, usedOn: uo, uncategorized, untagged, needed, notNeeded, total: visibleSites.length };
     }, [visibleSites, hasExclusions, hasGroupFilter]);
 
     // Sites tab count: show "visible / total" when any filter is active
@@ -596,6 +607,29 @@ export default function Sidebar({
         { value: 'free_trial', label: 'Free Trial', icon: '⏱', color: '#f59e0b' },
         { value: 'paid', label: 'Paid', icon: '$', color: '#ef4444' }
     ];
+
+    // Used On counts
+    const usedOnCounts = useMemo(() => ({
+        desktop: stats.usedOnCounts?.desktop || 0,
+        mobile: stats.usedOnCounts?.mobile || 0,
+        both: stats.usedOnCounts?.both || 0,
+        web: stats.usedOnCounts?.web || 0,
+    }), [stats.usedOnCounts]);
+
+    const USED_ON_OPTIONS = [
+        { value: 'desktop', label: 'Desktop', Icon: DesktopIcon, color: '#0ea5e9' },
+        { value: 'mobile', label: 'Mobile', Icon: DeviceMobileIcon, color: '#8b5cf6' },
+        { value: 'both', label: 'Both', Icon: DesktopIcon, color: '#14b8a6' },
+        { value: 'web', label: 'Web', Icon: GlobeIcon, color: '#f59e0b' },
+    ];
+
+    const getUsedOnCount = (key, ownCount) => {
+        if (hasExclusions && visibleCounts) {
+            const vc = visibleCounts.usedOn?.[key] || 0;
+            return `${vc} / ${ownCount}`;
+        }
+        return ownCount;
+    };
 
     return (
         <>
@@ -828,19 +862,21 @@ export default function Sidebar({
                 {(activeTab === 'sites' || activeTab === 'favorites') && (
                     <div className="p-3 sm:p-4 flex-1 overflow-y-auto  sm:max-h-none" data-tour="filters">
                         {/* Reset All Filters Button */}
-                        {(selectedCategory || selectedTag || selectedImportSource || selectedPricing || selectedGroup || (neededFilterSites && neededFilterSites !== 'all') || hasExclusions) && (
+                        {(selectedCategory || selectedTag || selectedImportSource || selectedPricing || selectedUsedOn || selectedGroup || (neededFilterSites && neededFilterSites !== 'all') || hasExclusions) && (
                             <button
                                 onClick={() => {
                                     setSelectedCategory(null);
                                     setSelectedTag(null);
                                     setSelectedImportSource(null);
                                     setSelectedPricing(null);
+                                    setSelectedUsedOn(null);
                                     setNeededFilterSites('all');
                                     setExcludedCategoryIds(new Set());
                                     setExcludedTagIds(new Set());
                                     setExcludedImportSources(new Set());
                                     setExcludedPricingValues(new Set());
                                     setExcludedNeededValues(new Set());
+                                    setExcludedUsedOnValues(new Set());
                                     setExcludeMode(false);
                                     setSelectedGroup(null);
                                     onGroupFilter?.(null);
@@ -1347,6 +1383,50 @@ export default function Sidebar({
                                 })}
                             </div>
                         </>)}
+
+                        {/* Used On Filter */}
+                        <div className="flex items-center gap-2 mb-2 mt-6">
+                            <DesktopIcon className="w-3.5 h-3.5" />
+                            <span className="text-xs font-semibold text-app-text-tertiary uppercase tracking-wider">Used On</span>
+                            {(selectedUsedOn || uoSet.size > 0) && (
+                                <button onClick={() => { setSelectedUsedOn(null); setExcludedUsedOnValues(new Set()); }} className="ml-auto text-red-400 hover:text-red-300" title="Reset">
+                                    <CloseIcon className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 mb-5">
+                            {USED_ON_OPTIONS.map(opt => {
+                                const isExcluded = uoSet.has(opt.value);
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => excludeMode
+                                            ? setExcludedUsedOnValues(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(opt.value)) next.delete(opt.value); else next.add(opt.value);
+                                                return next;
+                                            })
+                                            : setSelectedUsedOn(selectedUsedOn === opt.value ? null : opt.value)
+                                        }
+                                        className={`px-1.5 py-1.5 rounded-lg text-[10px] font-medium transition-all flex flex-col items-center gap-0.5 border ${isExcluded ? 'opacity-40 line-through' : ''} ${selectedUsedOn === opt.value
+                                            ? 'shadow-sm'
+                                            : ''
+                                            }`}
+                                        style={{
+                                            backgroundColor: isExcluded ? 'rgba(239,68,68,0.1)' : selectedUsedOn === opt.value ? `${opt.color}20` : '#1A2E4A',
+                                            color: isExcluded ? '#ef4444' : selectedUsedOn === opt.value ? opt.color : '#8BA4C4',
+                                            borderColor: isExcluded ? 'rgba(239,68,68,0.3)' : selectedUsedOn === opt.value ? `${opt.color}50` : '#243654'
+                                        }}
+                                    >
+                                        <span className="text-sm leading-none">{isExcluded ? '✖' : <opt.Icon className="w-3.5 h-3.5" />}</span>
+                                        <span className="truncate w-full text-center leading-tight">{opt.label}</span>
+                                        <span className={`text-xs font-bold leading-none ${selectedUsedOn === opt.value ? '' : 'text-app-text-muted'}`}>
+                                            {getUsedOnCount(opt.value, usedOnCounts[opt.value])}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
 

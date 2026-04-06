@@ -32,7 +32,8 @@ export default async function handler(req, res) {
     total, favorites, uncategorized, untagged,
     manual, bookmarks, notion, file,
     fullyFree, freemium, freeTrial, paid,
-    needed, notNeeded
+    needed, notNeeded,
+    usedDesktop, usedMobile, usedBoth, usedWeb
   ] = await Promise.all([
     getCount(cfg, token, `${base}${q}`),
     getCount(cfg, token, `${base}${q}&is_favorite=eq.true`),
@@ -48,6 +49,10 @@ export default async function handler(req, res) {
     getCount(cfg, token, `${base}${q}&pricing=eq.paid`),
     getCount(cfg, token, `${base}${q}&is_needed=eq.true`),
     getCount(cfg, token, `${base}${q}&or=(is_needed.eq.false,is_needed.is.null)`),
+    getCount(cfg, token, `${base}${q}&used_on=eq.desktop`),
+    getCount(cfg, token, `${base}${q}&used_on=eq.mobile`),
+    getCount(cfg, token, `${base}${q}&used_on=eq.both`),
+    getCount(cfg, token, `${base}${q}&used_on=eq.web`),
   ]);
 
   return sendOk(res, {
@@ -58,5 +63,6 @@ export default async function handler(req, res) {
     importSources: { manual, bookmarks, notion, file },
     pricingCounts: { fully_free: fullyFree, freemium, free_trial: freeTrial, paid },
     neededCounts: { needed, not_needed: notNeeded },
+    usedOnCounts: { desktop: usedDesktop, mobile: usedMobile, both: usedBoth, web: usedWeb },
   });
 }
