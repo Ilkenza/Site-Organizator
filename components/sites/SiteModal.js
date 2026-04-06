@@ -5,7 +5,7 @@ import { fetchAPI, supabase } from '../../lib/supabase';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { LightbulbIcon, PlusIcon, FolderIcon, TagIcon, SparklesIcon, CloseIcon, SpinnerIcon, StarIcon } from '../ui/Icons';
+import { LightbulbIcon, PlusIcon, FolderIcon, TagIcon, SparklesIcon, CloseIcon, SpinnerIcon, StarIcon, DesktopIcon, DeviceMobileIcon, GlobeIcon } from '../ui/Icons';
 import { suggestCategories } from '../../lib/categorySuggestions';
 import { suggestTags } from '../../lib/tagSuggestions';
 import { normalizeUrlForDuplicateCheck } from '../../lib/urlPatternUtils';
@@ -167,6 +167,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
         pricing: 'fully_free',
         is_favorite: false,
         is_needed: false,
+        used_on: null,
         categoryIds: [],
         tagIds: []
     });
@@ -325,6 +326,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                     pricing: site.pricing || 'fully_free',
                     is_favorite: site.is_favorite || false,
                     is_needed: site.is_needed ?? false,
+                    used_on: site.used_on || null,
                     categoryIds: extractRelationIds(siteCategories),
                     tagIds: extractRelationIds(siteTags)
                 });
@@ -337,6 +339,7 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                     pricing: 'fully_free',
                     is_favorite: defaultFavorite,
                     is_needed: false,
+                    used_on: null,
                     categoryIds: defaultCategoryId ? [defaultCategoryId] : [],
                     tagIds: defaultTagId ? [defaultTagId] : []
                 });
@@ -560,7 +563,8 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                 category_ids: formData.categoryIds,
                 tag_ids: formData.tagIds,
                 is_favorite: formData.is_favorite,
-                is_needed: formData.is_needed
+                is_needed: formData.is_needed,
+                used_on: formData.used_on
             };
 
             if (isEditing) {
@@ -625,7 +629,8 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                 category_ids: formData.categoryIds,
                 tag_ids: formData.tagIds,
                 is_favorite: formData.is_favorite,
-                is_needed: formData.is_needed
+                is_needed: formData.is_needed,
+                used_on: formData.used_on
             };
             onNeedsSaveConfirm(payload, missing, !!site, { ...formData });
             return;
@@ -1017,6 +1022,58 @@ export default function SiteModal({ isOpen, onClose, site = null, prefill = null
                         </button>
                     </div>
                     <p className="text-xs text-app-text-muted">Used for filtering and badges.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-app-text-primary">Used On</label>
+                    <div className="grid grid-cols-4 gap-2 p-1 rounded-lg border border-app-border bg-app-bg-secondary/60">
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, used_on: prev.used_on === 'desktop' ? null : 'desktop' }))}
+                            className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-semibold rounded-md transition-colors ${formData.used_on === 'desktop'
+                                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                                : 'text-app-text-secondary hover:text-app-text-primary'
+                                }`}
+                        >
+                            <DesktopIcon className="w-3.5 h-3.5" />
+                            Desktop
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, used_on: prev.used_on === 'mobile' ? null : 'mobile' }))}
+                            className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-semibold rounded-md transition-colors ${formData.used_on === 'mobile'
+                                ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30'
+                                : 'text-app-text-secondary hover:text-app-text-primary'
+                                }`}
+                        >
+                            <DeviceMobileIcon className="w-3.5 h-3.5" />
+                            Mobile
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, used_on: prev.used_on === 'both' ? null : 'both' }))}
+                            className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-semibold rounded-md transition-colors ${formData.used_on === 'both'
+                                ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                                : 'text-app-text-secondary hover:text-app-text-primary'
+                                }`}
+                        >
+                            <DesktopIcon className="w-3 h-3" />
+                            <DeviceMobileIcon className="w-3 h-3 -ml-1" />
+                            Both
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, used_on: prev.used_on === 'web' ? null : 'web' }))}
+                            className={`flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-semibold rounded-md transition-colors ${formData.used_on === 'web'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : 'text-app-text-secondary hover:text-app-text-primary'
+                                }`}
+                        >
+                            <GlobeIcon className="w-3.5 h-3.5" />
+                            Web
+                        </button>
+                    </div>
+                    <p className="text-xs text-app-text-muted">Click again to unset.</p>
                 </div>
 
                 {/* Categories */}

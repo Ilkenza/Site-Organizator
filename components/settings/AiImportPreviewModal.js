@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import Modal from '../ui/Modal';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
-import { SparklesIcon, GlobeIcon, EditIcon, TrashIcon, PlusIcon, CloseIcon, CheckmarkIcon, FolderIcon, TagIcon, CheckCircleFilledIcon, BanIcon } from '../ui/Icons';
+import { SparklesIcon, GlobeIcon, EditIcon, TrashIcon, PlusIcon, CloseIcon, CheckmarkIcon, FolderIcon, TagIcon, CheckCircleFilledIcon, BanIcon, DesktopIcon, DeviceMobileIcon } from '../ui/Icons';
 
 function normalizeArray(val) {
     if (!val) return [];
@@ -24,7 +24,7 @@ function buildItem(s, i, urlMap) {
     const importTags = normalizeArray(s.tags || s.tags_array || s.tag);
     const urlKey = (s.url || '').trim().toLowerCase().replace(/\/+$/, '');
     const existing = urlKey ? urlMap.get(urlKey) : null;
-    const base = { ...s, _id: i, _selected: true, is_needed: s.is_needed !== undefined ? s.is_needed : true, categories: importCats, tags: importTags };
+    const base = { ...s, _id: i, _selected: true, is_needed: s.is_needed !== undefined ? s.is_needed : true, used_on: s.used_on || null, categories: importCats, tags: importTags };
     if (!existing) return base;
     const curCats = (existing.categories_array || []).map(c => c.name).filter(Boolean);
     const curTags = (existing.tags_array || []).map(t => t.name).filter(Boolean);
@@ -34,6 +34,7 @@ function buildItem(s, i, urlMap) {
     return {
         ...base,
         is_needed: s.is_needed !== undefined ? s.is_needed : (existing.is_needed !== undefined ? existing.is_needed : true),
+        used_on: s.used_on || existing.used_on || null,
         categories: [...catMap.values()],
         tags: [...tagMap.values()],
         _currentCats: curCats, _currentTags: curTags,
@@ -42,6 +43,8 @@ function buildItem(s, i, urlMap) {
         _importDesc: s.description || '', _importUseCase: s.use_case || '', _importPricing: s.pricing || 'freemium',
         _currentNeeded: existing.is_needed !== undefined ? existing.is_needed : true,
         _importNeeded: s.is_needed !== undefined ? s.is_needed : true,
+        _currentUsedOn: existing.used_on || null,
+        _importUsedOn: s.used_on || null,
         description: s.description || existing.description || '',
         use_case: s.use_case || existing.use_case || '',
         pricing: s.pricing && s.pricing !== 'freemium' ? s.pricing : (existing.pricing || s.pricing || 'freemium'),
@@ -317,7 +320,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
 
     const [showConfirmClose, setShowConfirmClose] = useState(false);
 
-    const stripInternal = ({ _id, _selected, _imported, _currentCats, _currentTags, _importCats, _importTags, _currentDesc, _currentUseCase, _currentPricing, _importDesc, _importUseCase, _importPricing, _currentNeeded, _importNeeded, ...rest }) => rest;
+    const stripInternal = ({ _id, _selected, _imported, _currentCats, _currentTags, _importCats, _importTags, _currentDesc, _currentUseCase, _currentPricing, _importDesc, _importUseCase, _importPricing, _currentNeeded, _importNeeded, _currentUsedOn, _importUsedOn, ...rest }) => rest;
 
     const handleConfirm = () => {
         const toImport = items.filter(s => s._selected && !s._imported).map(stripInternal);
@@ -494,6 +497,7 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                             const diffDesc = site._currentDesc !== site._importDesc && (site._currentDesc || site._importDesc);
                                             const diffUse = site._currentUseCase !== site._importUseCase && (site._currentUseCase || site._importUseCase);
                                             const diffPricing = site._currentPricing !== site._importPricing;
+                                            const diffUsedOn = site._currentUsedOn !== site._importUsedOn && (site._currentUsedOn || site._importUsedOn);
 
                                             return (
                                                 <div className="mt-1.5 space-y-0 px-1.5 sm:px-2 py-1.5 sm:py-2 rounded bg-app-bg-secondary/30 border border-app-border/50">
@@ -637,6 +641,39 @@ export default function AiImportPreviewModal({ isOpen, onClose, sites: initialSi
                                                         <div className="flex items-start gap-1.5 pb-2.5 pt-2.5 border-t border-app-border/30">
                                                             <span className="text-[10px] text-app-text-muted uppercase flex-shrink-0 mt-px">Use:</span>
                                                             <span className="text-[11px] text-app-text-secondary line-clamp-2">{site.use_case}</span>
+                                                        </div>
+                                                    ) : null}
+
+                                                    {/* Used On picker */}
+                                                    {diffUsedOn ? (
+                                                        <div className="space-y-1.5 pb-2.5 pt-2.5 border-t border-app-border/30">
+                                                            <span className="text-[10px] text-app-text-muted uppercase tracking-wider">Used On</span>
+                                                            <div className="flex flex-col sm:flex-row gap-1.5">
+                                                                {site._currentUsedOn && (
+                                                                    <button type="button" onClick={() => setFieldValue(site._id, 'used_on', site._currentUsedOn)}
+                                                                        className={`inline-flex items-center gap-1 px-2 py-1 sm:py-0.5 text-[10px] rounded border transition-colors ${site.used_on === site._currentUsedOn ? 'bg-app-bg-secondary border-app-border text-app-text-primary' : 'border-app-border/30 text-app-text-muted hover:border-app-border/60'}`}>
+                                                                        <span className="text-[9px] text-app-text-muted mr-1">Current:</span>
+                                                                        {site._currentUsedOn === 'desktop' ? <DesktopIcon className="w-3 h-3" /> : site._currentUsedOn === 'mobile' ? <DeviceMobileIcon className="w-3 h-3" /> : site._currentUsedOn === 'web' ? <GlobeIcon className="w-3 h-3" /> : <><DesktopIcon className="w-3 h-3" /><DeviceMobileIcon className="w-3 h-3" /></>}
+                                                                        {site._currentUsedOn === 'both' ? 'Both' : site._currentUsedOn === 'desktop' ? 'Desktop' : site._currentUsedOn === 'web' ? 'Web' : 'Mobile'}
+                                                                    </button>
+                                                                )}
+                                                                {site._importUsedOn && (
+                                                                    <button type="button" onClick={() => setFieldValue(site._id, 'used_on', site._importUsedOn)}
+                                                                        className={`inline-flex items-center gap-1 px-2 py-1 sm:py-0.5 text-[10px] rounded border transition-colors ${site.used_on === site._importUsedOn ? 'bg-purple-500/10 border-purple-500/30 text-purple-200' : 'border-app-border/30 text-app-text-muted hover:border-app-border/60'}`}>
+                                                                        <span className="text-[9px] text-purple-300/70 mr-1">Import:</span>
+                                                                        {site._importUsedOn === 'desktop' ? <DesktopIcon className="w-3 h-3" /> : site._importUsedOn === 'mobile' ? <DeviceMobileIcon className="w-3 h-3" /> : site._importUsedOn === 'web' ? <GlobeIcon className="w-3 h-3" /> : <><DesktopIcon className="w-3 h-3" /><DeviceMobileIcon className="w-3 h-3" /></>}
+                                                                        {site._importUsedOn === 'both' ? 'Both' : site._importUsedOn === 'desktop' ? 'Desktop' : site._importUsedOn === 'web' ? 'Web' : 'Mobile'}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : site.used_on ? (
+                                                        <div className="flex items-center gap-1.5 pb-2.5 pt-2.5 border-t border-app-border/30">
+                                                            <span className="text-[10px] text-app-text-muted uppercase flex-shrink-0">Used on:</span>
+                                                            <span className="inline-flex items-center gap-1 text-[11px] text-app-text-secondary">
+                                                                {site.used_on === 'desktop' ? <DesktopIcon className="w-3 h-3" /> : site.used_on === 'mobile' ? <DeviceMobileIcon className="w-3 h-3" /> : site.used_on === 'web' ? <GlobeIcon className="w-3 h-3" /> : <><DesktopIcon className="w-3 h-3" /><DeviceMobileIcon className="w-3 h-3" /></>}
+                                                                {site.used_on === 'both' ? 'Both' : site.used_on === 'desktop' ? 'Desktop' : site.used_on === 'web' ? 'Web' : 'Mobile'}
+                                                            </span>
                                                         </div>
                                                     ) : null}
 

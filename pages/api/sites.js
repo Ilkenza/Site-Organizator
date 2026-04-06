@@ -5,7 +5,7 @@ import {
   buildHeaders, restUrl, sendError, sendOk, guardUUID, validateUUID,
 } from './helpers/api-utils';
 
-const POST_FIELDS = ['name', 'url', 'pricing', 'description', 'use_case', 'import_source', 'is_needed'];
+const POST_FIELDS = ['name', 'url', 'pricing', 'description', 'use_case', 'import_source', 'is_needed', 'used_on'];
 
 // Build URL variants for duplicate detection (www / no-www / trailing slash)
 function buildUrlVariants(rawUrl) {
@@ -156,6 +156,7 @@ function buildListUrl(cfg, limit, offset, f) {
   if (f.pricing) url += `&pricing=eq.${encodeURIComponent(f.pricing)}`;
   if (f.needed === 'needed') url += '&is_needed=eq.true';
   else if (f.needed === 'not_needed') url += '&or=(is_needed.eq.false,is_needed.is.null)';
+  if (f.usedOn && f.usedOn !== 'all') url += `&used_on=eq.${encodeURIComponent(f.usedOn)}`;
   return url;
 }
 
@@ -227,6 +228,7 @@ async function handleGet(req, res, cfg, authKey, relKey) {
     importSource: q.import_source || null,
     needed: q.needed || 'all',
     pricing: q.pricing || null,
+    usedOn: q.used_on || null,
   };
 
   const url = buildListUrl(cfg, limit, offset, filters);
@@ -261,8 +263,10 @@ async function handleGet(req, res, cfg, authKey, relKey) {
 
   // IDs mode — build maps directly from junction rows (no embedded objects needed)
   if (fieldsMode === 'ids') {
-    const scData = await batchFetchJunction(cfg, 'site_categories', 'category_id', siteIds, relKey);
-    const stData = await batchFetchJunction(cfg, 'site_tags', 'tag_id', siteIds, relKey);
+    const [scData, stData] = await Promise.all([
+      batchFetchJunction(cfg, 'site_categories', 'category_id', siteIds, relKey),
+      batchFetchJunction(cfg, 'site_tags', 'tag_id', siteIds, relKey),
+    ]);
     const cMap = new Map(), tMap = new Map();
     for (const sc of scData) { if (sc.category_id) { const a = cMap.get(sc.site_id) || []; a.push(sc.category_id); cMap.set(sc.site_id, a); } }
     for (const st of stData) { if (st.tag_id) { const a = tMap.get(st.site_id) || []; a.push(st.tag_id); tMap.set(st.site_id, a); } }
@@ -275,8 +279,10 @@ async function handleGet(req, res, cfg, authKey, relKey) {
   }
 
   // Full mode
-  const scData = await batchFetchJunction(cfg, 'site_categories', 'category:categories(*)', siteIds, relKey);
-  const stData = await batchFetchJunction(cfg, 'site_tags', 'tag:tags(*)', siteIds, relKey);
+  const [scData, stData] = await Promise.all([
+    batchFetchJunction(cfg, 'site_categories', 'category:categories(*)', siteIds, relKey),
+    batchFetchJunction(cfg, 'site_tags', 'tag:tags(*)', siteIds, relKey),
+  ]);
   const { cMap, tMap } = buildRelMaps(scData, stData);
 
   // Collect string names for legacy fallback
