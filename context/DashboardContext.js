@@ -420,6 +420,7 @@ export function DashboardProvider({ children }) {
     });
     const [selectedImportSource, setSelectedImportSource] = useState(() => initQ.source || null);
     const [selectedPricing, setSelectedPricing] = useState(() => initQ.pricing || null);
+    const [selectedUsedOn, setSelectedUsedOn] = useState(() => initQ.used_on || null);
     const initTab = initQ.tab || 'sites';
     const [usageFilterCategories, setUsageFilterCategories] = useState(() => (initTab === 'categories' && initQ.usage) ? initQ.usage : 'all');
     const [usageFilterTags, setUsageFilterTags] = useState(() => (initTab === 'tags' && initQ.usage) ? initQ.usage : 'all');
@@ -447,6 +448,7 @@ export function DashboardProvider({ children }) {
     const [excludedImportSources, setExcludedImportSources] = useState(() => new Set());
     const [excludedPricingValues, setExcludedPricingValues] = useState(() => new Set());
     const [excludedNeededValues, setExcludedNeededValues] = useState(() => new Set());
+    const [excludedUsedOnValues, setExcludedUsedOnValues] = useState(() => new Set());
 
     // Per-tab filter store for sites & favorites (they share the same state vars,
     // so we save/restore when switching between them)
@@ -457,10 +459,10 @@ export function DashboardProvider({ children }) {
     const siteFavFiltersRef = useRef({});
     siteFavFiltersRef.current = {
         searchQuery, searchInput, selectedCategory, selectedTag,
-        selectedImportSource, selectedPricing, neededFilterSites,
+        selectedImportSource, selectedPricing, selectedUsedOn, neededFilterSites,
         sortBy, sortOrder, selectedGroup,
         excludeMode, excludedCategoryIds, excludedTagIds,
-        excludedImportSources, excludedPricingValues, excludedNeededValues,
+        excludedImportSources, excludedPricingValues, excludedNeededValues, excludedUsedOnValues,
     };
 
     // Sync activeTab with URL query tab param (only when tab in URL changes)
@@ -560,6 +562,7 @@ export function DashboardProvider({ children }) {
                 }
                 if (selectedImportSource) params.source = selectedImportSource;
                 if (selectedPricing) params.pricing = selectedPricing;
+                if (selectedUsedOn) params.used_on = selectedUsedOn;
                 if (neededFilterSites !== 'all') params.needed = neededFilterSites;
                 if (selectedGroup) params.group = groupKeyToLabel(selectedGroup);
                 if (excludeMode) {
@@ -617,7 +620,7 @@ export function DashboardProvider({ children }) {
         }, 150); // Small debounce to batch rapid changes
         return () => { if (urlSyncRef.current) clearTimeout(urlSyncRef.current); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchQuery, selectedCategory, selectedTag, selectedImportSource, selectedPricing,
+    }, [searchQuery, selectedCategory, selectedTag, selectedImportSource, selectedPricing, selectedUsedOn,
         neededFilterSites, usageFilterCategories, usageFilterTags, neededFilterCategories,
         neededFilterTags, sortBy, sortOrder, sortByCategories, sortOrderCategories,
         sortByTags, sortOrderTags, activeTab, categories, tags, selectedGroup,
@@ -835,9 +838,10 @@ export function DashboardProvider({ children }) {
         if (activeTab === 'favorites') params.set('favorites', 'true');
         if (selectedImportSource) params.set('import_source', selectedImportSource);
         if (selectedPricing) params.set('pricing', selectedPricing);
+        if (selectedUsedOn) params.set('used_on', selectedUsedOn);
         if (neededFilterSites && neededFilterSites !== 'all') params.set('needed', neededFilterSites);
         return params.toString();
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, neededFilterSites, parseSearchPrefixes]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, selectedUsedOn, neededFilterSites, parseSearchPrefixes]);
 
     // Fetch a single page of sites from server (all filters are server-side now)
     const fetchSitesPage = useCallback(async (page = 1) => {
@@ -878,6 +882,7 @@ export function DashboardProvider({ children }) {
             if (activeTab === 'favorites') params.set('favorites', 'true');
             if (selectedImportSource) params.set('import_source', selectedImportSource);
             if (selectedPricing) params.set('pricing', selectedPricing);
+            if (selectedUsedOn) params.set('used_on', selectedUsedOn);
             if (neededFilterSites && neededFilterSites !== 'all') params.set('needed', neededFilterSites);
 
             const sitesRes = await fetchAPI(`/sites?${params.toString()}`);
@@ -890,7 +895,7 @@ export function DashboardProvider({ children }) {
         } catch (err) {
             console.error('Failed to fetch all sites:', err);
         }
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, neededFilterSites, parseSearchPrefixes]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, activeTab, selectedImportSource, selectedPricing, selectedUsedOn, neededFilterSites, parseSearchPrefixes]);
 
     // Fetch initial data (categories, tags, first page of sites, sidebar counts)
     const fetchData = useCallback(async () => {
@@ -940,6 +945,7 @@ export function DashboardProvider({ children }) {
                 importSources: counts.importSources ?? { manual: 0, bookmarks: 0, notion: 0, file: 0 },
                 pricingCounts: counts.pricingCounts ?? { fully_free: 0, freemium: 0, free_trial: 0, paid: 0 },
                 neededCounts: counts.neededCounts ?? { needed: 0, not_needed: 0 },
+                usedOnCounts: counts.usedOnCounts ?? { desktop: 0, mobile: 0, both: 0, web: 0 },
                 notes: notesData.length,
                 noteGroups: noteGroupsData.length
             });
@@ -1019,7 +1025,7 @@ export function DashboardProvider({ children }) {
     useEffect(() => {
         if (!dataLoadedRef.current) return;
         fetchSitesPageRef.current(1);
-    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, selectedImportSource, selectedPricing, activeTab, neededFilterSites]);
+    }, [searchQuery, selectedCategory, selectedTag, sortBy, sortOrder, selectedImportSource, selectedPricing, selectedUsedOn, activeTab, neededFilterSites]);
 
     // Compute cross-filter counts when multiple filter dimensions are active
     // This lets ALL categories/tags in the sidebar show "intersection / ownTotal"
@@ -1899,6 +1905,10 @@ export function DashboardProvider({ children }) {
         setExcludedPricingValues,
         excludedNeededValues,
         setExcludedNeededValues,
+        excludedUsedOnValues,
+        setExcludedUsedOnValues,
+        selectedUsedOn,
+        setSelectedUsedOn,
 
         // Multi-select
         selectedSites,
@@ -1988,7 +1998,8 @@ export function DashboardProvider({ children }) {
         neededFilterTags, sortBy, sortOrder, sortByCategories, sortOrderCategories,
         sortByTags, sortOrderTags, activeTab, selectedGroup,
         excludeMode, excludedCategoryIds, excludedTagIds, excludedImportSources,
-        excludedPricingValues, excludedNeededValues,
+        excludedPricingValues, excludedNeededValues, excludedUsedOnValues,
+        selectedUsedOn, setSelectedUsedOn,
         selectedSites, selectedCategories,
         selectedTags, multiSelectMode, toggleFavorite, togglePinned, fetchData,
         addSite, updateSite, deleteSite, addCategory, updateCategory, deleteCategory,

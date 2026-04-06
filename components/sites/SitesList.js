@@ -15,11 +15,11 @@ export default function SitesList({ onEdit, onDelete, groupCategoryIds = null })
         selectedImportSource, neededFilterSites, initialDataLoaded,
         parseSearchPrefixes,
         excludedCategoryIds, excludedTagIds, excludedImportSources,
-        excludedPricingValues, excludedNeededValues,
+        excludedPricingValues, excludedNeededValues, excludedUsedOnValues,
     } = useDashboard();
 
     // Client-side exclusion filter — sites use categories_array/tags_array (objects with .id)
-    const hasExclusions = excludedCategoryIds.size > 0 || excludedTagIds.size > 0 || excludedImportSources.size > 0 || excludedPricingValues.size > 0 || excludedNeededValues.size > 0;
+    const hasExclusions = excludedCategoryIds.size > 0 || excludedTagIds.size > 0 || excludedImportSources.size > 0 || excludedPricingValues.size > 0 || excludedNeededValues.size > 0 || excludedUsedOnValues.size > 0;
     const hasGroupFilter = groupCategoryIds instanceof Set && groupCategoryIds.size > 0;
     const needsClientFilter = hasExclusions || hasGroupFilter;
 
@@ -68,14 +68,18 @@ export default function SitesList({ onEdit, onDelete, groupCategoryIds = null })
                 const needed = site.is_needed ? 'needed' : 'not_needed';
                 if (excludedNeededValues.has(needed)) return false;
             }
+            if (excludedUsedOnValues.size > 0) {
+                const uo = site.used_on || 'unset';
+                if (excludedUsedOnValues.has(uo)) return false;
+            }
             return true;
         });
-    }, [rawFilteredSites, excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, needsClientFilter, groupCategoryIds, hasGroupFilter]);
+    }, [rawFilteredSites, excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, excludedUsedOnValues, needsClientFilter, groupCategoryIds, hasGroupFilter]);
 
     // Client-side pagination when client-side filtering is active
     const [excludePage, setExcludePage] = useState(1);
     // Reset client page when filters change
-    useEffect(() => { setExcludePage(1); }, [excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, groupCategoryIds]);
+    useEffect(() => { setExcludePage(1); }, [excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, excludedUsedOnValues, groupCategoryIds]);
 
     const excludeTotalPages = Math.ceil(allFilteredSites.length / SITES_PAGE_SIZE) || 1;
     const filteredSites = needsClientFilter
