@@ -410,8 +410,8 @@ function DashboardContent() {
         setDangerZonePending(null);
     };
 
-    // Group-based category filter (set of category IDs when a group is selected)
-    const [groupCategoryIds, setGroupCategoryIds] = useState(null);
+    // Group-based filter (object with catIds/tagIds Sets when a group is selected)
+    const [groupFilter, setGroupFilter] = useState(null);
 
     // Render content based on active tab
     const renderContent = () => {
@@ -423,7 +423,7 @@ function DashboardContent() {
                         <SitesList
                             onEdit={handleEditSite}
                             onDelete={handleDeleteSite}
-                            groupCategoryIds={groupCategoryIds}
+                            groupFilter={groupFilter}
                         />
                     </>
                 );
@@ -460,7 +460,7 @@ function DashboardContent() {
             <Sidebar
                 isOpen={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
-                onGroupFilter={setGroupCategoryIds}
+                onGroupFilter={setGroupFilter}
             />
 
             {/* Main content */}

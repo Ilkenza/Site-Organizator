@@ -15,28 +15,50 @@ const GROUP_ICONS = [
     '📐', '🖌️', '💎', '🌍', '📡', '🛡️', '⚡', '🔗', '📌',
 ];
 
-export default function GroupModal({ isOpen, onClose, categories, editGroup, onSave }) {
+export default function GroupModal({ isOpen, onClose, categories, tags, editGroup, onSave }) {
     const [name, setName] = useState(editGroup?.label || '');
     const [icon, setIcon] = useState(editGroup?.icon || '📁');
     const [color, setColor] = useState(editGroup?.color || '#60a5fa');
     const [selectedCatIds, setSelectedCatIds] = useState(new Set(editGroup?.categoryIds || []));
-    const [search, setSearch] = useState('');
+    const [selectedTagIds, setSelectedTagIds] = useState(new Set(editGroup?.tagIds || []));
+    const [catSearch, setCatSearch] = useState('');
+    const [tagSearch, setTagSearch] = useState('');
     const [showIcons, setShowIcons] = useState(false);
 
     const filteredCats = useMemo(() =>
         (categories || [])
-            .filter(c => c?.name?.toLowerCase().includes(search.toLowerCase()))
+            .filter(c => c?.name?.toLowerCase().includes(catSearch.toLowerCase()))
             .sort((a, b) => {
                 const aSelected = selectedCatIds.has(a.id) ? 0 : 1;
                 const bSelected = selectedCatIds.has(b.id) ? 0 : 1;
                 if (aSelected !== bSelected) return aSelected - bSelected;
                 return a.name.localeCompare(b.name);
             }),
-        [categories, search, selectedCatIds]
+        [categories, catSearch, selectedCatIds]
+    );
+
+    const filteredTags = useMemo(() =>
+        (tags || [])
+            .filter(t => t?.name?.toLowerCase().includes(tagSearch.toLowerCase()))
+            .sort((a, b) => {
+                const aSelected = selectedTagIds.has(a.id) ? 0 : 1;
+                const bSelected = selectedTagIds.has(b.id) ? 0 : 1;
+                if (aSelected !== bSelected) return aSelected - bSelected;
+                return a.name.localeCompare(b.name);
+            }),
+        [tags, tagSearch, selectedTagIds]
     );
 
     const toggleCat = (id) => {
         setSelectedCatIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleTag = (id) => {
+        setSelectedTagIds(prev => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id); else next.add(id);
             return next;
@@ -51,6 +73,7 @@ export default function GroupModal({ isOpen, onClose, categories, editGroup, onS
             icon,
             color,
             categoryIds: Array.from(selectedCatIds),
+            tagIds: Array.from(selectedTagIds),
             isCustom: true,
         });
         onClose();
@@ -117,12 +140,12 @@ export default function GroupModal({ isOpen, onClose, categories, editGroup, onS
                     </label>
                     <input
                         type="text"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
+                        value={catSearch}
+                        onChange={e => setCatSearch(e.target.value)}
                         placeholder="Search categories..."
                         className="w-full px-2 py-1.5 mb-2 bg-app-bg-light border border-app-border rounded text-xs text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-1 focus:ring-app-accent"
                     />
-                    <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
+                    <div className="max-h-40 overflow-y-auto space-y-0.5 pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
                         {filteredCats.map(cat => {
                             const isSelected = selectedCatIds.has(cat.id);
                             return (
@@ -145,6 +168,45 @@ export default function GroupModal({ isOpen, onClose, categories, editGroup, onS
                         })}
                         {filteredCats.length === 0 && (
                             <p className="text-xs text-app-text-muted text-center py-3">No categories found</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Tags selection */}
+                <div>
+                    <label className="block text-xs font-semibold text-app-text-tertiary uppercase mb-1.5">
+                        Tags ({selectedTagIds.size} selected)
+                    </label>
+                    <input
+                        type="text"
+                        value={tagSearch}
+                        onChange={e => setTagSearch(e.target.value)}
+                        placeholder="Search tags..."
+                        className="w-full px-2 py-1.5 mb-2 bg-app-bg-light border border-app-border rounded text-xs text-app-text-primary placeholder-app-text-tertiary focus:outline-none focus:ring-1 focus:ring-app-accent"
+                    />
+                    <div className="max-h-40 overflow-y-auto space-y-0.5 pr-1 scrollbar-thin scrollbar-thumb-app-border scrollbar-track-transparent">
+                        {filteredTags.map(tag => {
+                            const isSelected = selectedTagIds.has(tag.id);
+                            return (
+                                <button
+                                    key={tag.id}
+                                    onClick={() => toggleTag(tag.id)}
+                                    className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-all flex items-center gap-2 ${isSelected
+                                        ? 'bg-app-accent/15 text-app-accent border border-app-accent/30'
+                                        : 'text-app-text-secondary hover:bg-app-bg-light border border-transparent'
+                                        }`}
+                                >
+                                    <span
+                                        className="w-2.5 h-2.5 rounded-full ring-1 ring-white/20 flex-shrink-0"
+                                        style={{ backgroundColor: tag.color || '#6b7280' }}
+                                    />
+                                    <span className="truncate flex-1">{tag.name}</span>
+                                    {isSelected && <span className="text-app-accent">✓</span>}
+                                </button>
+                            );
+                        })}
+                        {filteredTags.length === 0 && (
+                            <p className="text-xs text-app-text-muted text-center py-3">No tags found</p>
                         )}
                     </div>
                 </div>
