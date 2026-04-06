@@ -255,6 +255,7 @@ export default function Sidebar({
     const [groupModalOpen, setGroupModalOpen] = useState(false);
     const [noteGroupToDelete, setNoteGroupToDelete] = useState(null);
     const [deletingNoteGroup, setDeletingNoteGroup] = useState(false);
+    const [groupToDelete, setGroupToDelete] = useState(null);
     const [editingGroup, setEditingGroup] = useState(null);
     // Hidden auto-matched groups (persisted in Supabase user_metadata + localStorage fallback)
     const [hiddenAutoGroups, setHiddenAutoGroups] = useState(() => {
@@ -345,11 +346,25 @@ export default function Sidebar({
         return map;
     }, [categories, customGroups, hiddenAutoGroups]);
 
+    // Map tags to groups (custom groups only — auto groups don't use tags)
+    const tagGroupMap = useMemo(() => {
+        const map = {};
+        (tags || []).forEach(tag => {
+            const groups = [];
+            customGroups.forEach(g => {
+                if ((g.tagIds || []).includes(tag.id)) groups.push(g.key);
+            });
+            map[tag.id] = groups;
+        });
+        return map;
+    }, [tags, customGroups]);
+
     // Build object for editing an auto-matched group (pre-fill with matched categories)
     const buildAutoGroupEdit = useCallback((sc) => {
         const matchedCatIds = (categories || []).filter(cat => (categoryGroupMap[cat.id] || []).includes(sc.key)).map(cat => cat.id);
-        return { key: sc.key, label: sc.label, icon: sc.icon, color: sc.color, categoryIds: matchedCatIds, isCustom: true };
-    }, [categories, categoryGroupMap]);
+        const matchedTagIds = (tags || []).filter(tag => (tagGroupMap[tag.id] || []).includes(sc.key)).map(tag => tag.id);
+        return { key: sc.key, label: sc.label, icon: sc.icon, color: sc.color, categoryIds: matchedCatIds, tagIds: matchedTagIds, isCustom: true };
+    }, [categories, tags, categoryGroupMap, tagGroupMap]);
 
     const superCategoryCounts = useMemo(() => {
         const counts = {};
@@ -364,7 +379,7 @@ export default function Sidebar({
         return counts;
     }, [categories, categoryGroupMap, customGroups]);
 
-    // Compute category IDs for currently selected group and call onGroupFilter
+    // Compute category + tag IDs for currently selected group and call onGroupFilter
     const handleGroupClick = useCallback((groupKey) => {
         const nextKey = selectedGroup === groupKey ? null : groupKey;
         setSelectedGroup(nextKey);
@@ -375,16 +390,26 @@ export default function Sidebar({
             return;
         }
         // Collect all category IDs belonging to this group
-        let ids;
+        let catIds;
         if (nextKey === '_other') {
-            ids = (categories || []).filter(cat => !(categoryGroupMap[cat.id] || []).length).map(cat => cat.id);
+            catIds = (categories || []).filter(cat => !(categoryGroupMap[cat.id] || []).length).map(cat => cat.id);
         } else {
-            ids = (categories || []).filter(cat => (categoryGroupMap[cat.id] || []).includes(nextKey)).map(cat => cat.id);
+            catIds = (categories || []).filter(cat => (categoryGroupMap[cat.id] || []).includes(nextKey)).map(cat => cat.id);
         }
-        onGroupFilter?.(ids.length > 0 ? new Set(ids) : null);
-        // Fetch all sites so both Sidebar count and SitesList have the full dataset
-        if (ids.length > 0) fetchAllSites();
-    }, [selectedGroup, setSelectedGroup, categories, categoryGroupMap, onGroupFilter, fetchAllSites, fetchSitesPage]);
+        // Collect all tag IDs belonging to this group
+        let tIds = [];
+        if (nextKey !== '_other') {
+            tIds = (tags || []).filter(tag => (tagGroupMap[tag.id] || []).includes(nextKey)).map(tag => tag.id);
+        }
+        const hasCats = catIds.length > 0;
+        const hasTags = tIds.length > 0;
+        if (hasCats || hasTags) {
+            onGroupFilter?.({ catIds: hasCats ? new Set(catIds) : null, tagIds: hasTags ? new Set(tIds) : null });
+            fetchAllSites();
+        } else {
+            onGroupFilter?.(null);
+        }
+    }, [selectedGroup, setSelectedGroup, categories, tags, categoryGroupMap, tagGroupMap, onGroupFilter, fetchAllSites, fetchSitesPage]);
 
     // Visible auto groups = not hidden, not overridden by a custom group with the same key
     const visibleAutoGroups = useMemo(() => {
@@ -411,6 +436,13 @@ export default function Sidebar({
         return ids.length > 0 ? new Set(ids) : null;
     }, [selectedGroup, categories, categoryGroupMap]);
 
+    // Compute the set of tag IDs for the currently selected group
+    const groupTagIds = useMemo(() => {
+        if (!selectedGroup || selectedGroup === '_other') return null;
+        const ids = (tags || []).filter(tag => (tagGroupMap[tag.id] || []).includes(selectedGroup)).map(tag => tag.id);
+        return ids.length > 0 ? new Set(ids) : null;
+    }, [selectedGroup, tags, tagGroupMap]);
+
     // Sync group filter to parent when selectedGroup changes (including URL-restored value on mount)
     const groupInitRef = useRef(false);
     useEffect(() => {
@@ -420,10 +452,14 @@ export default function Sidebar({
             return;
         }
         groupInitRef.current = true;
-        onGroupFilter?.(groupCatIds);
-        if (groupCatIds) fetchAllSites();
+        if (groupCatIds || groupTagIds) {
+            onGroupFilter?.({ catIds: groupCatIds, tagIds: groupTagIds });
+            fetchAllSites();
+        } else {
+            onGroupFilter?.(null);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedGroup, groupCatIds]);
+    }, [selectedGroup, groupCatIds, groupTagIds]);
 
     // Counts from API (loaded with categories/tags)
     const favoriteCount = stats.favorites || 0;
@@ -432,17 +468,26 @@ export default function Sidebar({
 
     // Whether any site filter is active (including exclusions)
     const hasExclusions = catSet.size > 0 || tagSet.size > 0 || srcSet.size > 0 || prcSet.size > 0 || nddSet.size > 0 || uoSet.size > 0;
-    const hasGroupFilter = groupCatIds instanceof Set && groupCatIds.size > 0;
+    const hasGroupFilter = (groupCatIds instanceof Set && groupCatIds.size > 0) || (groupTagIds instanceof Set && groupTagIds.size > 0);
     const totalExcluded = catSet.size + tagSet.size + srcSet.size + prcSet.size + nddSet.size + uoSet.size;
     const hasServerFilter = selectedCategory || selectedTag || selectedImportSource || selectedPricing || selectedUsedOn || (neededFilterSites && neededFilterSites !== 'all');
     // Compute visible sites after exclusions and group filter (all sites loaded via fetchAllSites when active)
     const visibleSites = useMemo(() => {
         if (!hasExclusions && !hasGroupFilter) return sites;
         return sites.filter(site => {
-            // Group filter: site must have at least one category belonging to the group
+            // Group filter: site must have at least one category or tag belonging to the group
             if (hasGroupFilter) {
-                const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
-                if (!catIds.some(id => groupCatIds.has(id))) return false;
+                let matchesCat = false;
+                let matchesTag = false;
+                if (groupCatIds instanceof Set && groupCatIds.size > 0) {
+                    const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
+                    matchesCat = catIds.some(id => groupCatIds.has(id));
+                }
+                if (groupTagIds instanceof Set && groupTagIds.size > 0) {
+                    const tIds = (site.tags_array || []).map(t => t?.id).filter(Boolean);
+                    matchesTag = tIds.some(id => groupTagIds.has(id));
+                }
+                if (!matchesCat && !matchesTag) return false;
             }
             if (catSet.size > 0) {
                 if (catSet.has('all')) return false;
@@ -475,7 +520,7 @@ export default function Sidebar({
             }
             return true;
         });
-    }, [sites, catSet, tagSet, srcSet, prcSet, nddSet, uoSet, hasExclusions, hasGroupFilter, groupCatIds]);
+    }, [sites, catSet, tagSet, srcSet, prcSet, nddSet, uoSet, hasExclusions, hasGroupFilter, groupCatIds, groupTagIds]);
 
     // Per-filter counts from visible sites (after exclusions + group filter)
     const visibleCounts = useMemo(() => {
@@ -1010,7 +1055,7 @@ export default function Sidebar({
                                                 title="Edit"
                                             >✎</button>
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); handleDeleteGroup(grp.key); }}
+                                                onClick={(e) => { e.stopPropagation(); setGroupToDelete(grp); }}
                                                 className="w-5 h-5 sm:w-3.5 sm:h-3.5 rounded-full bg-gray-700 border border-gray-600 flex items-center justify-center text-[10px] sm:text-[8px] text-gray-300 hover:bg-red-500 hover:text-white active:bg-red-500 active:text-white"
                                                 title="Delete"
                                             >✕</button>
@@ -1529,6 +1574,7 @@ export default function Sidebar({
                 isOpen={groupModalOpen}
                 onClose={() => { setGroupModalOpen(false); setEditingGroup(null); }}
                 categories={categories}
+                tags={tags}
                 editGroup={editingGroup}
                 onSave={(group) => {
                     handleSaveGroup(group);
@@ -1560,6 +1606,19 @@ export default function Sidebar({
                 cancelText={(noteGroupToDelete?.note_count || 0) > 0 ? null : 'Cancel'}
                 variant="danger"
                 loading={deletingNoteGroup}
+            />
+
+            <ConfirmModal
+                isOpen={!!groupToDelete}
+                onClose={() => setGroupToDelete(null)}
+                onConfirm={() => {
+                    handleDeleteGroup(groupToDelete.key);
+                    setGroupToDelete(null);
+                }}
+                title="Delete Group"
+                message={`Are you sure you want to delete "${groupToDelete?.label}"?`}
+                confirmText="Delete"
+                variant="danger"
             />
         </>
     );

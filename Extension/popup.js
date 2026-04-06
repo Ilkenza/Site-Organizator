@@ -1142,16 +1142,19 @@ function showLoading(message = 'Loading...') {
         overlay = document.createElement('div');
         overlay.id = 'loadingOverlay';
         overlay.className = 'loading-overlay';
-        overlay.innerHTML = `<div class="loading-text"><span class="loading-spinner"></span>${message}</div>`;
-        const container = document.querySelector('.container');
-        if (container) {
-            container.style.position = 'relative';
-            container.appendChild(overlay);
-        }
+        overlay.innerHTML = `<div class="loading-text"><span class="loading-spinner"></span>${message}</div><div class="loading-progress" id="loadingProgress"></div>`;
+        document.body.appendChild(overlay);
     } else {
         overlay.querySelector('.loading-text').innerHTML = `<span class="loading-spinner"></span>${message}`;
+        const prog = overlay.querySelector('.loading-progress');
+        if (prog) prog.textContent = '';
         overlay.style.display = 'flex';
     }
+}
+
+function updateLoadingProgress(text) {
+    const prog = document.getElementById('loadingProgress');
+    if (prog) prog.textContent = text;
 }
 
 function hideLoading() {
@@ -1540,303 +1543,301 @@ function loadFormFromCache(attempt = 0) {
 }
 
 // Load categories and tags from database (Supabase-first, with cache fallback and legacy API fallback)
+// Guard: prevent overlapping loadCategoriesAndTags calls
+let _loadCatsTagsRunning = false;
+let _renderGeneration = 0; // incremented on each render to cancel stale rAF chunks
+
 async function loadCategoriesAndTags() {
+    // If already running, skip this call — the first one will complete
+    if (_loadCatsTagsRunning) {
+        debug('loadCategoriesAndTags: skipped — already running');
+        return;
+    }
+    _loadCatsTagsRunning = true;
+
+    try {
+        await _loadCategoriesAndTagsInner();
+    } finally {
+        _loadCatsTagsRunning = false;
+    }
+}
+
+async function _loadCategoriesAndTagsInner() {
     // Only show loading if site form is visible (user is authenticated)
     const siteFormSection = document.getElementById('siteFormSection');
-    if (siteFormSection && !siteFormSection.classList.contains('hidden')) {
-        showLoading('Loading categories and tags...');
-    }
-    try {
-        let categoriesList = null;
-        let tagsList = null;
+    const showSpinner = siteFormSection && !siteFormSection.classList.contains('hidden');
 
-        // 1) Try Supabase as the authoritative source (if available)
-        if (ensureSupabase()) {
-            try {
-                const { data: cats, error: catErr } = await supabaseClient.from('categories').select('id,name,color').order('name', { ascending: true });
-                if (!catErr && Array.isArray(cats)) {
-                    categoriesList = cats;
-                    console.debug('[popup] loadCategoriesAndTags: fetched categories from Supabase - count=', (categoriesList || []).length);
-                    try { await persistCachedCategories(categoriesList); } catch (e) { debug('persistCachedCategories failed', e); }
-                } else if (catErr) {
-                    debug('Supabase categories query error', catErr);
-                    const msg = String(catErr.message || catErr.code || '');
-                    if (/row-level security|policy|permission|permission denied|42501/i.test(msg) || (catErr && catErr.code === '42501')) {
-                        categoriesAccessDenied = true;
-                        debug('categories: access denied due to RLS');
-                    }
-                }
-            } catch (err) { debug('Supabase categories fetch threw', err); }
-
-            try {
-                const { data: tags, error: tagErr } = await supabaseClient.from('tags').select('id,name,color').order('name', { ascending: true });
-                if (!tagErr && Array.isArray(tags)) {
-                    tagsList = tags;
-                    console.debug('[popup] loadCategoriesAndTags: fetched tags from Supabase - count=', (tagsList || []).length);
-                    try { await persistCachedTags(tagsList); } catch (e) { debug('persistCachedTags failed', e); }
-                } else if (tagErr) {
-                    debug('Supabase tags query error', tagErr);
-                    const tmsg = String(tagErr.message || tagErr.code || '');
-                    const tstatus = tagErr.status || tagErr.statusCode || null;
-                    if (/row-level security|policy|permission|permission denied|42501/i.test(tmsg) || (tagErr && tagErr.code === '42501') || tstatus === 403) {
-                        _tagsAccessDenied = true;
-                        debug('tags: access denied due to RLS or 403');
-                    }
-                }
-            } catch (err) { debug('Supabase tags fetch threw', err); }
-        }
-
-        // 2) If Supabase didn't provide data, try chrome.storage.local cached copies
-        if ((!categoriesList || categoriesList.length === 0) || (!tagsList || tagsList.length === 0)) {
-            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                const res = await new Promise(resolve => chrome.storage.local.get(['cachedCategories', 'cachedTags'], resolve));
-                if ((!categoriesList || categoriesList.length === 0) && res && res.cachedCategories) {
-                    categoriesList = res.cachedCategories;
-                    console.debug('[popup] loadCategoriesAndTags: loaded cachedCategories from chrome.storage.local - count=', (categoriesList || []).length);
-                }
-                if ((!tagsList || tagsList.length === 0) && res && res.cachedTags) {
-                    tagsList = res.cachedTags;
-                    console.debug('[popup] loadCategoriesAndTags: loaded cachedTags from chrome.storage.local - count=', (tagsList || []).length);
-                }
-            }
-        }
-
-        // 3) Legacy fallback to local API if still empty (keeps backward compatibility)
-        if (!categoriesList || categoriesList.length === 0) {
-            try {
-                const categoriesResp = await fetch(`${API_URL}/api/categories`);
-                const categoriesData = await categoriesResp.json();
-                if (categoriesData && categoriesData.success && Array.isArray(categoriesData.data)) {
-                    categoriesList = categoriesData.data;
-                    console.debug('[popup] loadCategoriesAndTags: loaded categories from legacy API - count=', (categoriesList || []).length);
-                }
-            } catch (e) { debug('local API categories fetch failed', e); }
-        }
-
-        if (!tagsList || tagsList.length === 0) {
-            try {
-                const tagsResp = await fetch(`${API_URL}/api/tags`);
-                const tagsData = await tagsResp.json();
-                if (tagsData && tagsData.success && Array.isArray(tagsData.data)) {
-                    tagsList = tagsData.data;
-                    console.debug('[popup] loadCategoriesAndTags: loaded tags from legacy API - count=', (tagsList || []).length);
-                }
-            } catch (e) { debug('local API tags fetch failed', e); }
-        }
-
-        // Helper: reorder a checkbox list so selected items appear first, rest alphabetically
-        // (uses top-level reorderCheckboxList defined above)
-
-        // Read cached selections so selected items render first
+    // --- Helper: read cached selections so selected items render first ---
+    async function getCachedSelections() {
         let cachedSelectedCategories = new Set();
         let cachedSelectedTags = new Set();
         try {
-            // Build cache key — ensure currentTabUrl is available
             let cacheUrl = currentTabUrl;
             if (!cacheUrl) {
                 try {
                     const tabs = await new Promise(resolve => { if (typeof chrome !== 'undefined' && chrome.tabs) { chrome.tabs.query({ active: true, currentWindow: true }, resolve); } else { resolve([]); } });
-                    if (tabs && tabs[0] && tabs[0].url) {
-                        cacheUrl = tabs[0].url;
-                        currentTabUrl = cacheUrl;
-                    }
+                    if (tabs && tabs[0] && tabs[0].url) { cacheUrl = tabs[0].url; currentTabUrl = cacheUrl; }
                 } catch (e) { debug('cache: tabs.query failed', e); }
             }
             const cacheKey = getFormCacheKey();
-            debug('loadCategoriesAndTags: reading cache for sort-first, key=', cacheKey);
-
-            // Try chrome.storage.local first (where saveFormToCache writes)
             let cached = null;
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                try {
-                    cached = await new Promise(resolve => chrome.storage.local.get([cacheKey], res => resolve(res && res[cacheKey])));
-                } catch (e) { debug('chrome.storage cache read failed', e); }
+                try { cached = await new Promise(resolve => chrome.storage.local.get([cacheKey], res => resolve(res && res[cacheKey]))); } catch (e) { }
             }
-            // Fallback to localStorage
-            if (!cached) {
-                try {
-                    const raw = localStorage.getItem(cacheKey);
-                    cached = raw ? JSON.parse(raw) : null;
-                } catch { /* ignore */ }
-            }
+            if (!cached) { try { const raw = localStorage.getItem(cacheKey); cached = raw ? JSON.parse(raw) : null; } catch { } }
             if (cached) {
                 if (Array.isArray(cached.selectedCategories)) cachedSelectedCategories = new Set(cached.selectedCategories);
                 if (Array.isArray(cached.selectedTags)) cachedSelectedTags = new Set(cached.selectedTags);
-                debug('loadCategoriesAndTags: cached selections — cats:', cachedSelectedCategories.size, 'tags:', cachedSelectedTags.size);
-            } else {
-                debug('loadCategoriesAndTags: no cached form data found for key', cacheKey);
             }
-        } catch (e) { debug('loadCategoriesAndTags: reading cache for sort-first failed', e); }
+        } catch (e) { debug('getCachedSelections failed', e); }
+        return { cachedSelectedCategories, cachedSelectedTags };
+    }
 
-        // Render categories (selected first, then alphabetically A-Z)
-        const categoriesCheckboxList = document.getElementById('categoriesCheckboxList');
-        if (categoriesCheckboxList) {
-            categoriesCheckboxList.innerHTML = '';
-            if (categoriesAccessDenied) {
-                categoriesCheckboxList.innerHTML = '<div class="no-results-message">Sign in to view categories (permission denied)</div>';
-            } else if (categoriesList && categoriesList.length > 0) {
-                // Sort: selected first, then alphabetically by name
-                const sortedCategories = [...categoriesList].sort((a, b) => {
-                    const aSelected = cachedSelectedCategories.has(a.id) ? 0 : 1;
-                    const bSelected = cachedSelectedCategories.has(b.id) ? 0 : 1;
-                    if (aSelected !== bSelected) return aSelected - bSelected;
-                    return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
-                });
-                sortedCategories.forEach(cat => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'category-checkbox';
+    // --- Helper: create a single checkbox item (category or tag) ---
+    function createCheckboxItem(item, type, selectedSet) {
+        const isCategory = type === 'category';
+        const itemDiv = document.createElement('div');
+        itemDiv.className = isCategory ? 'category-checkbox' : 'tag-checkbox';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `${type}-${item.id}`;
+        checkbox.value = item.id;
+        if (isCategory) checkbox.dataset.categoryName = item.name;
+        else checkbox.dataset.tagName = item.name;
+        const label = document.createElement('label');
+        label.htmlFor = checkbox.id;
+        label.textContent = item.name;
+        const color = item.color || (isCategory ? '#6CBBFB' : '#667eea');
+        itemDiv.style.cssText = `background:${color}20;color:${color};border:1px solid ${color}40;display:inline-block;padding:6px 12px;border-radius:12px;cursor:pointer;margin-bottom:6px;margin-right:6px`;
+        label.style.color = color;
+        itemDiv.dataset.defaultBorder = '1px solid ' + color + '40';
+        itemDiv.dataset.selectedBorder = '1px solid ' + color;
+        checkbox.style.display = 'none';
+        itemDiv.appendChild(checkbox);
+        itemDiv.appendChild(label);
+        const listId = isCategory ? 'categoriesCheckboxList' : 'tagsCheckboxList';
+        itemDiv.addEventListener('click', (e) => { e.preventDefault(); checkbox.checked = !checkbox.checked; checkbox.dispatchEvent(new Event('change')); });
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) { itemDiv.classList.add('selected'); itemDiv.style.border = itemDiv.dataset.selectedBorder; }
+            else { itemDiv.classList.remove('selected'); itemDiv.style.border = itemDiv.dataset.defaultBorder; }
+            reorderCheckboxList(listId);
+            saveFormToCache();
+        });
+        checkbox.addEventListener('change', saveFormToCache);
+        return itemDiv;
+    }
 
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.id = `category-${cat.id}`;
-                    checkbox.value = cat.id;
-                    checkbox.dataset.categoryName = cat.name;
+    // --- Helper: render lists in chunks so the UI stays responsive ---
+    function renderLists(catsList, tagsList, cachedSelectedCategories, cachedSelectedTags) {
+        // Cancel any previous chunked render
+        const generation = ++_renderGeneration;
 
-                    const label = document.createElement('label');
-                    label.htmlFor = checkbox.id;
-                    label.textContent = cat.name;
-
-                    // Apply colored badge styling
-                    const catColor = cat.color || '#6CBBFB';
-                    itemDiv.style.background = catColor + '20';
-                    itemDiv.style.color = catColor;
-                    itemDiv.style.border = '1px solid ' + catColor + '40';
-                    itemDiv.style.display = 'inline-block';
-                    itemDiv.style.padding = '6px 12px';
-                    itemDiv.style.borderRadius = '12px';
-                    itemDiv.style.cursor = 'pointer';
-                    itemDiv.style.marginBottom = '6px';
-                    itemDiv.style.marginRight = '6px';
-                    label.style.color = catColor;
-
-                    // Persist border values so toggling doesn't change layout
-                    itemDiv.dataset.defaultBorder = itemDiv.style.border;
-                    itemDiv.dataset.selectedBorder = '1px solid ' + catColor;
-
-                    // Hide checkbox
-                    checkbox.style.display = 'none';
-
-                    itemDiv.appendChild(checkbox);
-                    itemDiv.appendChild(label);
-
-                    // Click to toggle checkbox
-                    itemDiv.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        checkbox.checked = !checkbox.checked;
-                        checkbox.dispatchEvent(new Event('change'));
-                    });
-
-                    // Toggle border color on checked state (use border instead of outline to keep sizing stable)
-                    checkbox.addEventListener('change', () => {
-                        if (checkbox.checked) {
-                            itemDiv.classList.add('selected');
-                            itemDiv.style.border = itemDiv.dataset.selectedBorder || ('1px solid ' + catColor);
-                        } else {
-                            itemDiv.classList.remove('selected');
-                            itemDiv.style.border = itemDiv.dataset.defaultBorder || '1px solid transparent';
-                        }
-                        // Re-order: selected categories first
-                        reorderCheckboxList('categoriesCheckboxList');
-                        saveFormToCache();
-                    });
-
-                    // Add save listener
-                    checkbox.addEventListener('change', saveFormToCache);
-
-                    categoriesCheckboxList.appendChild(itemDiv);
-                });
-                // Apply active category filter (if user typed into input)
-                try { if (document.getElementById('categoriesSearchInput')?.value) filterCheckboxList('categoriesCheckboxList', document.getElementById('categoriesSearchInput').value); } catch (e) { }
-            }
-
-            // Render tags (selected first, then alphabetically A-Z)
+        return new Promise(resolve => {
+            const CHUNK = 50;
+            const categoriesCheckboxList = document.getElementById('categoriesCheckboxList');
             const tagsCheckboxList = document.getElementById('tagsCheckboxList');
-            if (tagsCheckboxList && tagsList && tagsList.length > 0) {
-                tagsCheckboxList.innerHTML = '';
-                // Sort: selected first, then alphabetically by name
-                const sortedTags = [...tagsList].sort((a, b) => {
-                    const aSelected = cachedSelectedTags.has(a.id) ? 0 : 1;
-                    const bSelected = cachedSelectedTags.has(b.id) ? 0 : 1;
-                    if (aSelected !== bSelected) return aSelected - bSelected;
-                    return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
-                });
-                sortedTags.forEach(tag => {
-                    const itemDiv = document.createElement('div');
-                    itemDiv.className = 'tag-checkbox';
 
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.id = `tag-${tag.id}`;
-                    checkbox.value = tag.id;
-                    checkbox.dataset.tagName = tag.name;
-
-                    const label = document.createElement('label');
-                    label.htmlFor = checkbox.id;
-                    label.textContent = tag.name;
-
-                    // Apply colored badge styling
-                    const tagColor = tag.color || '#667eea';
-                    itemDiv.style.background = tagColor + '20';
-                    itemDiv.style.color = tagColor;
-                    itemDiv.style.border = '1px solid ' + tagColor + '40';
-                    itemDiv.style.display = 'inline-block';
-                    itemDiv.style.padding = '6px 12px';
-                    itemDiv.style.borderRadius = '12px';
-                    itemDiv.style.cursor = 'pointer';
-                    itemDiv.style.marginBottom = '6px';
-                    itemDiv.style.marginRight = '6px';
-                    label.style.color = tagColor;
-
-                    // Persist border values so toggling doesn't change layout
-                    itemDiv.dataset.defaultBorder = itemDiv.style.border;
-                    itemDiv.dataset.selectedBorder = '1px solid ' + tagColor;
-
-                    // Hide checkbox
-                    checkbox.style.display = 'none';
-
-                    itemDiv.appendChild(checkbox);
-                    itemDiv.appendChild(label);
-
-                    // Click to toggle checkbox
-                    itemDiv.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        checkbox.checked = !checkbox.checked;
-                        checkbox.dispatchEvent(new Event('change'));
+            // Prepare sorted arrays
+            let sortedCats = [];
+            if (categoriesCheckboxList) {
+                categoriesCheckboxList.innerHTML = '';
+                if (categoriesAccessDenied) {
+                    categoriesCheckboxList.innerHTML = '<div class="no-results-message">Sign in to view categories (permission denied)</div>';
+                } else if (catsList && catsList.length > 0) {
+                    sortedCats = [...catsList].sort((a, b) => {
+                        const aS = cachedSelectedCategories.has(a.id) ? 0 : 1;
+                        const bS = cachedSelectedCategories.has(b.id) ? 0 : 1;
+                        if (aS !== bS) return aS - bS;
+                        return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
                     });
-
-                    // Toggle border color on checked state (use border instead of outline to keep sizing stable)
-                    checkbox.addEventListener('change', () => {
-                        if (checkbox.checked) {
-                            itemDiv.classList.add('selected');
-                            itemDiv.style.border = itemDiv.dataset.selectedBorder || ('1px solid ' + tagColor);
-                        } else {
-                            itemDiv.classList.remove('selected');
-                            itemDiv.style.border = itemDiv.dataset.defaultBorder || '1px solid transparent';
-                        }
-                        // Re-order: selected tags first
-                        reorderCheckboxList('tagsCheckboxList');
-                        saveFormToCache();
-                    });
-
-                    // Add save listener
-                    checkbox.addEventListener('change', saveFormToCache);
-
-                    tagsCheckboxList.appendChild(itemDiv);
-                });
-                // Apply active tag filter (if user typed into input)
-                try { if (document.getElementById('tagsSearchInput')?.value) filterCheckboxList('tagsCheckboxList', document.getElementById('tagsSearchInput').value); } catch (e) { }
+                }
             }
 
-            // Success - hide loading spinner
-            hideLoading();
+            let sortedTags = [];
+            if (tagsCheckboxList) {
+                tagsCheckboxList.innerHTML = '';
+                if (tagsList && tagsList.length > 0) {
+                    sortedTags = [...tagsList].sort((a, b) => {
+                        const aS = cachedSelectedTags.has(a.id) ? 0 : 1;
+                        const bS = cachedSelectedTags.has(b.id) ? 0 : 1;
+                        if (aS !== bS) return aS - bS;
+                        return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+                    });
+                }
+            }
 
-            // Scroll to top after rendering so the popup doesn't open at the bottom
+            // Merge into a single work queue: categories first, then tags
+            const queue = [];
+            sortedCats.forEach(item => queue.push({ item, type: 'category', container: categoriesCheckboxList, selectedSet: cachedSelectedCategories }));
+            sortedTags.forEach(item => queue.push({ item, type: 'tag', container: tagsCheckboxList, selectedSet: cachedSelectedTags }));
+
+            const total = queue.length;
+            if (total === 0) {
+                hideLoading();
+                resolve();
+                return;
+            }
+
+            let idx = 0;
+            function processChunk() {
+                // Abort if a newer render started
+                if (generation !== _renderGeneration) { resolve(); return; }
+
+                const frag = document.createDocumentFragment();
+                const end = Math.min(idx + CHUNK, queue.length);
+                let currentContainer = queue[idx]?.container;
+
+                // Build fragment for this chunk, flushing when container changes
+                for (let i = idx; i < end; i++) {
+                    const { item, type, container, selectedSet } = queue[i];
+                    if (container !== currentContainer) {
+                        // Flush fragment to previous container
+                        if (currentContainer) currentContainer.appendChild(frag);
+                        // Start new fragment
+                        while (frag.firstChild) frag.removeChild(frag.firstChild);
+                        currentContainer = container;
+                    }
+                    frag.appendChild(createCheckboxItem(item, type, selectedSet));
+                }
+                // Flush remaining
+                if (currentContainer) currentContainer.appendChild(frag);
+
+                idx = end;
+                updateLoadingProgress(`${Math.min(idx, total)} / ${total}`);
+
+                if (idx < queue.length) {
+                    requestAnimationFrame(processChunk);
+                } else {
+                    // Done — apply filters and clean up
+                    try { if (document.getElementById('categoriesSearchInput')?.value) filterCheckboxList('categoriesCheckboxList', document.getElementById('categoriesSearchInput').value); } catch (e) { }
+                    try { if (document.getElementById('tagsSearchInput')?.value) filterCheckboxList('tagsCheckboxList', document.getElementById('tagsSearchInput').value); } catch (e) { }
+                    hideLoading();
+                    try { window.scrollTo(0, 0); document.body.scrollTop = 0; const container = document.querySelector('.container'); if (container) container.scrollTop = 0; } catch (e) { }
+                    resolve();
+                }
+            }
+
+            showLoading('Loading categories & tags...');
+            requestAnimationFrame(processChunk);
+        });
+    }
+
+    try {
+        // --- Phase 1: Load from cache FIRST for instant display ---
+        let categoriesList = null;
+        let tagsList = null;
+        let renderedFromCache = false;
+
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             try {
-                window.scrollTo(0, 0);
-                document.body.scrollTop = 0;
-                const container = document.querySelector('.container');
-                if (container) container.scrollTop = 0;
-            } catch (e) { debug('scroll-to-top failed', e); }
+                const res = await new Promise(resolve => chrome.storage.local.get(['cachedCategories', 'cachedTags'], resolve));
+                if (res && res.cachedCategories && res.cachedCategories.length > 0) {
+                    categoriesList = res.cachedCategories;
+                    console.debug('[popup] loadCategoriesAndTags: loaded cachedCategories from chrome.storage.local - count=', categoriesList.length);
+                }
+                if (res && res.cachedTags && res.cachedTags.length > 0) {
+                    tagsList = res.cachedTags;
+                    console.debug('[popup] loadCategoriesAndTags: loaded cachedTags from chrome.storage.local - count=', tagsList.length);
+                }
+            } catch (e) { debug('chrome.storage cache read failed', e); }
+        }
+
+        // If we have cached data, render immediately (no loading spinner)
+        if ((categoriesList && categoriesList.length > 0) || (tagsList && tagsList.length > 0)) {
+            const sel = await getCachedSelections();
+            await renderLists(categoriesList, tagsList, sel.cachedSelectedCategories, sel.cachedSelectedTags);
+            renderedFromCache = true;
+        } else if (showSpinner) {
+            showLoading('Loading categories and tags...');
+        }
+
+        // --- Phase 2: Fetch fresh data from Supabase in parallel (update cache for next open) ---
+        // If we already rendered from cache, just update the cache silently — no re-render
+        if (renderedFromCache) {
+            if (ensureSupabase()) {
+                // Fire-and-forget: update cache in background, don't block or re-render
+                Promise.all([
+                    Promise.resolve(supabaseClient.from('categories').select('id,name,color').order('name', { ascending: true })).catch(() => null),
+                    Promise.resolve(supabaseClient.from('tags').select('id,name,color').order('name', { ascending: true })).catch(() => null)
+                ]).then(([catResult, tagResult]) => {
+                    if (catResult && !catResult.error && Array.isArray(catResult.data)) {
+                        persistCachedCategories(catResult.data);
+                        console.debug('[popup] background cache update: categories count=', catResult.data.length);
+                    }
+                    if (tagResult && !tagResult.error && Array.isArray(tagResult.data)) {
+                        persistCachedTags(tagResult.data);
+                        console.debug('[popup] background cache update: tags count=', tagResult.data.length);
+                    }
+                }).catch(e => debug('background cache update failed', e));
+            }
+            // Done — cache is rendered, background update is running
+        } else {
+            // No cache available — must fetch and render now
+            let freshCategories = null;
+            let freshTags = null;
+
+            if (ensureSupabase()) {
+                const catPromise = Promise.resolve(supabaseClient.from('categories').select('id,name,color').order('name', { ascending: true })).catch(err => { debug('Supabase categories fetch threw', err); return { data: null, error: err }; });
+                const tagPromise = Promise.resolve(supabaseClient.from('tags').select('id,name,color').order('name', { ascending: true })).catch(err => { debug('Supabase tags fetch threw', err); return { data: null, error: err }; });
+
+                const [catResult, tagResult] = await Promise.all([catPromise, tagPromise]);
+
+                if (catResult) {
+                    const { data: cats, error: catErr } = catResult;
+                    if (!catErr && Array.isArray(cats)) {
+                        freshCategories = cats;
+                        console.debug('[popup] loadCategoriesAndTags: fetched categories from Supabase - count=', freshCategories.length);
+                        persistCachedCategories(freshCategories);
+                    } else if (catErr) {
+                        debug('Supabase categories query error', catErr);
+                        const msg = String(catErr.message || catErr.code || '');
+                        if (/row-level security|policy|permission|permission denied|42501/i.test(msg) || (catErr && catErr.code === '42501')) {
+                            categoriesAccessDenied = true;
+                        }
+                    }
+                }
+                if (tagResult) {
+                    const { data: tags, error: tagErr } = tagResult;
+                    if (!tagErr && Array.isArray(tags)) {
+                        freshTags = tags;
+                        console.debug('[popup] loadCategoriesAndTags: fetched tags from Supabase - count=', freshTags.length);
+                        persistCachedTags(freshTags);
+                    } else if (tagErr) {
+                        debug('Supabase tags query error', tagErr);
+                        const tmsg = String(tagErr.message || tagErr.code || '');
+                        const tstatus = tagErr.status || tagErr.statusCode || null;
+                        if (/row-level security|policy|permission|permission denied|42501/i.test(tmsg) || (tagErr && tagErr.code === '42501') || tstatus === 403) {
+                            _tagsAccessDenied = true;
+                        }
+                    }
+                }
+            }
+
+            let resultCategories = freshCategories;
+            let resultTags = freshTags;
+
+            // Legacy fallback if still empty
+            if (!resultCategories || resultCategories.length === 0 || !resultTags || resultTags.length === 0) {
+                const legacyPromises = [];
+                if (!resultCategories || resultCategories.length === 0) {
+                    legacyPromises.push(
+                        fetch(`${API_URL}/api/categories`).then(r => r.json()).then(d => {
+                            if (d && d.success && Array.isArray(d.data)) resultCategories = d.data;
+                        }).catch(e => { debug('local API categories fetch failed', e); })
+                    );
+                }
+                if (!resultTags || resultTags.length === 0) {
+                    legacyPromises.push(
+                        fetch(`${API_URL}/api/tags`).then(r => r.json()).then(d => {
+                            if (d && d.success && Array.isArray(d.data)) resultTags = d.data;
+                        }).catch(e => { debug('local API tags fetch failed', e); })
+                    );
+                }
+                await Promise.all(legacyPromises);
+            }
+
+            const sel = await getCachedSelections();
+            await renderLists(resultCategories, resultTags, sel.cachedSelectedCategories, sel.cachedSelectedTags);
         }
     } catch (err) {
         console.error('❌ Error loading data:', err);
@@ -2282,7 +2283,49 @@ async function checkAuth() {
     }
 
     try {
-        // First, try to restore session from localStorage
+        // Fast path: if we have cached credentials, show the form immediately
+        // then validate the session in the background
+        const cachedAuth = getStoredAuthToken();
+        const rememberMe = localStorage.getItem('rememberMe') === 'true';
+        const sessionData = !rememberMe && sessionStorage.getItem('supabase_session');
+
+        if (cachedAuth && cachedAuth.user) {
+            // Show the form instantly from cached user data
+            currentUser = cachedAuth.user;
+            showSiteForm();
+            // Validate session in background — if invalid, redirect to login
+            restoreSession().then(valid => {
+                if (!valid) {
+                    // Cached token was stale — fall back to getSession
+                    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+                        if (session && session.user) {
+                            currentUser = session.user;
+                            saveAuthToken(session);
+                        } else {
+                            showAuthForm();
+                        }
+                    }).catch(() => showAuthForm());
+                }
+            }).catch(() => {});
+            return;
+        }
+
+        if (sessionData) {
+            try {
+                const parsed = JSON.parse(sessionData);
+                if (parsed && parsed.user) {
+                    currentUser = parsed.user;
+                    showSiteForm();
+                    // Validate in background
+                    restoreSession().then(valid => {
+                        if (!valid) showAuthForm();
+                    }).catch(() => {});
+                    return;
+                }
+            } catch (e) { debug('checkAuth: sessionData parse failed', e); }
+        }
+
+        // No cached credentials — must wait for network
         const restored = await restoreSession();
         if (restored) {
             showSiteForm();

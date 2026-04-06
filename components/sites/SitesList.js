@@ -8,7 +8,7 @@ import { fetchAPI } from '../../lib/supabase';
 
 const RENDER_DELAY_MS = 150;
 
-export default function SitesList({ onEdit, onDelete, groupCategoryIds = null }) {
+export default function SitesList({ onEdit, onDelete, groupFilter = null }) {
     const {
         filteredSites: rawFilteredSites, loading, searchQuery, selectedCategory, selectedTag, categories,
         currentPage, totalPages, totalSitesCount, fetchSitesPage, fetchAllSites, SITES_PAGE_SIZE,
@@ -20,7 +20,9 @@ export default function SitesList({ onEdit, onDelete, groupCategoryIds = null })
 
     // Client-side exclusion filter — sites use categories_array/tags_array (objects with .id)
     const hasExclusions = excludedCategoryIds.size > 0 || excludedTagIds.size > 0 || excludedImportSources.size > 0 || excludedPricingValues.size > 0 || excludedNeededValues.size > 0 || excludedUsedOnValues.size > 0;
-    const hasGroupFilter = groupCategoryIds instanceof Set && groupCategoryIds.size > 0;
+    const groupCategoryIds = groupFilter?.catIds || null;
+    const groupTagIds = groupFilter?.tagIds || null;
+    const hasGroupFilter = (groupCategoryIds instanceof Set && groupCategoryIds.size > 0) || (groupTagIds instanceof Set && groupTagIds.size > 0);
     const needsClientFilter = hasExclusions || hasGroupFilter;
 
     // When exclusions or group filter become active, fetch ALL sites so client-side filtering works on the full dataset
@@ -38,10 +40,19 @@ export default function SitesList({ onEdit, onDelete, groupCategoryIds = null })
     const allFilteredSites = useMemo(() => {
         if (!needsClientFilter) return rawFilteredSites;
         return rawFilteredSites.filter(site => {
-            // Group filter: site must have at least one category belonging to the group
+            // Group filter: site must have at least one category or tag belonging to the group
             if (hasGroupFilter) {
-                const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
-                if (!catIds.some(id => groupCategoryIds.has(id))) return false;
+                let matchesCat = false;
+                let matchesTag = false;
+                if (groupCategoryIds instanceof Set && groupCategoryIds.size > 0) {
+                    const catIds = (site.categories_array || []).map(c => c?.id).filter(Boolean);
+                    matchesCat = catIds.some(id => groupCategoryIds.has(id));
+                }
+                if (groupTagIds instanceof Set && groupTagIds.size > 0) {
+                    const tIds = (site.tags_array || []).map(t => t?.id).filter(Boolean);
+                    matchesTag = tIds.some(id => groupTagIds.has(id));
+                }
+                if (!matchesCat && !matchesTag) return false;
             }
             if (excludedCategoryIds.size > 0) {
                 if (excludedCategoryIds.has('all')) return false;
@@ -74,12 +85,12 @@ export default function SitesList({ onEdit, onDelete, groupCategoryIds = null })
             }
             return true;
         });
-    }, [rawFilteredSites, excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, excludedUsedOnValues, needsClientFilter, groupCategoryIds, hasGroupFilter]);
+    }, [rawFilteredSites, excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, excludedUsedOnValues, needsClientFilter, groupCategoryIds, groupTagIds, hasGroupFilter]);
 
     // Client-side pagination when client-side filtering is active
     const [excludePage, setExcludePage] = useState(1);
     // Reset client page when filters change
-    useEffect(() => { setExcludePage(1); }, [excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, excludedUsedOnValues, groupCategoryIds]);
+    useEffect(() => { setExcludePage(1); }, [excludedCategoryIds, excludedTagIds, excludedImportSources, excludedPricingValues, excludedNeededValues, excludedUsedOnValues, groupFilter]);
 
     const excludeTotalPages = Math.ceil(allFilteredSites.length / SITES_PAGE_SIZE) || 1;
     const filteredSites = needsClientFilter
