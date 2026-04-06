@@ -2,7 +2,7 @@ import { useState, memo } from 'react';
 import Badge from '../ui/Badge';
 import InlineEditableName from '../categories/InlineEditableName';
 import { useDashboard } from '../../context/DashboardContext';
-import { CheckmarkIcon, GlobeIcon, ExternalLinkIcon, EditIcon, TrashIcon, BookmarkIcon, DocumentIcon, TextLinesIcon, PinIcon, CheckCircleFilledIcon, BanIcon, LightbulbIcon } from '../ui/Icons';
+import { CheckmarkIcon, GlobeIcon, ExternalLinkIcon, EditIcon, TrashIcon, BookmarkIcon, DocumentIcon, TextLinesIcon, PinIcon, CheckCircleFilledIcon, BanIcon, LightbulbIcon, DesktopIcon, DeviceMobileIcon } from '../ui/Icons';
 
 const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -291,6 +291,26 @@ function SiteCard({ site, onEdit, onDelete, onVisit }) {
                         )}
                         {site.is_needed ? 'Needed' : 'Not needed'}
                     </span>
+                    {site.used_on && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium border ${site.used_on === 'desktop' ? 'bg-sky-500/10 text-sky-300 border-sky-500/30' :
+                                site.used_on === 'mobile' ? 'bg-violet-500/10 text-violet-300 border-violet-500/30' :
+                                    site.used_on === 'web' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' :
+                                        'bg-teal-500/10 text-teal-300 border-teal-500/30'
+                            }`}
+                            title={site.used_on === 'desktop' ? 'Desktop' : site.used_on === 'mobile' ? 'Mobile' : site.used_on === 'web' ? 'Web only' : 'Desktop & Mobile'}
+                        >
+                            {site.used_on === 'desktop' ? (
+                                <DesktopIcon className="w-3 h-3" />
+                            ) : site.used_on === 'mobile' ? (
+                                <DeviceMobileIcon className="w-3 h-3" />
+                            ) : site.used_on === 'web' ? (
+                                <GlobeIcon className="w-3 h-3" />
+                            ) : (
+                                <><DesktopIcon className="w-3 h-3" /><DeviceMobileIcon className="w-3 h-3" /></>
+                            )}
+                            {site.used_on === 'both' ? 'Both' : site.used_on === 'desktop' ? 'Desktop' : site.used_on === 'web' ? 'Web' : 'Mobile'}
+                        </span>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -330,6 +350,7 @@ export default memo(SiteCard, (prev, next) => {
     if (prev.site?.is_favorite !== next.site?.is_favorite) return false;
     if (prev.site?.is_pinned !== next.site?.is_pinned) return false;
     if (prev.site?.is_needed !== next.site?.is_needed) return false;
+    if (prev.site?.used_on !== next.site?.used_on) return false;
     if (prev.site?.use_case !== next.site?.use_case) return false;
     if (prev.site?.description !== next.site?.description) return false;
     if (prev.site?.updated_at !== next.site?.updated_at) return false;

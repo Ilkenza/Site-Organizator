@@ -5,7 +5,7 @@ import {
   buildHeaders, restUrl, sendError, sendOk, guardUUID, validateUUID,
 } from '../helpers/api-utils';
 
-const ALLOWED = ['name', 'url', 'pricing', 'description', 'use_case', 'is_needed'];
+const ALLOWED = ['name', 'url', 'pricing', 'description', 'use_case', 'is_needed', 'used_on'];
 const pick = (body) => {
   const f = {};
   for (const k of ALLOWED) if (Object.prototype.hasOwnProperty.call(body, k)) f[k] = body[k];

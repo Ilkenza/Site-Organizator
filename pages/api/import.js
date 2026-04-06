@@ -55,6 +55,7 @@ function normRow(row, idx) {
     is_favorite: parseBool(row.is_favorite),
     is_pinned: parseBool(row.is_pinned),
     is_needed: row.is_needed === true || row.is_needed === 'true' || row.is_needed === 'Yes' ? true : row.is_needed === false || row.is_needed === 'false' || row.is_needed === 'No' ? false : null,
+    used_on: ['desktop', 'mobile', 'both', 'web'].includes((row.used_on || '').toString().trim().toLowerCase()) ? (row.used_on || '').toString().trim().toLowerCase() : null,
     created_at: row.created_at || row.createdAt || null,
     mergeMode: row.mergeMode === true || row.mergeMode === 'true' ? true : row.mergeMode === false || row.mergeMode === 'false' ? false : undefined,
   };
@@ -227,6 +228,7 @@ export default async function handler(req, res) {
         if (x.nr.description) r.description = x.nr.description;
         if (x.nr.use_case) r.use_case = x.nr.use_case;
         if (x.nr.is_needed !== null) r.is_needed = x.nr.is_needed;
+        if (x.nr.used_on) r.used_on = x.nr.used_on;
         if (x.nr.created_at) r.created_at = x.nr.created_at;
         return r;
       });
@@ -250,11 +252,13 @@ export default async function handler(req, res) {
             if (nr.use_case) patch.use_case = nr.use_case;
             if (nr.pricing && nr.pricing !== 'freemium') patch.pricing = nr.pricing;
             if (nr.is_needed !== null) patch.is_needed = nr.is_needed;
+            if (nr.used_on) patch.used_on = nr.used_on;
           } else {
             patch = { name: nr.name || existingSite.name, pricing: nr.pricing || existingSite.pricing, is_favorite: nr.is_favorite, is_pinned: nr.is_pinned };
             if (nr.description) patch.description = nr.description;
             if (nr.use_case) patch.use_case = nr.use_case;
             if (nr.is_needed !== null) patch.is_needed = nr.is_needed;
+            if (nr.used_on) patch.used_on = nr.used_on;
           }
           const hasPatch = Object.keys(patch).length > 0;
           if (hasPatch) {

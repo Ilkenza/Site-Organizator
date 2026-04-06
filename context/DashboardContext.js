@@ -897,33 +897,12 @@ export function DashboardProvider({ children }) {
         setLoading(true);
         setError(null);
         try {
-            const [sitesRes, categoriesRes, tagsRes, favRes, uncatRes, untagRes, totalRes,
-                manualRes, bookmarksRes, notionRes, fileRes,
-                pFullyFreeRes, pFreemiumRes, pFreeTrialRes, pPaidRes,
-                neededRes, notNeededRes,
+            const [sitesRes, categoriesRes, tagsRes, countsRes,
                 notesRes, noteGroupsRes] = await Promise.all([
                     fetchAPI(`/sites?${buildSitesQuery(1)}`),
                     fetchAPI('/categories'),
                     fetchAPI('/tags'),
-                    // Lightweight count queries for sidebar (non-blocking)
-                    fetchAPI('/sites?favorites=true&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?category_id=uncategorized&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?tag_id=untagged&limit=1&page=1').catch(() => null),
-                    // Always fetch unfiltered total for accurate sidebar counts
-                    fetchAPI('/sites?limit=1&page=1').catch(() => null),
-                    // Import source counts from DB
-                    fetchAPI('/sites?import_source=manual&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?import_source=bookmarks&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?import_source=notion&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?import_source=file&limit=1&page=1').catch(() => null),
-                    // Pricing counts
-                    fetchAPI('/sites?pricing=fully_free&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?pricing=freemium&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?pricing=free_trial&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?pricing=paid&limit=1&page=1').catch(() => null),
-                    // Needed counts
-                    fetchAPI('/sites?needed=needed&limit=1&page=1').catch(() => null),
-                    fetchAPI('/sites?needed=not_needed&limit=1&page=1').catch(() => null),
+                    fetchAPI('/counts').catch(() => null),
                     // Notes & Note Groups
                     fetchAPI('/notes?limit=5000').catch(() => null),
                     fetchAPI('/note-groups').catch(() => null)
@@ -947,35 +926,20 @@ export function DashboardProvider({ children }) {
             setNotes(notesData);
             setNoteGroups(noteGroupsData);
 
-            // Sidebar counts
-            const favoritesCount = favRes?.totalCount ?? 0;
-            const uncategorizedCount = uncatRes?.totalCount ?? 0;
-            const untaggedCount = untagRes?.totalCount ?? 0;
-            const totalAllSites = totalRes?.totalCount ?? totalCount;
+            // Sidebar counts (from single /api/counts call)
+            const counts = countsRes || {};
+            const totalAllSites = counts.total ?? totalCount;
 
             setStats({
                 sites: totalAllSites,
                 categories: categoriesData.length,
                 tags: tagsData.length,
-                favorites: favoritesCount,
-                uncategorized: uncategorizedCount,
-                untagged: untaggedCount,
-                importSources: {
-                    manual: manualRes?.totalCount ?? 0,
-                    bookmarks: bookmarksRes?.totalCount ?? 0,
-                    notion: notionRes?.totalCount ?? 0,
-                    file: fileRes?.totalCount ?? 0
-                },
-                pricingCounts: {
-                    fully_free: pFullyFreeRes?.totalCount ?? 0,
-                    freemium: pFreemiumRes?.totalCount ?? 0,
-                    free_trial: pFreeTrialRes?.totalCount ?? 0,
-                    paid: pPaidRes?.totalCount ?? 0
-                },
-                neededCounts: {
-                    needed: neededRes?.totalCount ?? 0,
-                    not_needed: notNeededRes?.totalCount ?? 0
-                },
+                favorites: counts.favorites ?? 0,
+                uncategorized: counts.uncategorized ?? 0,
+                untagged: counts.untagged ?? 0,
+                importSources: counts.importSources ?? { manual: 0, bookmarks: 0, notion: 0, file: 0 },
+                pricingCounts: counts.pricingCounts ?? { fully_free: 0, freemium: 0, free_trial: 0, paid: 0 },
+                neededCounts: counts.neededCounts ?? { needed: 0, not_needed: 0 },
                 notes: notesData.length,
                 noteGroups: noteGroupsData.length
             });
