@@ -25,6 +25,7 @@ const TagModal = dynamic(() => import('../../components/tags/TagModal'), { ssr: 
 const NotesList = dynamic(() => import('../../components/notes/NotesList'));
 const NoteModal = dynamic(() => import('../../components/notes/NoteModal'), { ssr: false });
 const SettingsPanel = dynamic(() => import('../../components/settings/SettingsPanel'));
+const MapsView = dynamic(() => import('../../components/maps/MapsView'));
 const CommandMenu = dynamic(() => import('../../components/ui/CommandMenu'), { ssr: false });
 const OnboardingTour = dynamic(() => import('../../components/ui/OnboardingTour'), { ssr: false });
 
@@ -63,7 +64,7 @@ function DashboardContent() {
 
     // Sync activeTab with URL
     useEffect(() => {
-        if (tab && ['sites', 'categories', 'tags', 'favorites', 'notes', 'settings'].includes(tab)) {
+        if (tab && ['sites', 'categories', 'tags', 'favorites', 'notes', 'maps', 'settings'].includes(tab)) {
             setActiveTab(tab);
         }
     }, [tab, setActiveTab]);
@@ -435,6 +436,8 @@ function DashboardContent() {
                 return <TagsList onEdit={handleEditTag} onDelete={handleDeleteTag} />;
             case 'notes':
                 return <NotesList onEdit={handleEditNote} onDelete={handleDeleteNote} />;
+            case 'maps':
+                return <MapsView />;
             case 'settings':
                 return (
                     <ErrorBoundary>

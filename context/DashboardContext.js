@@ -146,6 +146,8 @@ export function DashboardProvider({ children }) {
     const [tags, setTags] = useState([]);
     const [notes, setNotes] = useState([]);
     const [noteGroups, setNoteGroups] = useState([]);
+    const [storageItems, setStorageItems] = useState([]);
+    const [courses, setCourses] = useState([]);
     // Notes tab filter/sort state (persists across tab switches, synced to URL)
     const [notesFilter, setNotesFilter] = useState(() => {
         if (typeof window === 'undefined') return { search: '', group: null, sortBy: 'created_at', sortOrder: 'desc', page: 1 };
@@ -172,7 +174,7 @@ export function DashboardProvider({ children }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [notesFilter, router.query.tab]);
 
-    const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0, notes: 0, noteGroups: 0 });
+    const [stats, setStats] = useState({ sites: 0, categories: 0, tags: 0, notes: 0, noteGroups: 0, storageItems: 0, courses: 0 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [failedRelationUpdates, setFailedRelationUpdates] = useState({}); // { [siteId]: { categoryIds, tagIds, warnings } }
@@ -903,14 +905,17 @@ export function DashboardProvider({ children }) {
         setError(null);
         try {
             const [sitesRes, categoriesRes, tagsRes, countsRes,
-                notesRes, noteGroupsRes] = await Promise.all([
+                notesRes, noteGroupsRes, storageItemsRes, coursesRes] = await Promise.all([
                     fetchAPI(`/sites?${buildSitesQuery(1)}`),
                     fetchAPI('/categories'),
                     fetchAPI('/tags'),
                     fetchAPI('/counts').catch(() => null),
                     // Notes & Note Groups
                     fetchAPI('/notes?limit=5000').catch(() => null),
-                    fetchAPI('/note-groups').catch(() => null)
+                    fetchAPI('/note-groups').catch(() => null),
+                    // Maps
+                    fetchAPI('/storage-items?limit=5000').catch(() => null),
+                    fetchAPI('/courses?limit=5000').catch(() => null),
                 ]);
 
             const categoriesData = dedupeById(Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []));
@@ -931,6 +936,12 @@ export function DashboardProvider({ children }) {
             setNotes(notesData);
             setNoteGroups(noteGroupsData);
 
+            // Storage items & Courses
+            const storageItemsData = Array.isArray(storageItemsRes?.data) ? storageItemsRes.data : (Array.isArray(storageItemsRes) ? storageItemsRes : []);
+            const coursesData = Array.isArray(coursesRes?.data) ? coursesRes.data : (Array.isArray(coursesRes) ? coursesRes : []);
+            setStorageItems(storageItemsData);
+            setCourses(coursesData);
+
             // Sidebar counts (from single /api/counts call)
             const counts = countsRes || {};
             const totalAllSites = counts.total ?? totalCount;
@@ -947,7 +958,9 @@ export function DashboardProvider({ children }) {
                 neededCounts: counts.neededCounts ?? { needed: 0, not_needed: 0 },
                 usedOnCounts: counts.usedOnCounts ?? { desktop: 0, mobile: 0, both: 0, web: 0 },
                 notes: notesData.length,
-                noteGroups: noteGroupsData.length
+                noteGroups: noteGroupsData.length,
+                storageItems: storageItemsData.length,
+                courses: coursesData.length
             });
         } catch (err) {
             setError(err.message);
@@ -979,7 +992,11 @@ export function DashboardProvider({ children }) {
                 setSites([]);
                 setCategories([]);
                 setTags([]);
-                setStats({ sites: 0, categories: 0, tags: 0 });
+                setNotes([]);
+                setNoteGroups([]);
+                setStorageItems([]);
+                setCourses([]);
+                setStats({ sites: 0, categories: 0, tags: 0, notes: 0, noteGroups: 0, storageItems: 0, courses: 0 });
                 hadUserRef.current = false;
                 fetchedForUserRef.current = null;
             };
@@ -1210,6 +1227,9 @@ export function DashboardProvider({ children }) {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'tags' }, handleChange)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'site_categories' }, handleChange)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'site_tags' }, handleChange)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'courses' }, handleChange)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'storage_items' }, handleChange)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'storage_item_tags' }, handleChange)
             .subscribe();
 
         return () => {
@@ -1744,6 +1764,102 @@ export function DashboardProvider({ children }) {
         }
     }, [showToast]);
 
+    // ── Storage Items CRUD ──────────────────────────────────────────────────
+    const addStorageItem = useCallback(async (data) => {
+        if (!user) throw new Error('Must be logged in');
+        const tier = getUserTier(user);
+        const check = canAdd(tier, 'storageItems', stats.storageItems);
+        if (!check.allowed) {
+            const msg = `Storage item limit reached (${stats.storageItems}/${check.limit})`;
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
+        try {
+            const res = await fetchAPI('/storage-items', { method: 'POST', body: JSON.stringify(data) });
+            const item = res?.data || res;
+            setStorageItems(prev => [item, ...prev]);
+            setStats(prev => ({ ...prev, storageItems: prev.storageItems + 1 }));
+            showToast(`Storage item "${item.name}" created`, 'success');
+            return item;
+        } catch (err) {
+            showToast(`Failed to add storage item: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [user, showToast, stats.storageItems]);
+
+    const updateStorageItem = useCallback(async (id, data) => {
+        try {
+            const res = await fetchAPI(`/storage-items/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+            const updated = res?.data || res;
+            setStorageItems(prev => prev.map(i => i.id === id ? updated : i));
+            showToast(`Storage item "${updated.name}" updated`, 'success');
+            return updated;
+        } catch (err) {
+            showToast(`Failed to update storage item: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
+    const deleteStorageItem = useCallback(async (id) => {
+        try {
+            await fetchAPI(`/storage-items/${id}`, { method: 'DELETE' });
+            setStorageItems(prev => prev.filter(i => i.id !== id));
+            setStats(prev => ({ ...prev, storageItems: prev.storageItems - 1 }));
+            showToast('Storage item deleted', 'success');
+        } catch (err) {
+            showToast(`Failed to delete storage item: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
+    // ── Courses CRUD ──────────────────────────────────────────────────
+    const addCourse = useCallback(async (data) => {
+        if (!user) throw new Error('Must be logged in');
+        const tier = getUserTier(user);
+        const check = canAdd(tier, 'courses', stats.courses);
+        if (!check.allowed) {
+            const msg = `Course limit reached (${stats.courses}/${check.limit})`;
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
+        try {
+            const res = await fetchAPI('/courses', { method: 'POST', body: JSON.stringify(data) });
+            const course = res?.data || res;
+            setCourses(prev => [course, ...prev]);
+            setStats(prev => ({ ...prev, courses: prev.courses + 1 }));
+            showToast(`Course "${course.name}" created`, 'success');
+            return course;
+        } catch (err) {
+            showToast(`Failed to add course: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [user, showToast, stats.courses]);
+
+    const updateCourse = useCallback(async (id, data) => {
+        try {
+            const res = await fetchAPI(`/courses/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+            const updated = res?.data || res;
+            setCourses(prev => prev.map(c => c.id === id ? updated : c));
+            showToast(`Course "${updated.name}" updated`, 'success');
+            return updated;
+        } catch (err) {
+            showToast(`Failed to update course: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
+    const deleteCourse = useCallback(async (id) => {
+        try {
+            await fetchAPI(`/courses/${id}`, { method: 'DELETE' });
+            setCourses(prev => prev.filter(c => c.id !== id));
+            setStats(prev => ({ ...prev, courses: prev.courses - 1 }));
+            showToast('Course deleted', 'success');
+        } catch (err) {
+            showToast(`Failed to delete course: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
     // ── Note Groups CRUD ──────────────────────────────────────────────────
     const fetchNoteGroups = useCallback(async () => {
         try {
@@ -1983,6 +2099,18 @@ export function DashboardProvider({ children }) {
         notesFilter,
         setNotesFilter,
 
+        // Maps: Storage Items
+        storageItems,
+        addStorageItem,
+        updateStorageItem,
+        deleteStorageItem,
+
+        // Maps: Courses
+        courses,
+        addCourse,
+        updateCourse,
+        deleteCourse,
+
         // Offline-first
         isOnline,
         pendingChanges,
@@ -2010,7 +2138,9 @@ export function DashboardProvider({ children }) {
         runImport, cancelImport, clearImportResult, isOnline, pendingChanges, syncing,
         syncOfflineChanges, notes, noteGroups, fetchNotes, addNote, updateNote, deleteNote,
         fetchNoteGroups, addNoteGroup, updateNoteGroup, deleteNoteGroup,
-        notesFilter, setNotesFilter
+        notesFilter, setNotesFilter,
+        storageItems, addStorageItem, updateStorageItem, deleteStorageItem,
+        courses, addCourse, updateCourse, deleteCourse
     ]);
 
     return (

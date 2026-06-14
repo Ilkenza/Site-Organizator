@@ -1,40 +1,13 @@
 /** Note Groups collection — GET all, POST create */
 
 import {
-  HTTP, configGuard, extractTokenFromReq, resolveTier, isDuplicate, decodeJwt,
+  HTTP, configGuard, extractTokenFromReq, isDuplicate, decodeJwt,
   buildHeaders, restUrl, sendError, sendOk,
 } from './helpers/api-utils';
-import { TIER_LIMITS } from '../../lib/tierConfig';
+import { makePick, lookupByName, enforceTierLimit } from './helpers/crud-utils';
 
 const ALLOWED = ['name', 'color'];
-const pick = (body) => Object.fromEntries(ALLOWED.filter(k => body[k] !== undefined).map(k => [k, body[k]]));
-
-async function lookupByName(cfg, name, token) {
-  if (!name) return null;
-  try {
-    const r = await fetch(`${restUrl(cfg, 'note_groups')}?select=*&name=eq.${encodeURIComponent(name)}`, { headers: buildHeaders(cfg.anonKey, token) });
-    if (!r.ok) return null;
-    const rows = await r.json();
-    return rows?.[0] || null;
-  } catch { return null; }
-}
-
-async function checkTierLimit(cfg, userToken, res) {
-  const { tier } = resolveTier(userToken);
-  const limit = TIER_LIMITS[tier]?.noteGroups ?? TIER_LIMITS.free.noteGroups;
-  if (limit === Infinity) return false;
-  try {
-    const r = await fetch(`${restUrl(cfg, 'note_groups')}?select=id&limit=${limit + 1}`, { headers: buildHeaders(cfg.anonKey, userToken) });
-    if (r.ok) {
-      const rows = await r.json();
-      if (rows.length >= limit) {
-        sendError(res, HTTP.FORBIDDEN, `Note group limit reached (${rows.length}/${limit}).`);
-        return true;
-      }
-    }
-  } catch { /* allow on failure */ }
-  return false;
-}
+const pick = makePick(ALLOWED);
 
 export default async function handler(req, res) {
   const cfg = configGuard(res);
@@ -43,12 +16,12 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
-    if (await checkTierLimit(cfg, userToken, res)) return;
+    if (await enforceTierLimit({ cfg, token: userToken, res, table: 'note_groups', limitKey: 'noteGroups', label: 'Note group' })) return;
 
     try {
       const body = req.body || {};
       if (body.name) {
-        const existing = await lookupByName(cfg, body.name, userToken);
+        const existing = await lookupByName(cfg, 'note_groups', body.name, userToken);
         if (existing) return sendOk(res, { data: existing });
       }
 
@@ -65,7 +38,7 @@ export default async function handler(req, res) {
       const text = await r.text();
       if (!r.ok) {
         if (body.name && isDuplicate(text)) {
-          const existing = await lookupByName(cfg, body.name, cfg.serviceKey);
+          const existing = await lookupByName(cfg, 'note_groups', body.name, cfg.serviceKey);
           if (existing) return sendOk(res, { data: existing });
         }
         return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: text });

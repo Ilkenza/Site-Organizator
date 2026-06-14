@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useDashboard } from '../../context/DashboardContext';
 import { useAuth } from '../../context/AuthContext';
-import { CollectionIcon, CloseIcon, GlobeIcon, FolderIcon, TagIcon, StarIcon, SettingsIcon, PinSimpleIcon, UploadIcon, ChevronDownIcon, PlusIcon, BookmarkIcon, TextLinesIcon, DocumentIcon, FilterIcon, ListBulletIcon, CheckCircleIcon, BanIcon, EditIcon, TrashIcon, DesktopIcon, DeviceMobileIcon } from '../ui/Icons';
+import { CollectionIcon, CloseIcon, GlobeIcon, FolderIcon, TagIcon, StarIcon, SettingsIcon, PinSimpleIcon, UploadIcon, ChevronDownIcon, PlusIcon, BookmarkIcon, TextLinesIcon, DocumentIcon, FilterIcon, ListBulletIcon, CheckCircleIcon, BanIcon, EditIcon, TrashIcon, DesktopIcon, DeviceMobileIcon, MapIcon } from '../ui/Icons';
 import GroupModal from './GroupModal';
 import { ConfirmModal } from '../ui/Modal';
 import { SUPER_CATEGORIES, matchSuperCategory } from '../../lib/sharedGroups';
@@ -725,6 +725,7 @@ export default function Sidebar({
                             { id: 'tags', label: 'Tags', icon: 'tags', count: stats.tags },
                             { id: 'favorites', label: 'Favorites', icon: 'favorites', count: favoriteCount },
                             { id: 'notes', label: 'Notes', icon: 'notes', count: stats.notes || 0 },
+                            { id: 'maps', label: 'Maps', icon: 'maps', count: (stats.storageItems || 0) + (stats.courses || 0) },
                             { id: 'settings', label: 'Settings', icon: 'settings', count: null }
                         ].map(tab => {
                             const iconMap = {
@@ -742,6 +743,9 @@ export default function Sidebar({
                                 ),
                                 notes: (
                                     <DocumentIcon className="w-4 h-4" />
+                                ),
+                                maps: (
+                                    <MapIcon className="w-4 h-4" />
                                 ),
                                 settings: (
                                     <SettingsIcon className="w-4 h-4" />

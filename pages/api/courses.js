@@ -1,4 +1,4 @@
-/** Notes collection — GET all (with filters/sort/pagination), POST create */
+/** Courses collection — GET all (with filters/sort/pagination), POST create */
 
 import {
   HTTP, configGuard, extractTokenFromReq, decodeJwt,
@@ -6,9 +6,19 @@ import {
 } from './helpers/api-utils';
 import { makePick, enforceTierLimit, parsePagination, parseSort, totalCountFromRes } from './helpers/crud-utils';
 
-const ALLOWED = ['name', 'description', 'group_id'];
-const pick = makePick(ALLOWED);
-const VALID_SORTS = ['created_at', 'updated_at', 'name'];
+const ALLOWED = ['name', 'platform', 'link', 'status', 'progress', 'category', 'notes_text'];
+const VALID_STATUSES = ['not_started', 'in_progress', 'completed'];
+const VALID_SORTS = ['created_at', 'updated_at', 'name', 'platform', 'status', 'progress'];
+
+const pick = makePick(ALLOWED, (result) => {
+  // Validate status
+  if (result.status && !VALID_STATUSES.includes(result.status)) delete result.status;
+  // Clamp progress to 0–100
+  if (result.progress !== undefined) {
+    result.progress = Math.max(0, Math.min(100, parseInt(result.progress, 10) || 0));
+  }
+  return result;
+});
 
 export default async function handler(req, res) {
   const cfg = configGuard(res);
@@ -17,18 +27,15 @@ export default async function handler(req, res) {
   if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
 
   if (req.method === 'POST') {
-    if (await enforceTierLimit({ cfg, token: userToken, res, table: 'notes', limitKey: 'notes', label: 'Note' })) return;
+    if (await enforceTierLimit({ cfg, token: userToken, res, table: 'courses', limitKey: 'courses', label: 'Course' })) return;
     try {
       const body = req.body || {};
       const data = pick(body);
-      // Handle null group_id explicitly
-      if (data.group_id === '' || data.group_id === 'null') data.group_id = null;
-      // Set user_id from JWT for RLS
       const jwt = decodeJwt(userToken);
       if (!jwt?.sub) return sendError(res, HTTP.UNAUTHORIZED, 'Invalid token');
       data.user_id = jwt.sub;
 
-      const r = await fetch(restUrl(cfg, 'notes'), {
+      const r = await fetch(restUrl(cfg, 'courses'), {
         method: 'POST',
         headers: buildHeaders(cfg.anonKey, userToken, { contentType: true, prefer: 'return=representation' }),
         body: JSON.stringify(data),
@@ -47,29 +54,23 @@ export default async function handler(req, res) {
       const q = req.query || {};
       const { limit, offset } = parsePagination(q);
 
-      // Build query
-      let queryUrl = `${restUrl(cfg, 'notes')}?select=*,note_groups(id,name,color)`;
+      let queryUrl = `${restUrl(cfg, 'courses')}?select=*`;
 
-      // Search filter
       if (q.q) {
         const search = encodeURIComponent(`%${q.q}%`);
-        queryUrl += `&or=(name.ilike.${search},description.ilike.${search})`;
+        queryUrl += `&or=(name.ilike.${search},platform.ilike.${search},category.ilike.${search})`;
       }
 
-      // Group filter
-      if (q.group_id) {
-        if (q.group_id === 'ungrouped') {
-          queryUrl += '&group_id=is.null';
-        } else {
-          queryUrl += `&group_id=eq.${q.group_id}`;
-        }
+      if (q.status && VALID_STATUSES.includes(q.status)) {
+        queryUrl += `&status=eq.${q.status}`;
+      }
+      if (q.platform) {
+        queryUrl += `&platform=eq.${encodeURIComponent(q.platform)}`;
       }
 
-      // Sort
       const { clause } = parseSort(q, VALID_SORTS);
       queryUrl += `&order=${clause}`;
 
-      // Pagination
       queryUrl += `&limit=${limit}&offset=${offset}`;
 
       const r = await fetch(queryUrl, {

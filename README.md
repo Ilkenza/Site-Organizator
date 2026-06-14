@@ -389,15 +389,16 @@ site-organizator/
 │ ├── index.js # Landing page (SEO, hero, features, pricing, FAQ)
 │ ├── login.js # Login/signup with MFA flow
 │ ├── dashboard.js # Redirect to /dashboard/sites
-│ ├── dashboard-redirect.js # Dashboard redirect helper
 │ ├── admin.js # Admin panel (overview, users, content, tools)
 │ ├── health.js # Health check page
 │ ├── dashboard/
-│ │ └── [tab].js # Main dashboard (sites/favorites/categories/tags/settings tabs)
+│ │ └── [tab].js # Main dashboard (sites/favorites/categories/tags/notes/maps/settings tabs)
 │ └── api/
 │ ├── sites.js # GET (paginated, filtered, sorted) / POST
 │ ├── categories.js # GET / POST (with tier limit)
 │ ├── tags.js # GET / POST (with tier limit)
+│ ├── courses.js # GET / POST courses (Maps tab, with tier limit)
+│ ├── storage-items.js # GET / POST storage items (Maps tab, with tier limit)
 │ ├── favorites.js # POST toggle favorite
 │ ├── pinned.js # POST toggle pinned
 │ ├── bulk-delete.js # POST bulk delete sites

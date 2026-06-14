@@ -2306,7 +2306,7 @@ async function checkAuth() {
                         }
                     }).catch(() => showAuthForm());
                 }
-            }).catch(() => {});
+            }).catch(() => { });
             return;
         }
 
@@ -2319,7 +2319,7 @@ async function checkAuth() {
                     // Validate in background
                     restoreSession().then(valid => {
                         if (!valid) showAuthForm();
-                    }).catch(() => {});
+                    }).catch(() => { });
                     return;
                 }
             } catch (e) { debug('checkAuth: sessionData parse failed', e); }

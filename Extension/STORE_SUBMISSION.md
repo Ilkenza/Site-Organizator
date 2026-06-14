@@ -63,8 +63,6 @@ Create a ZIP that includes:
 
 - EXTENSION_QUICK_REFERENCE.md
 - STORE_SUBMISSION.md
-- about.txt
-- site.webmanifest
 
 ### 4. Submit to Stores
 

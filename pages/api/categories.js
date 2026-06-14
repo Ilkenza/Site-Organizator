@@ -1,42 +1,13 @@
 /** Categories collection — GET all, POST create */
 
 import {
-  HTTP, configGuard, extractTokenFromReq, resolveTier, isDuplicate, decodeJwt,
+  HTTP, configGuard, extractTokenFromReq, isDuplicate, decodeJwt,
   buildHeaders, restUrl, sendError, sendOk,
 } from './helpers/api-utils';
-import { TIER_LIMITS } from '../../lib/tierConfig';
+import { makePick, lookupByName, enforceTierLimit } from './helpers/crud-utils';
 
 const ALLOWED = ['name', 'color', 'display_order', 'is_needed'];
-const pick = (body) => Object.fromEntries(ALLOWED.filter(k => body[k] !== undefined).map(k => [k, body[k]]));
-
-async function lookupByName(cfg, name, token) {
-  if (!name) return null;
-  try {
-    const r = await fetch(`${restUrl(cfg, 'categories')}?select=*&name=eq.${encodeURIComponent(name)}`, { headers: buildHeaders(cfg.anonKey, token) });
-    if (!r.ok) return null;
-    const rows = await r.json();
-    return rows?.[0] || null;
-  } catch { return null; }
-}
-
-async function checkTierLimit(cfg, userToken, res) {
-  const { tier } = resolveTier(userToken);
-  const limit = TIER_LIMITS[tier]?.categories ?? TIER_LIMITS.free.categories;
-  if (limit === Infinity) return false;
-  try {
-    const r = await fetch(`${restUrl(cfg, 'categories')}?select=id&limit=${limit + 1}`, { headers: buildHeaders(cfg.anonKey, userToken) });
-    if (r.ok) {
-      const rows = await r.json();
-      if (rows.length >= limit) {
-        const label = tier === 'promax' ? 'Pro Max' : tier === 'pro' ? 'Pro' : 'Free';
-        const target = tier === 'free' ? 'Pro or Pro Max' : 'Pro Max';
-        sendError(res, HTTP.FORBIDDEN, `Category limit reached (${rows.length}/${limit}). You are on the ${label} plan. Upgrade to ${target} for more.`);
-        return true;
-      }
-    }
-  } catch { /* allow on failure */ }
-  return false;
-}
+const pick = makePick(ALLOWED);
 
 export default async function handler(req, res) {
   const cfg = configGuard(res);
@@ -45,14 +16,14 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
-    if (await checkTierLimit(cfg, userToken, res)) return;
+    if (await enforceTierLimit({ cfg, token: userToken, res, table: 'categories', limitKey: 'categories', label: 'Category' })) return;
 
     try {
       const body = req.body || {};
 
       // Duplicate name check — return existing if same name already exists for this user
       if (body.name) {
-        const existing = await lookupByName(cfg, body.name, userToken);
+        const existing = await lookupByName(cfg, 'categories', body.name, userToken);
         if (existing) return sendOk(res, { data: existing });
       }
 
@@ -69,7 +40,7 @@ export default async function handler(req, res) {
       const text = await r.text();
       if (!r.ok) {
         if (body.name && isDuplicate(text)) {
-          const existing = await lookupByName(cfg, body.name, cfg.serviceKey);
+          const existing = await lookupByName(cfg, 'categories', body.name, cfg.serviceKey);
           if (existing) return sendOk(res, { data: existing });
         }
         return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: text });
