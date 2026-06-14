@@ -13,8 +13,8 @@ const CONFIG = {
         } catch { return 'localhost'; }
     })(),
 
-    // Build settings
-    ESLINT_IGNORE_DURING_BUILDS: true, // TODO: Remove once all lint issues are fixed
+    // Build settings — ESLint runs during builds (errors fail the build; warnings don't)
+    ESLINT_IGNORE_DURING_BUILDS: false,
 
     // PWA settings
     PWA_ENABLED: true,
@@ -29,8 +29,7 @@ const nextConfig = {
     // React strict mode for better development warnings
     reactStrictMode: CONFIG.STRICT_MODE,
 
-    // Temporarily ignore ESLint during builds
-    // TODO: Fix all ESLint warnings and remove this
+    // ESLint runs during builds; errors fail the build (warnings are allowed)
     eslint: {
         ignoreDuringBuilds: CONFIG.ESLINT_IGNORE_DURING_BUILDS,
     },

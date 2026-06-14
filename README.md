@@ -371,7 +371,6 @@ site-organizator/
 │ ├── Pagination.js # Paginator with keyboard nav
 │ ├── ErrorBoundary.js # React error boundary
 │ ├── ExportImportModal.js # Export format picker modal
-│ ├── PasswordResetModal.js # Password reset flow
 │ └── index.js
 ├── context/
 │ ├── AuthContext.js # Auth state, MFA, session, token refresh

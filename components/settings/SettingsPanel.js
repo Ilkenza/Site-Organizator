@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { useDashboard } from '../../context/DashboardContext';
 import AvatarSection from './AvatarSection';
@@ -41,12 +42,12 @@ export default function SettingsPanel({ onDeleteComplete }) {
                         <p className="text-sm text-app-text-secondary mb-4">
                             Create shareable links for selected categories and tags.
                         </p>
-                        <a
+                        <Link
                             href="/share"
                             className="inline-flex px-4 py-2.5 bg-app-accent/20 border border-app-accent/30 text-app-accent hover:bg-app-accent/30 rounded-lg transition-all text-sm font-medium"
                         >
                             Open Share Manager
-                        </a>
+                        </Link>
                     </div>
 
                     <BulkOrganizeSection user={user} fetchData={fetchData} showToast={showToast} />

@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import Head from 'next/head';
 import Modal from '../components/ui/Modal';
@@ -906,9 +907,9 @@ export default function Login() {
                             <p className="text-app-text-muted text-xs">
                                 Your data is securely stored and encrypted
                             </p>
-                            <a href="/" className="inline-block text-app-accent hover:text-app-accent/80 text-sm transition-colors">
+                            <Link href="/" className="inline-block text-app-accent hover:text-app-accent/80 text-sm transition-colors">
                                 ← Back to homepage
-                            </a>
+                            </Link>
                         </div>
                     </div>
                 </div>

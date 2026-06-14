@@ -23,13 +23,13 @@ function topUsage(items, usageMap, idKey, n = 10) {
 }
 
 async function fetchAllSites(supabase) {
-    let all = [], from = 0;
-    while (true) {
+    let all = [], from = 0, more = true;
+    while (more) {
         const { data } = await supabase.from('sites').select('id, url, pricing, user_id, created_at').range(from, from + PAGE - 1);
         if (!data?.length) break;
         all = all.concat(data);
-        if (data.length < PAGE) break;
-        from += PAGE;
+        if (data.length < PAGE) more = false;
+        else from += PAGE;
     }
     return all;
 }
