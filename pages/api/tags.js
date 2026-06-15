@@ -4,7 +4,7 @@ import {
   HTTP, configGuard, extractTokenFromReq, isDuplicate, decodeJwt,
   buildHeaders, restUrl, sendError, sendOk,
 } from './helpers/api-utils';
-import { makePick, lookupByName, enforceTierLimit } from './helpers/crud-utils';
+import { makePick, lookupByName, enforceTierLimit, parsePagination, totalCountFromRes } from './helpers/crud-utils';
 
 const ALLOWED = ['name', 'color', 'is_needed'];
 const pick = makePick(ALLOWED);
@@ -55,11 +55,35 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     if (!userToken) return sendError(res, HTTP.UNAUTHORIZED, 'Authentication required');
     try {
-      const r = await fetch(`${restUrl(cfg, 'tags')}?select=*,site_tags(count)`, { headers: buildHeaders(cfg.anonKey, userToken) });
+      const query = req.query || {};
+      // Per-tag site count is on by default; pass counts=0 to skip the (heavier) aggregate.
+      const wantCounts = query.counts !== '0';
+      // Paginate only when asked — keeps the default call backward compatible (returns all).
+      const paginated = query.page !== undefined || query.limit !== undefined;
+
+      let url = `${restUrl(cfg, 'tags')}?select=${wantCounts ? '*,site_tags(count)' : '*'}`;
+      if (query.q) {
+        url += `&name=ilike.${encodeURIComponent(`%${query.q}%`)}`;
+      }
+      url += '&order=name.asc';
+
+      const headers = buildHeaders(cfg.anonKey, userToken);
+      if (paginated) {
+        const { limit, offset } = parsePagination(query);
+        url += `&limit=${limit}&offset=${offset}`;
+        headers.Prefer = 'count=exact';
+      }
+
+      const r = await fetch(url, { headers });
       if (!r.ok) return sendError(res, HTTP.BAD_GATEWAY, 'Upstream REST error', { details: await r.text() });
       const raw = await r.json();
-      const data = raw.map(({ site_tags: st, ...rest }) => ({ ...rest, site_count: st?.[0]?.count ?? 0 }));
-      return sendOk(res, { data });
+      const data = wantCounts
+        ? raw.map(({ site_tags: st, ...rest }) => ({ ...rest, site_count: st?.[0]?.count ?? 0 }))
+        : raw;
+
+      const result = { data };
+      if (paginated) result.totalCount = totalCountFromRes(r, raw);
+      return sendOk(res, result);
     } catch (err) {
       return sendError(res, HTTP.INTERNAL_ERROR, err.message);
     }
