@@ -373,12 +373,12 @@ export default function Home() {
             </div>
 
             <div className="grid md:grid-cols-3 gap-8 relative">
-              {/* Connector line (desktop only) */}
-              <div className="hidden md:block absolute top-16 left-[20%] right-[20%] h-0.5 bg-gradient-to-r from-app-accent/50 via-purple-500/50 to-green-500/50"></div>
+              {/* Connector line (desktop only) — centered through the number badges */}
+              <div className="hidden md:block absolute top-7 left-[16.666%] right-[16.666%] h-0.5 -translate-y-1/2 bg-gradient-to-r from-app-accent/50 via-purple-500/50 to-green-500/50"></div>
 
               {/* Step 1 */}
               <div className="scroll-animate-stagger relative text-center">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-app-accent/20 to-app-accent/10 border-2 border-app-accent/30 flex items-center justify-center mx-auto mb-6 relative z-10">
+                <div className="w-14 h-14 rounded-2xl bg-gray-950 bg-gradient-to-br from-app-accent/20 to-app-accent/10 border-2 border-app-accent/30 flex items-center justify-center mx-auto mb-6 relative z-10">
                   <span className="text-xl font-bold text-app-accent">1</span>
                 </div>
                 <h3 className="text-xl font-bold text-white mb-3">Add a Link</h3>
@@ -387,7 +387,7 @@ export default function Home() {
 
               {/* Step 2 */}
               <div className="scroll-animate-stagger relative text-center">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/10 border-2 border-purple-500/30 flex items-center justify-center mx-auto mb-6 relative z-10">
+                <div className="w-14 h-14 rounded-2xl bg-gray-950 bg-gradient-to-br from-purple-500/20 to-purple-500/10 border-2 border-purple-500/30 flex items-center justify-center mx-auto mb-6 relative z-10">
                   <span className="text-xl font-bold text-purple-400">2</span>
                 </div>
                 <h3 className="text-xl font-bold text-white mb-3">AI Suggests, You Pick</h3>
@@ -396,7 +396,7 @@ export default function Home() {
 
               {/* Step 3 */}
               <div className="scroll-animate-stagger relative text-center">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-green-500/20 to-green-500/10 border-2 border-green-500/30 flex items-center justify-center mx-auto mb-6 relative z-10">
+                <div className="w-14 h-14 rounded-2xl bg-gray-950 bg-gradient-to-br from-green-500/20 to-green-500/10 border-2 border-green-500/30 flex items-center justify-center mx-auto mb-6 relative z-10">
                   <span className="text-xl font-bold text-green-400">3</span>
                 </div>
                 <h3 className="text-xl font-bold text-white mb-3">Find It Instantly</h3>

@@ -904,11 +904,11 @@ export function DashboardProvider({ children }) {
         setLoading(true);
         setError(null);
         try {
-            const [sitesRes, categoriesRes, tagsRes, countsRes,
+            // Tags are intentionally excluded here — see the deferred fetch below.
+            const [sitesRes, categoriesRes, countsRes,
                 notesRes, noteGroupsRes, storageItemsRes, coursesRes] = await Promise.all([
                     fetchAPI(`/sites?${buildSitesQuery(1)}`),
                     fetchAPI('/categories'),
-                    fetchAPI('/tags'),
                     fetchAPI('/counts').catch(() => null),
                     // Notes & Note Groups
                     fetchAPI('/notes?limit=5000').catch(() => null),
@@ -919,9 +919,7 @@ export function DashboardProvider({ children }) {
                 ]);
 
             const categoriesData = dedupeById(Array.isArray(categoriesRes) ? categoriesRes : (categoriesRes?.data || []));
-            const tagsData = dedupeById(Array.isArray(tagsRes) ? tagsRes : (tagsRes?.data || []));
             setCategories(categoriesData);
-            setTags(tagsData);
 
             const sitesData = Array.isArray(sitesRes) ? sitesRes : (sitesRes?.data || []);
             const totalCount = sitesRes?.totalCount ?? sitesData.length;
@@ -946,10 +944,10 @@ export function DashboardProvider({ children }) {
             const counts = countsRes || {};
             const totalAllSites = counts.total ?? totalCount;
 
-            setStats({
+            setStats((prev) => ({
                 sites: totalAllSites,
                 categories: categoriesData.length,
-                tags: tagsData.length,
+                tags: prev.tags ?? 0, // updated by the deferred tags fetch below
                 favorites: counts.favorites ?? 0,
                 uncategorized: counts.uncategorized ?? 0,
                 untagged: counts.untagged ?? 0,
@@ -961,13 +959,25 @@ export function DashboardProvider({ children }) {
                 noteGroups: noteGroupsData.length,
                 storageItems: storageItemsData.length,
                 courses: coursesData.length
-            });
+            }));
         } catch (err) {
             setError(err.message);
             console.error('Failed to fetch data:', err);
         } finally {
             setLoading(false);
         }
+
+        // Tags can be very large (thousands of rows + per-tag counts ≈ MBs) and are
+        // NOT needed for the first paint — each site already carries its own
+        // tags_array. Load the global tag list in the background so the dashboard
+        // renders immediately; the sidebar tag filter populates a moment later.
+        fetchAPI('/tags')
+            .then((tagsRes) => {
+                const tagsData = dedupeById(Array.isArray(tagsRes) ? tagsRes : (tagsRes?.data || []));
+                setTags(tagsData);
+                setStats((prev) => ({ ...prev, tags: tagsData.length }));
+            })
+            .catch(() => { });
     }, [buildSitesQuery]);
 
     // Track which user ID we already fetched for to prevent duplicate fetches

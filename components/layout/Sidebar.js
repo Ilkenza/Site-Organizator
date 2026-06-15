@@ -1271,6 +1271,9 @@ export default function Sidebar({
                             {tags
                                 .filter(tag => tag?.name?.toLowerCase().includes(tagsSearchQuery.toLowerCase()))
                                 .sort((a, b) => a.name.localeCompare(b.name))
+                                // Cap rendered tags — with thousands of tags, rendering
+                                // every button is slow. Search still scans the full list.
+                                .slice(0, tagsSearchQuery ? 500 : 100)
                                 .map(tag => {
                                     // Use site_count from API
                                     const siteCount = tag.site_count || 0;
@@ -1311,6 +1314,11 @@ export default function Sidebar({
                                         </button>
                                     );
                                 })}
+                            {!tagsSearchQuery && tags.length > 100 && (
+                                <div className="px-3 py-1.5 text-[11px] text-app-text-muted text-center italic">
+                                    Showing first 100 — type to search all {tags.length} tags
+                                </div>
+                            )}
                         </div>
 
                         {/* Needed Filter */}
