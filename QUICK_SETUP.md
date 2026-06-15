@@ -116,7 +116,7 @@ npm start
 
 ## Deployment
 
-### Deploy to Netlify
+### Deploy to Vercel
 
 1. **Push to GitHub:**
 
@@ -126,25 +126,20 @@ npm start
    git push origin main
    ```
 
-2. **Connect to Netlify:**
+2. **Import on Vercel:**
 
-   - Go to [Netlify](https://app.netlify.com/)
-   - Click **Add new site** → **Import an existing project**
-   - Select your GitHub repository
+   - Go to [Vercel](https://vercel.com/new)
+   - Click **Add New… → Project** and import your GitHub repository
+   - Vercel auto-detects Next.js — no build settings needed
 
-3. **Configure Build Settings:**
+3. **Add Environment Variables:**
 
-   - Build command: `npm run build`
-   - Publish directory: `.next`
+   - On the import screen (or later under **Settings → Environment Variables**),
+     add all variables from `.env.local`
+   - After changing env vars later, **redeploy** for them to take effect
 
-4. **Add Environment Variables:**
-
-   - Go to **Site settings** → **Environment variables**
-   - Add all variables from `.env.local`
-   - **Important:** Use **different Supabase keys** for production!
-
-5. **Deploy:**
-   - Click **Deploy site**
+4. **Deploy:**
+   - Click **Deploy**
 
 ---
 
@@ -213,10 +208,10 @@ npm start
 - ✅ Ensure you're redirecting to `/dashboard/sites` (not `/dashboard`)
 - ✅ Check `next.config.js` redirect is configured
 
-#### 5. "Build fails on Netlify"
+#### 5. "Build fails on Vercel"
 
-- ✅ Check environment variables are set in Netlify dashboard
-- ✅ Verify Node.js version is 20+ in `netlify.toml`
+- ✅ Check environment variables are set in the Vercel project (Settings → Environment Variables)
+- ✅ Ensure a recent Node.js version is selected in Vercel project settings
 
 ---
 
@@ -242,7 +237,6 @@ site-organizator/
 ├── .env.local          # Environment variables (local)
 ├── .eslintrc.json      # ESLint config
 ├── .gitignore          # Git ignore rules
-├── netlify.toml        # Netlify config
 ├── next.config.js      # Next.js config
 ├── package.json        # Dependencies
 ├── postcss.config.js   # PostCSS config

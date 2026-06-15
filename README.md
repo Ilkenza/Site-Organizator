@@ -248,7 +248,7 @@ Full reference: [KEYBOARD_SHORTCUTS.md](KEYBOARD_SHORTCUTS.md)
 
 - **Package Manager**: npm/yarn
 - **Linting**: ESLint
-- **Deployment**: Vercel/Netlify compatible
+- **Deployment**: Vercel
 
 ## 📦 Installation
 
@@ -448,7 +448,6 @@ site-organizator/
 ├── supabase/ # Supabase config
 ├── tailwind.config.js # Tailwind custom theme
 ├── next.config.js # Next.js config
-├── netlify.toml # Netlify deployment config
 └── package.json
 
 ```
@@ -511,27 +510,6 @@ colors: {
 3. **Configure Domain** (optional)
    - Go to project settings → Domains
    - Add your custom domain
-
-### Netlify
-
-1. **Connect Repository**
-
-   - Go to [netlify.com](https://netlify.com)
-   - Click "Add new site" → "Import an existing project"
-   - Select your repository
-
-2. **Configure Build Settings**
-
-   - Build command: `npm run build`
-   - Publish directory: `.next`
-
-3. **Add Environment Variables**
-
-   - Go to Site settings → Environment variables
-   - Add all three Supabase variables
-
-4. **Deploy**
-   - Click "Deploy site"
 
 ### Manual Deployment
 

@@ -116,6 +116,29 @@ const nextConfig = {
                     },
                 ],
             },
+            // PWA: serve the manifest with the correct content type
+            {
+                source: '/manifest.json',
+                headers: [
+                    { key: 'Content-Type', value: 'application/manifest+json' },
+                    { key: 'Cache-Control', value: 'public, max-age=3600' },
+                ],
+            },
+            // PWA: never cache the service worker so updates are picked up
+            {
+                source: '/sw.js',
+                headers: [
+                    { key: 'Content-Type', value: 'application/javascript' },
+                    { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+                ],
+            },
+            // Icons are immutable — cache for a year
+            {
+                source: '/icons/:path*',
+                headers: [
+                    { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+                ],
+            },
         ];
     },
 };
